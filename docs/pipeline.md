@@ -1,0 +1,214 @@
+# 資料處理 Pipeline
+
+本文件記錄目前 FOI ODS 人壽保險評議資料處理流程。
+
+## 目前資料來源
+
+來源網站：
+
+- https://ods.foi.org.tw/
+
+已完成查詢條件：
+
+- 年度：ROC 115
+- 產業：保險業
+- 保險類別：人壽保險
+- 文件類型：評議決定書
+- 查詢期間：ROC 115/1/1 到 ROC 115/7/1
+
+目前產物：
+
+- metadata records：492 筆
+- PDF：492 份
+- raw text：492 份
+- normalized text：492 份
+- 單案 metadata：492 份
+- 失敗筆數：0
+
+## Pipeline 步驟
+
+### 1. 爬取 metadata 與 PDF URL
+
+程式：
+
+```text
+foi_ods_life_mvp_crawler.py
+```
+
+功能：
+
+- 查詢 FOI ODS。
+- 取得案件 metadata。
+- 取得官方 PDF URL。
+- 支援月份、週、爭議類型切分。
+- 避免超過網站 100 筆查詢上限。
+- 輸出總 metadata JSON。
+
+主要輸出：
+
+```text
+data/foi_ods/metadata/foi_ods_life_roc115_metadata.json
+```
+
+驗證重點：
+
+- records 筆數正確。
+- 無重複案號。
+- 每筆都有 `case_number`、`decision_date`、`dispute_type`、`source.pdf_url`。
+- required field errors 為 0。
+
+### 2. PDF 下載與文字抽取
+
+程式：
+
+```text
+foi_ods_pdf_text_pipeline.py
+```
+
+功能：
+
+- 下載官方 PDF。
+- 使用 `pdfplumber` 抽取文字。
+- 若 `pdfplumber` 失敗，fallback 到 `pypdf`。
+- 產生 raw text。
+- 產生 normalized text。
+- 回寫 metadata。
+- 產生處理 report。
+
+主要輸出：
+
+```text
+data/foi_ods/metadata/foi_ods_life_roc115_pdf_text_report.json
+```
+
+驗證重點：
+
+- `success_count` = 492。
+- `failure_count` = 0。
+- `file_validation_errors` = 0。
+- 每筆案件都有 PDF、raw text、normalized text。
+
+### 3. 案件資料夾整理
+
+程式：
+
+```text
+foi_ods_case_organizer.py
+```
+
+功能：
+
+- 依照「年度 → 爭議類型 → 案件」整理資料。
+- 每案建立獨立資料夾。
+- 每案輸出：
+  - `decision.pdf`
+  - `raw_text.txt`
+  - `normalized_text.txt`
+  - `metadata.json`
+- 更新總 metadata 的本地檔案路徑。
+- 產生整理 report。
+
+主要輸出：
+
+```text
+data/foi_ods/cases/roc115/<爭議類型>/<案號>/
+data/foi_ods/metadata/foi_ods_life_roc115_case_organize_report.json
+```
+
+驗證重點：
+
+- `success_count` = 492。
+- `failure_count` = 0。
+- `validation_errors` = 0。
+- 每案四個檔案完整存在。
+
+## 後續新增 Pipeline
+
+### 4. 匯入 SQLite
+
+預計新增：
+
+```text
+backend/scripts/import_cases_to_db.py
+```
+
+功能：
+
+- 讀取總 metadata。
+- 讀取每案 normalized text。
+- 寫入 `cases`、`case_texts`。
+- 建立或更新 `case_search`。
+
+驗證：
+
+- `cases` 筆數 = 492。
+- `case_texts` 筆數 = 492。
+- `case_search` 可查詢關鍵字。
+
+### 5. 建立全文搜尋索引
+
+預計新增：
+
+```text
+backend/scripts/build_search_index.py
+```
+
+功能：
+
+- 重建 SQLite FTS5 index。
+- 支援後續重新匯入資料後重建搜尋索引。
+
+驗證：
+
+- 搜尋「必要性醫療」有結果。
+- 搜尋「癌症」有結果。
+- 搜尋結果可回到正確 case。
+
+### 6. 規則式摘要
+
+預計新增：
+
+```text
+backend/scripts/extract_case_summary.py
+```
+
+功能：
+
+- 從 normalized text 抽取主文。
+- 抽取申請人主張。
+- 抽取評議理由。
+- 寫入 `case_summaries`。
+
+驗證：
+
+- 抽樣人工檢查。
+- 摘要內容可回溯原文。
+
+### 7. 向量索引
+
+第三階段再做。
+
+預計新增：
+
+```text
+backend/scripts/build_embeddings.py
+```
+
+功能：
+
+- 將 normalized text 切成 chunks。
+- 產生 embedding。
+- 建立相似案件搜尋資料。
+
+驗證：
+
+- 任一案件可查 top 5 相似案件。
+- 回傳結果附相似段落。
+
+## Pipeline 注意事項
+
+1. 不要直接覆蓋原始資料，除非明確指定。
+2. 匯入資料庫時要設計成可重跑。
+3. 每個階段都要產生 report 或可查驗的統計結果。
+4. metadata 的檔案路徑更新要保持一致。
+5. 未來跨年度時，資料夾與資料庫都不可寫死 `roc115`。

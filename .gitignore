@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Local data and generated outputs
+data/
+outputs/
+*.db
+*.sqlite
+*.sqlite3
+
+# Frontend dependencies and build outputs
+node_modules/
+dist/
+build/
+.vite/
+
+# Test and coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Codex local app state
+.agents/
+.codex/
