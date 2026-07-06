@@ -3,16 +3,23 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_METADATA = PROJECT_ROOT / "data" / "foi_ods" / "metadata" / "foi_ods_life_roc115_metadata.json"
-DEFAULT_DB_PATH = PROJECT_ROOT / "backend" / "data" / "insurance_cases.db"
 SCHEMA_PATH = PROJECT_ROOT / "backend" / "schema.sql"
+
+
+def resolve_project_path(value: str | Path) -> Path:
+    path = Path(value).expanduser()
+    return path if path.is_absolute() else PROJECT_ROOT / path
+
+
+DEFAULT_DB_PATH = resolve_project_path(os.environ.get("INSURANCE_CASES_DB_PATH", "backend/data/insurance_cases.db"))
 
 
 class ImportError(RuntimeError):

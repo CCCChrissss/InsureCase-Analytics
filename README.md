@@ -137,6 +137,15 @@ py .\backend\scripts\verify_case_db.py
 py -m pip install -r requirements.txt
 ```
 
+後端可用環境變數覆蓋本機預設設定：
+
+```text
+INSURANCE_CASES_DB_PATH=backend/data/insurance_cases.db
+BACKEND_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+```
+
+設定範例可參考根目錄的 `.env.example`。目前專案不會自動載入 `.env` 檔；若要套用環境變數，請在啟動 API 前於 shell 設定，或使用部署平台提供的環境變數設定。
+
 啟動 API：
 
 ```powershell
@@ -199,6 +208,14 @@ http://127.0.0.1:5173
 ```text
 http://127.0.0.1:8000/api
 ```
+
+若後端 API 位址不同，可在 `frontend/.env` 設定：
+
+```text
+VITE_API_BASE_URL=http://127.0.0.1:8000/api
+```
+
+設定範例可參考 `frontend/.env.example`。
 
 目前頁面：
 

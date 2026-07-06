@@ -43,6 +43,7 @@
 ```text
 .
 ├─ .gitignore
+├─ .env.example
 ├─ PROJECT_CONTEXT.md
 ├─ README.md
 ├─ requirements.txt
@@ -57,6 +58,7 @@
 │  ├─ schema.sql
 │  ├─ app/
 │  │  ├─ __init__.py
+│  │  ├─ config.py
 │  │  ├─ main.py
 │  │  ├─ database.py
 │  │  ├─ schemas.py
@@ -86,6 +88,7 @@
 │     └─ test_summary_service.py
 └─ frontend/
    ├─ index.html
+   ├─ .env.example
    ├─ package.json
    ├─ pnpm-lock.yaml
    ├─ pnpm-workspace.yaml
@@ -133,6 +136,7 @@ frontend/dist/
 ### 根目錄
 
 - `.gitignore`：忽略 Python cache、虛擬環境、`.env`、資料產物、SQLite DB、前端 dependencies、前端 build 產物與本機工具狀態。
+- `.env.example`：根目錄環境變數範例，包含後端 DB path、CORS origins 與前端 API base URL。
 - `README.md`：專案介紹、目前資料狀態、pipeline、後端與前端啟動方式。
 - `requirements.txt`：Python 相依套件，包含 `beautifulsoup4`、`fastapi`、`httpx`、`pdfplumber`、`pypdf`、`pytest`、`requests`、`uvicorn`。
 - `foi_ods_life_mvp_crawler.py`：FOI ODS metadata 與 PDF URL 爬蟲。
@@ -149,6 +153,7 @@ frontend/dist/
 ### backend
 
 - `backend/schema.sql`：SQLite schema，定義 `cases`、`case_texts`、`case_summaries`、`case_search` 與索引。
+- `backend/app/config.py`：後端集中設定，支援由環境變數覆蓋 DB path 與 CORS origins。
 - `backend/app/main.py`：FastAPI app 入口，設定 CORS 與註冊 routers。
 - `backend/app/database.py`：SQLite 連線、預設 DB 路徑與 schema 初始化。
 - `backend/app/schemas.py`：Pydantic response models。
@@ -174,6 +179,7 @@ frontend/dist/
 ### frontend
 
 - `frontend/package.json`：React + Vite 前端專案設定與 scripts。
+- `frontend/.env.example`：前端環境變數範例，主要設定 `VITE_API_BASE_URL`。
 - `frontend/pnpm-lock.yaml`：pnpm lockfile，鎖定前端相依版本。
 - `frontend/pnpm-workspace.yaml`：pnpm build approval 設定，目前允許 `esbuild`。
 - `frontend/index.html`：Vite HTML 入口。
@@ -213,6 +219,7 @@ FastAPI app
   │  ├─ summary_service
   │  └─ statistics_service
   ├─ schemas
+  ├─ config
   └─ database
       ↓
 SQLite database
@@ -234,9 +241,11 @@ frontend
 
 - API prefix 以 `/api` 為主。
 - 統計 API 使用 `/api/statistics`。
-- CORS 目前允許：
+- CORS 預設允許：
   - `http://localhost:5173`
   - `http://127.0.0.1:5173`
+- CORS 可用 `BACKEND_CORS_ORIGINS` 以逗號分隔覆蓋。
+- DB path 預設為 `backend/data/insurance_cases.db`，可用 `INSURANCE_CASES_DB_PATH` 覆蓋。
 - HTTP method 目前只允許 GET。
 - DB 連線使用 Python 標準庫 `sqlite3`。
 - 每次 service function 以 context manager 建立連線。
@@ -271,6 +280,8 @@ FastAPI /api/*
 VITE_API_BASE_URL 若存在則使用該值
 否則預設 http://127.0.0.1:8000/api
 ```
+
+前端設定範例位於 `frontend/.env.example`。
 
 目前頁面以 React state 切換，並同步基本 URL query：
 
@@ -557,7 +568,8 @@ GET /api/statistics/decision-dates
 ### 後端
 
 - FastAPI app。
-- CORS 設定。
+- CORS 設定，支援環境變數覆蓋。
+- DB path 設定，支援環境變數覆蓋。
 - 健康檢查。
 - 案件列表 API。
 - 案件詳情 API。
@@ -606,7 +618,6 @@ GET /api/statistics/decision-dates
 - Docker。
 - CI。
 - 部署設定。
-- `.env.example`。
 - API 錯誤回應格式統一。
 - 正式 React Router。
 - 前端自動化測試。
@@ -653,20 +664,19 @@ GET /api/statistics/decision-dates
 - 保留案件 metadata endpoint。
 - 另開 `/api/cases/{case_id}/text` 或支援 lazy loading。
 
-### API 設定仍偏本機開發
+### API 設定已可覆蓋，但尚未導入完整設定管理
 
-目前 DB path、CORS、frontend API base 都以本機為主。
+目前 DB path、CORS、frontend API base 已提供本機預設值與 `.env.example`，並可透過環境變數覆蓋。
 
 影響：
 
 - 本機展示方便。
-- 部署或多人協作時需要額外設定。
+- 部署或多人協作時已可調整設定，但專案目前不會自動載入 `.env` 檔。
 
 建議：
 
-- 加入 `.env.example`。
-- 後端支援環境變數設定 DB path 與 CORS origins。
-- 前端正式使用 `VITE_API_BASE_URL` 文件化。
+- 若後續要正式部署，可評估加入部署平台環境變數、Docker env 或 settings class。
+- 若希望本機自動讀 `.env`，需要再評估是否加入 `python-dotenv` 或等價方案。
 
 ### 前端尚無自動化測試
 
@@ -706,6 +716,25 @@ GET /api/statistics/decision-dates
 ```powershell
 py -m pip install -r requirements.txt
 ```
+
+### 環境變數設定
+
+根目錄提供 `.env.example`，前端目錄提供 `frontend/.env.example`。
+
+後端支援：
+
+```text
+INSURANCE_CASES_DB_PATH=backend/data/insurance_cases.db
+BACKEND_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+```
+
+前端支援：
+
+```text
+VITE_API_BASE_URL=http://127.0.0.1:8000/api
+```
+
+注意：目前後端沒有新增自動讀取 `.env` 的套件。若要套用設定，請在啟動指令前於 shell 或部署平台設定環境變數。
 
 ### 建立 SQLite DB
 
@@ -801,7 +830,7 @@ http://127.0.0.1:8000/api
 VITE_API_BASE_URL
 ```
 
-目前尚未提供 `.env.example`，建議後續補上。
+設定範例在 `frontend/.env.example`。
 
 ## 12. 測試方式
 
@@ -904,6 +933,7 @@ http://127.0.0.1:5173
 - 規則式相似案件 API。
 - 前端相似案件區塊。
 - 前端結構拆分。
+- 環境設定集中化與 `.env.example`。
 
 ### 下一步：embedding 相似案件或跨年度擴充
 
@@ -934,10 +964,9 @@ http://127.0.0.1:5173
 
 建議工作：
 
-1. `.env.example`。
-2. Dockerfile。
-3. docker-compose。
-4. CI。
-5. PostgreSQL migration 評估。
-6. pgvector 評估。
-7. OCR fallback 評估。
+1. Dockerfile。
+2. docker-compose。
+3. CI。
+4. PostgreSQL migration 評估。
+5. pgvector 評估。
+6. OCR fallback 評估。

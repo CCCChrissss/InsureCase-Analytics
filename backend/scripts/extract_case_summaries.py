@@ -2,16 +2,23 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_DB_PATH = PROJECT_ROOT / "backend" / "data" / "insurance_cases.db"
 SUMMARY_METHOD = "rule_based_v1"
+
+
+def resolve_project_path(value: str | Path) -> Path:
+    path = Path(value).expanduser()
+    return path if path.is_absolute() else PROJECT_ROOT / path
+
+
+DEFAULT_DB_PATH = resolve_project_path(os.environ.get("INSURANCE_CASES_DB_PATH", "backend/data/insurance_cases.db"))
 
 PAGE_MARKER_RE = re.compile(r"^(--- page \d+ ---|-第\d+頁，共\d+頁-)$")
 TOP_LEVEL_HEADING_RE = re.compile(r"^[一二三四五六七八九十]+、")
