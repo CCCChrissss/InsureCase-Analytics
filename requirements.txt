@@ -1,4 +1,6 @@
 beautifulsoup4==4.15.0
+fastapi==0.118.0
 pdfplumber==0.11.10
 pypdf==6.14.2
 requests==2.34.2
+uvicorn==0.37.0

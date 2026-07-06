@@ -129,8 +129,41 @@ py .\backend\scripts\verify_case_db.py
 - `data/` 內原始案件資料不會被修改
 - `backend/data/insurance_cases.db` 是本機產物，不提交 Git
 
+## FastAPI 後端
+
+第 2 階段新增唯讀 API，啟動前請先安裝相依套件：
+
+```powershell
+py -m pip install -r requirements.txt
+```
+
+啟動 API：
+
+```powershell
+py -m uvicorn backend.app.main:app --reload
+```
+
+啟動後可開啟：
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+目前主要 endpoint：
+
+```text
+GET /api/health
+GET /api/cases
+GET /api/cases/{case_id}
+GET /api/dispute-types
+GET /api/search?q=癌症
+GET /api/statistics/overview
+GET /api/statistics/dispute-types
+GET /api/statistics/decision-dates
+GET /api/files/{case_id}/pdf
+```
+
 ## 目前待處理事項
 
-- 尚未建立 FastAPI 查詢 API。
 - 尚未建立前端介面。
 - 尚未建立自動化測試。

@@ -227,3 +227,29 @@ backend/scripts/build_embeddings.py
 3. 每個階段都要產生 report 或可查驗的統計結果。
 4. metadata 的檔案路徑更新要保持一致。
 5. 未來跨年度時，資料夾與資料庫都不可寫死 `roc115`。
+
+## API 讀取流程
+
+第 2 階段 API 不直接讀取 PDF 或 JSON metadata 作為主要查詢來源，而是讀取第 1 階段建立的 SQLite DB。
+
+```text
+data/foi_ods/cases
+  ↓ import_cases_to_db.py
+backend/data/insurance_cases.db
+  ↓ FastAPI services
+GET /api/cases
+GET /api/search
+GET /api/statistics/*
+```
+
+啟動 API：
+
+```powershell
+py -m uvicorn backend.app.main:app --reload
+```
+
+API 驗證重點：
+
+- `/api/health` 的 `database_ready` 應為 `true`。
+- `/api/statistics/overview` 的 `case_count` 應為 492。
+- `/api/search?q=癌症` 應有搜尋結果。

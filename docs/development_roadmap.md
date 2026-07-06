@@ -60,7 +60,7 @@ py .\backend\scripts\verify_case_db.py
 
 目標：提供案件查詢、搜尋與統計 API。
 
-預計完成：
+完成項目：
 
 - 建立 FastAPI app。
 - 案件列表 API。
@@ -69,7 +69,7 @@ py .\backend\scripts\verify_case_db.py
 - 統計 API。
 - PDF 檔案讀取 API。
 
-預計新增檔案：
+新增檔案：
 
 - `backend/app/main.py`
 - `backend/app/routers/cases.py`
@@ -78,6 +78,7 @@ py .\backend\scripts\verify_case_db.py
 - `backend/app/schemas.py`
 - `backend/app/services/case_service.py`
 - `backend/app/services/search_service.py`
+- `backend/app/services/statistics_service.py`
 
 驗證方式：
 
