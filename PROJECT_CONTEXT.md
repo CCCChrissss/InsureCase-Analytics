@@ -83,6 +83,7 @@
 │  │  └─ verify_case_db.py
 │  └─ tests/
 │     ├─ test_api.py
+│     ├─ test_import_cases_to_db.py
 │     ├─ test_search_service.py
 │     ├─ test_similar_case_service.py
 │     └─ test_summary_service.py
@@ -169,9 +170,10 @@ frontend/dist/
 - `backend/app/services/statistics_service.py`：總覽、爭議類型、決定日期統計。
 - `backend/app/services/summary_service.py`：案件摘要查詢。
 - `backend/scripts/extract_case_summaries.py`：從 normalized text 產生規則式摘要並寫入 `case_summaries`。
-- `backend/scripts/import_cases_to_db.py`：讀取 metadata 與文字檔，匯入 SQLite。
+- `backend/scripts/import_cases_to_db.py`：讀取單一或多個 metadata 與文字檔，匯入 SQLite。
 - `backend/scripts/verify_case_db.py`：驗證 SQLite 筆數、搜尋、路徑與 sample case。
 - `backend/tests/test_api.py`：API smoke tests。
+- `backend/tests/test_import_cases_to_db.py`：SQLite 匯入腳本測試，包含多 metadata 匯入與 metadata 目錄解析。
 - `backend/tests/test_search_service.py`：搜尋 fallback 單元測試。
 - `backend/tests/test_similar_case_service.py`：相似案件 service 單元測試。
 - `backend/tests/test_summary_service.py`：摘要擷取與 summary service 測試。
@@ -561,6 +563,7 @@ GET /api/statistics/decision-dates
 - 建立 `case_search` FTS5 virtual table。
 - 匯入 492 筆案件。
 - 匯入 492 筆文字。
+- 匯入腳本支援多個 `--metadata` 與 `--metadata-dir`。
 - 建立全文搜尋索引。
 - 已寫入 492 筆規則式摘要。
 - 提供資料庫驗證腳本。
@@ -613,7 +616,7 @@ GET /api/statistics/decision-dates
 - embedding 建立。
 - 向量索引。
 - OCR fallback。
-- 跨年度資料整合。
+- 實際跨年度資料匯入、前端跨年度展示與跨年度統計驗證。
 - 後台管理 API，例如重新匯入、重建索引。
 - Docker。
 - CI。
@@ -754,6 +757,24 @@ py .\backend\scripts\import_cases_to_db.py --recreate
 data/foi_ods/metadata/foi_ods_life_roc115_metadata.json
 ```
 
+多 metadata 匯入：
+
+```powershell
+py .\backend\scripts\import_cases_to_db.py --metadata .\data\foi_ods\metadata\foi_ods_life_roc114_metadata.json --metadata .\data\foi_ods\metadata\foi_ods_life_roc115_metadata.json --recreate
+```
+
+metadata 目錄匯入：
+
+```powershell
+py .\backend\scripts\import_cases_to_db.py --metadata-dir .\data\foi_ods\metadata --recreate
+```
+
+說明：
+
+- `--metadata` 可重複指定。
+- `--metadata-dir` 只讀取目錄下的 `*_metadata.json`。
+- 目前實際完成資料仍是 ROC 115 的 492 筆；多 metadata 匯入是跨年度擴充前置能力。
+
 預設輸出：
 
 ```text
@@ -859,6 +880,7 @@ py -m pytest
 - 搜尋 fallback service test。
 - 摘要擷取與 summary service tests。
 - 相似案件 service tests。
+- 匯入腳本多 metadata tests。
 
 ### SQLite 匯入驗證
 
@@ -934,6 +956,7 @@ http://127.0.0.1:5173
 - 前端相似案件區塊。
 - 前端結構拆分。
 - 環境設定集中化與 `.env.example`。
+- SQLite 匯入腳本支援多 metadata。
 
 ### 下一步：embedding 相似案件或跨年度擴充
 
@@ -955,8 +978,8 @@ http://127.0.0.1:5173
 
 建議工作：
 
-1. 匯入腳本支援多 metadata。
-2. API 與前端年度 filter 正式化。
+1. API 與前端年度 filter 正式化。
+2. 實際新增其他年度資料並匯入。
 3. 檢查 `case_id` 是否能跨年度穩定唯一。
 4. 增加跨年度統計。
 

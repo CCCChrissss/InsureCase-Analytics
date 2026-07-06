@@ -213,6 +213,11 @@ py .\backend\scripts\verify_case_db.py
 
 目標：支援更多年度與後續資料更新。
 
+目前進度：
+
+- 已完成匯入腳本前置能力，可指定多個 `--metadata` 或使用 `--metadata-dir` 匯入多個 `*_metadata.json`。
+- 尚未實際匯入 ROC 114、ROC 116 或其他年度資料。
+
 預計完成：
 
 - 支援匯入 ROC 114、ROC 115、ROC 116。

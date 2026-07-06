@@ -134,7 +134,7 @@ backend/scripts/import_cases_to_db.py
 
 功能：
 
-- 讀取總 metadata。
+- 讀取單一或多個總 metadata。
 - 讀取每案 normalized text。
 - 寫入 `cases`、`case_texts`。
 - 建立或更新 `case_search`。
@@ -151,11 +151,26 @@ backend/data/insurance_cases.db
 py .\backend\scripts\import_cases_to_db.py --recreate
 ```
 
+指定多個 metadata：
+
+```powershell
+py .\backend\scripts\import_cases_to_db.py --metadata .\data\foi_ods\metadata\foi_ods_life_roc114_metadata.json --metadata .\data\foi_ods\metadata\foi_ods_life_roc115_metadata.json --recreate
+```
+
+指定 metadata 目錄：
+
+```powershell
+py .\backend\scripts\import_cases_to_db.py --metadata-dir .\data\foi_ods\metadata --recreate
+```
+
+目錄模式只會讀取 `*_metadata.json`，避免誤讀 PDF text report 或 case organize report。
+
 驗證：
 
 - `cases` 筆數 = 492。
 - `case_texts` 筆數 = 492。
 - `case_search` 可查詢關鍵字。
+- 多 metadata 匯入時，輸出 report 的 `metadata_files` 與 `metadata_sources` 應列出每個來源檔案。
 
 ### 5. 建立全文搜尋索引
 
@@ -258,6 +273,7 @@ backend/scripts/build_embeddings.py
 3. 每個階段都要產生 report 或可查驗的統計結果。
 4. metadata 的檔案路徑更新要保持一致。
 5. 未來跨年度時，資料夾與資料庫都不可寫死 `roc115`。
+6. 目前匯入腳本已支援多 metadata，但不代表其他年度資料已經完成蒐集與匯入。
 
 ## API 讀取流程
 

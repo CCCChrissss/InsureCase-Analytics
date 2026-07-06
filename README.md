@@ -115,6 +115,18 @@ backend/data/insurance_cases.db
 py .\backend\scripts\import_cases_to_db.py --recreate
 ```
 
+跨年度或多批 metadata 可指定多個檔案：
+
+```powershell
+py .\backend\scripts\import_cases_to_db.py --metadata .\data\foi_ods\metadata\foi_ods_life_roc114_metadata.json --metadata .\data\foi_ods\metadata\foi_ods_life_roc115_metadata.json --recreate
+```
+
+也可以指定 metadata 目錄，腳本會讀取該目錄下的 `*_metadata.json`，不會讀取 `*_report.json`：
+
+```powershell
+py .\backend\scripts\import_cases_to_db.py --metadata-dir .\data\foi_ods\metadata --recreate
+```
+
 驗證指令：
 
 ```powershell
@@ -128,6 +140,8 @@ py .\backend\scripts\verify_case_db.py
 - `case_search` = 492
 - `data/` 內原始案件資料不會被修改
 - `backend/data/insurance_cases.db` 是本機產物，不提交 Git
+
+注意：目前實際可用資料仍只有 ROC 115 的 492 筆；多 metadata 匯入是跨年度擴充的前置能力。
 
 ## FastAPI 後端
 
@@ -279,4 +293,4 @@ GET /api/cases/{case_id}/similar?limit=5
 
 - 尚未建立向量索引。
 - 尚未建立 embedding 相似案件搜尋。
-- 尚未建立跨年度資料整合。
+- 匯入腳本已支援多 metadata，但尚未實際匯入其他年度資料，也尚未完成跨年度前端統計展示。

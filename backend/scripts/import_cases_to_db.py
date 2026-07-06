@@ -7,7 +7,7 @@ import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_METADATA = PROJECT_ROOT / "data" / "foi_ods" / "metadata" / "foi_ods_life_roc115_metadata.json"
@@ -66,6 +66,38 @@ def load_metadata(path: Path) -> dict[str, Any]:
     if not isinstance(data.get("records"), list):
         raise ImportError("Metadata JSON must contain a top-level records list.")
     return data
+
+
+def resolve_metadata_inputs(
+    metadata_paths: Sequence[Path] | None = None,
+    metadata_dirs: Sequence[Path] | None = None,
+) -> list[Path]:
+    paths: list[Path] = []
+
+    for metadata_path in metadata_paths or []:
+        paths.append(metadata_path)
+
+    for metadata_dir in metadata_dirs or []:
+        if not metadata_dir.is_dir():
+            raise ImportError(f"Metadata directory does not exist: {metadata_dir}")
+        matched_paths = sorted(metadata_dir.glob("*_metadata.json"))
+        if not matched_paths:
+            raise ImportError(f"Metadata directory contains no *_metadata.json files: {metadata_dir}")
+        paths.extend(matched_paths)
+
+    if not paths:
+        paths.append(DEFAULT_METADATA)
+
+    unique_paths: list[Path] = []
+    seen: set[Path] = set()
+    for path in paths:
+        resolved = path.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        unique_paths.append(path)
+
+    return unique_paths
 
 
 def connect(db_path: Path) -> sqlite3.Connection:
@@ -212,9 +244,21 @@ def import_record(connection: sqlite3.Connection, record: dict[str, Any], import
     )
 
 
-def import_cases(metadata_path: Path, db_path: Path, recreate: bool) -> dict[str, Any]:
-    data = load_metadata(metadata_path)
-    records = data["records"]
+def normalize_metadata_paths(metadata_paths: Path | Sequence[Path]) -> list[Path]:
+    if isinstance(metadata_paths, Path):
+        return [metadata_paths]
+    return list(metadata_paths)
+
+
+def import_cases(metadata_paths: Path | Sequence[Path], db_path: Path, recreate: bool) -> dict[str, Any]:
+    metadata_file_paths = normalize_metadata_paths(metadata_paths)
+    metadata_sources = [
+        {
+            "path": str(metadata_path),
+            "record_count": len(load_metadata(metadata_path)["records"]),
+        }
+        for metadata_path in metadata_file_paths
+    ]
     imported_at = now_iso()
 
     with connect(db_path) as connection:
@@ -223,17 +267,20 @@ def import_cases(metadata_path: Path, db_path: Path, recreate: bool) -> dict[str
             reset_tables(connection)
         failures: list[dict[str, str]] = []
         success_count = 0
-        for record in records:
-            try:
-                import_record(connection, record, imported_at)
-                success_count += 1
-            except Exception as error:
-                failures.append(
-                    {
-                        "case_number": str(record.get("case_number")),
-                        "error": repr(error),
-                    }
-                )
+        for metadata_path in metadata_file_paths:
+            records = load_metadata(metadata_path)["records"]
+            for record in records:
+                try:
+                    import_record(connection, record, imported_at)
+                    success_count += 1
+                except Exception as error:
+                    failures.append(
+                        {
+                            "metadata": str(metadata_path),
+                            "case_number": str(record.get("case_number")),
+                            "error": repr(error),
+                        }
+                    )
 
         counts = {
             "cases": connection.execute("SELECT COUNT(*) FROM cases").fetchone()[0],
@@ -242,9 +289,11 @@ def import_cases(metadata_path: Path, db_path: Path, recreate: bool) -> dict[str
         }
 
     return {
-        "metadata": str(metadata_path),
+        "metadata": str(metadata_file_paths[0]) if len(metadata_file_paths) == 1 else [str(path) for path in metadata_file_paths],
+        "metadata_files": [str(path) for path in metadata_file_paths],
+        "metadata_sources": metadata_sources,
         "database": str(db_path),
-        "record_count": len(records),
+        "record_count": sum(source["record_count"] for source in metadata_sources),
         "success_count": success_count,
         "failure_count": len(failures),
         "failures": failures[:20],
@@ -255,7 +304,20 @@ def import_cases(metadata_path: Path, db_path: Path, recreate: bool) -> dict[str
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Import FOI ODS case files into SQLite.")
-    parser.add_argument("--metadata", type=Path, default=DEFAULT_METADATA)
+    parser.add_argument(
+        "--metadata",
+        type=Path,
+        action="append",
+        default=None,
+        help="Metadata JSON path. Can be provided multiple times.",
+    )
+    parser.add_argument(
+        "--metadata-dir",
+        type=Path,
+        action="append",
+        default=None,
+        help="Directory containing *_metadata.json files. Can be provided multiple times.",
+    )
     parser.add_argument("--db", type=Path, default=DEFAULT_DB_PATH)
     parser.add_argument("--recreate", action="store_true", help="Clear imported tables before importing.")
     return parser.parse_args()
@@ -263,7 +325,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    report = import_cases(args.metadata, args.db, args.recreate)
+    metadata_paths = resolve_metadata_inputs(args.metadata, args.metadata_dir)
+    report = import_cases(metadata_paths, args.db, args.recreate)
     print(json.dumps(report, ensure_ascii=False, indent=2))
     if report["failure_count"]:
         raise SystemExit(1)
