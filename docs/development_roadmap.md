@@ -92,7 +92,7 @@ py .\backend\scripts\verify_case_db.py
 
 目標：建立可展示的前端介面。
 
-預計完成：
+完成項目：
 
 - Dashboard。
 - 案件列表頁。
@@ -100,14 +100,12 @@ py .\backend\scripts\verify_case_db.py
 - 案件詳情頁。
 - 統計頁。
 
-預計新增檔案：
+新增檔案：
 
-- `frontend/src/pages/Dashboard.tsx`
-- `frontend/src/pages/CaseList.tsx`
-- `frontend/src/pages/Search.tsx`
-- `frontend/src/pages/CaseDetail.tsx`
-- `frontend/src/pages/Statistics.tsx`
-- `frontend/src/api/client.ts`
+- `frontend/package.json`
+- `frontend/vite.config.ts`
+- `frontend/src/main.tsx`
+- `frontend/src/styles.css`
 
 驗證方式：
 

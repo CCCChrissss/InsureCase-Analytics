@@ -163,7 +163,48 @@ GET /api/statistics/decision-dates
 GET /api/files/{case_id}/pdf
 ```
 
+## React 前端
+
+第 3 階段新增 React + Vite 前端 MVP。
+
+前端目錄：
+
+```text
+frontend/
+```
+
+安裝相依套件：
+
+```powershell
+cd frontend
+pnpm install
+```
+
+啟動前端：
+
+```powershell
+pnpm dev
+```
+
+預設網址：
+
+```text
+http://127.0.0.1:5173
+```
+
+前端會呼叫：
+
+```text
+http://127.0.0.1:8000/api
+```
+
+目前頁面：
+
+- Dashboard：案件數、爭議類型、日期分布。
+- 案件管理：篩選、分頁、案件詳情、PDF 連結。
+- 全文搜尋：關鍵字搜尋與命中片段。
+- 統計分析：爭議類型與決定日期統計。
+
 ## 目前待處理事項
 
-- 尚未建立前端介面。
 - 尚未建立自動化測試。

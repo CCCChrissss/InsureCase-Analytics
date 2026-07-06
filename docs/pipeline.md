@@ -253,3 +253,22 @@ API 驗證重點：
 - `/api/health` 的 `database_ready` 應為 `true`。
 - `/api/statistics/overview` 的 `case_count` 應為 492。
 - `/api/search?q=癌症` 應有搜尋結果。
+
+## 前端讀取流程
+
+第 3 階段前端使用 React + Vite，透過 HTTP 呼叫 FastAPI。
+
+```text
+React frontend
+  ↓ fetch
+FastAPI /api/*
+  ↓ sqlite3
+backend/data/insurance_cases.db
+```
+
+啟動順序：
+
+1. 確認 SQLite DB 已建立。
+2. 啟動 FastAPI：`py -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000`
+3. 啟動前端：`pnpm dev`
+4. 開啟 `http://127.0.0.1:5173`
