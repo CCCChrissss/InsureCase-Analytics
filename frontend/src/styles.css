@@ -348,6 +348,60 @@ button {
   font-weight: 700;
 }
 
+.summary-section {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #dce5e3;
+  border-radius: 6px;
+  background: #fbfcfc;
+}
+
+.summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.summary-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.summary-header span {
+  color: #687873;
+  font-size: 0.82rem;
+}
+
+.summary-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.summary-block {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #e1e9e7;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.summary-block h4 {
+  margin: 0;
+  color: #2f6f73;
+  font-size: 0.92rem;
+}
+
+.summary-block p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #33413e;
+  font-size: 0.94rem;
+}
+
 .text-viewer {
   max-height: 460px;
   overflow: auto;
@@ -368,6 +422,10 @@ button {
 .state-box {
   padding: 18px;
   color: #60706c;
+}
+
+.state-box.compact {
+  padding: 10px 0;
 }
 
 .state-box.error {

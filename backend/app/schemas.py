@@ -42,6 +42,15 @@ class CaseDetail(CaseSummary):
     extraction_method: str | None
 
 
+class CaseSummaryDetail(BaseModel):
+    case_id: str
+    holding: str | None
+    applicant_claim: str | None
+    reasoning: str | None
+    summary_method: str | None
+    created_at: str | None
+
+
 class SearchResult(BaseModel):
     case_id: str
     case_number: str

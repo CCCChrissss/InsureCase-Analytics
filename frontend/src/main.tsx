@@ -63,6 +63,15 @@ type CaseDetail = CaseSummary & {
   extraction_method: string | null;
 };
 
+type CaseSummaryDetail = {
+  case_id: string;
+  holding: string | null;
+  applicant_claim: string | null;
+  reasoning: string | null;
+  summary_method: string | null;
+  created_at: string | null;
+};
+
 type SearchResult = {
   case_id: string;
   case_number: string;
@@ -84,6 +93,17 @@ type Route = "dashboard" | "cases" | "search" | "statistics";
 
 async function apiGet<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`);
+  if (!response.ok) {
+    throw new Error(`API ${response.status}: ${response.statusText}`);
+  }
+  return response.json() as Promise<T>;
+}
+
+async function apiGetOptional<T>(path: string): Promise<T | null> {
+  const response = await fetch(`${API_BASE}${path}`);
+  if (response.status === 404) {
+    return null;
+  }
   if (!response.ok) {
     throw new Error(`API ${response.status}: ${response.statusText}`);
   }
@@ -279,6 +299,10 @@ function CasesPage({
     () => (selectedCaseId ? apiGet<CaseDetail>(`/cases/${selectedCaseId}`) : Promise.resolve(null)),
     [selectedCaseId]
   );
+  const summary = useAsyncData(
+    () => (selectedCaseId ? apiGetOptional<CaseSummaryDetail>(`/cases/${selectedCaseId}/summary`) : Promise.resolve(null)),
+    [selectedCaseId]
+  );
 
   const totalPages = Math.max(1, Math.ceil((cases.data?.total ?? 0) / (cases.data?.page_size ?? 12)));
 
@@ -335,7 +359,14 @@ function CasesPage({
           {!selectedCaseId && <EmptyState text="請從左側選擇案件。" />}
           {selectedCaseId && (
             <AsyncBlock loading={detail.loading} error={detail.error}>
-              {detail.data && <CaseDetailView caseDetail={detail.data} />}
+              {detail.data && (
+                <CaseDetailView
+                  caseDetail={detail.data}
+                  summary={summary.data}
+                  summaryError={summary.error}
+                  summaryLoading={summary.loading}
+                />
+              )}
             </AsyncBlock>
           )}
         </section>
@@ -423,7 +454,17 @@ function StatisticsPage() {
   );
 }
 
-function CaseDetailView({ caseDetail }: { caseDetail: CaseDetail }) {
+function CaseDetailView({
+  caseDetail,
+  summary,
+  summaryError,
+  summaryLoading
+}: {
+  caseDetail: CaseDetail;
+  summary: CaseSummaryDetail | null;
+  summaryError: string | null;
+  summaryLoading: boolean;
+}) {
   return (
     <div className="case-detail">
       <div className="detail-title">
@@ -438,10 +479,35 @@ function CaseDetailView({ caseDetail }: { caseDetail: CaseDetail }) {
         <div><dt>評議結果</dt><dd>{caseDetail.decision_result}</dd></div>
         <div><dt>頁數</dt><dd>{caseDetail.page_count}</dd></div>
       </dl>
+      <section className="summary-section">
+        <div className="summary-header">
+          <h3>案件摘要</h3>
+          {summary?.summary_method && <span>{summary.summary_method}</span>}
+        </div>
+        {summaryLoading && <div className="state-box compact">摘要載入中</div>}
+        {!summaryLoading && summaryError && <div className="state-box error compact">摘要讀取失敗：{summaryError}</div>}
+        {!summaryLoading && !summaryError && !summary && <div className="state-box compact">尚未產生摘要。</div>}
+        {!summaryLoading && !summaryError && summary && (
+          <div className="summary-grid">
+            <SummaryBlock title="主文" text={summary.holding} />
+            <SummaryBlock title="申請人主張" text={summary.applicant_claim} />
+            <SummaryBlock title="判斷理由" text={summary.reasoning} />
+          </div>
+        )}
+      </section>
       <div className="text-viewer">
         <pre>{caseDetail.normalized_text}</pre>
       </div>
     </div>
+  );
+}
+
+function SummaryBlock({ title, text }: { title: string; text: string | null }) {
+  return (
+    <article className="summary-block">
+      <h4>{title}</h4>
+      <p>{text || "未擷取到對應段落。"}</p>
+    </article>
   );
 }
 

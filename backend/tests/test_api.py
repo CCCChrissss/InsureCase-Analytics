@@ -53,3 +53,23 @@ def test_search_cancer() -> None:
         "like_fallback_error",
         "like_fallback_empty_fts5",
     }
+
+
+def test_case_summary_not_found() -> None:
+    response = client.get("/api/cases/not-a-real-case-id/summary")
+
+    assert response.status_code == 404
+
+
+def test_case_summary() -> None:
+    cases_response = client.get("/api/cases", params={"page_size": 1})
+    case_id = cases_response.json()["items"][0]["case_id"]
+
+    response = client.get(f"/api/cases/{case_id}/summary")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["case_id"] == case_id
+    assert data["summary_method"] == "rule_based_v1"
+    assert data["holding"]
+    assert data["reasoning"]

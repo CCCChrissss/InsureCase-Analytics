@@ -161,6 +161,7 @@ GET /api/statistics/overview
 GET /api/statistics/dispute-types
 GET /api/statistics/decision-dates
 GET /api/files/{case_id}/pdf
+GET /api/cases/{case_id}/summary
 ```
 
 ## React 前端
@@ -205,6 +206,32 @@ http://127.0.0.1:8000/api
 - 全文搜尋：關鍵字搜尋與命中片段。
 - 統計分析：爭議類型與決定日期統計。
 
+## 規則式案件摘要
+
+第 4 階段新增規則式摘要 pipeline，會從 `case_texts.normalized_text` 擷取主文、申請人主張與判斷理由，並寫入 SQLite 的 `case_summaries` table。
+
+執行指令：
+
+```powershell
+py .\backend\scripts\extract_case_summaries.py
+```
+
+摘要 API：
+
+```text
+GET /api/cases/{case_id}/summary
+```
+
+目前摘要方法：
+
+```text
+rule_based_v1
+```
+
+注意：規則式摘要是根據評議書段落標題擷取重點文字，不是法律判斷，也不是 LLM 生成摘要。若格式變異，可能會出現部分欄位未擷取到。
+
 ## 目前待處理事項
 
-- 尚未建立自動化測試。
+- 前端尚未拆分大型 `main.tsx`。
+- 尚未建立相似案件搜尋。
+- 尚未建立向量索引。

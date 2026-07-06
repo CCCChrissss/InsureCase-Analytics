@@ -120,7 +120,7 @@ py .\backend\scripts\verify_case_db.py
 
 目標：從 normalized text 擷取案件重點。
 
-預計完成：
+完成項目：
 
 - 擷取主文。
 - 擷取申請人主張。
@@ -128,10 +128,27 @@ py .\backend\scripts\verify_case_db.py
 - 儲存至 `case_summaries`。
 - 案件詳情頁顯示摘要。
 
+新增檔案：
+
+- `backend/scripts/extract_case_summaries.py`
+- `backend/app/routers/summaries.py`
+- `backend/app/services/summary_service.py`
+- `backend/tests/test_summary_service.py`
+
+修改檔案：
+
+- `backend/app/main.py`
+- `backend/app/schemas.py`
+- `frontend/src/main.tsx`
+- `frontend/src/styles.css`
+
 驗證方式：
 
-- 抽樣 30 件人工檢查。
-- 至少 80% 案件能抽出主文。
+- `py .\backend\scripts\extract_case_summaries.py`
+- `py -m pytest`
+- `pnpm build`
+- 抽樣案件人工檢查。
+- 大多數案件能抽出主文、申請人主張與判斷理由。
 - 摘要內容可回溯原文。
 - 沒有產生原文不存在的結論。
 

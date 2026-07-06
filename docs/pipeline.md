@@ -181,10 +181,10 @@ py .\backend\scripts\verify_case_db.py
 
 ### 6. 規則式摘要
 
-預計新增：
+程式：
 
 ```text
-backend/scripts/extract_case_summary.py
+backend/scripts/extract_case_summaries.py
 ```
 
 功能：
@@ -193,9 +193,25 @@ backend/scripts/extract_case_summary.py
 - 抽取申請人主張。
 - 抽取評議理由。
 - 寫入 `case_summaries`。
+- 使用 `summary_method = rule_based_v1`。
+
+執行指令：
+
+```powershell
+py .\backend\scripts\extract_case_summaries.py
+```
+
+API：
+
+```text
+GET /api/cases/{case_id}/summary
+```
 
 驗證：
 
+- `case_summaries` 筆數應等於已處理案件數。
+- API 可回傳摘要。
+- 前端案件詳情頁可顯示摘要。
 - 抽樣人工檢查。
 - 摘要內容可回溯原文。
 
