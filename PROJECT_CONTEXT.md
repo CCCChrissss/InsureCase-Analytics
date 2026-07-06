@@ -76,9 +76,9 @@
 │  │     ├─ statistics_service.py
 │  │     └─ summary_service.py
 │  ├─ scripts/
-│     ├─ extract_case_summaries.py
-│     ├─ import_cases_to_db.py
-│     └─ verify_case_db.py
+│  │  ├─ extract_case_summaries.py
+│  │  ├─ import_cases_to_db.py
+│  │  └─ verify_case_db.py
 │  └─ tests/
 │     ├─ test_api.py
 │     ├─ test_search_service.py
@@ -93,9 +93,23 @@
    ├─ tsconfig.node.json
    ├─ vite.config.ts
    └─ src/
+      ├─ App.tsx
       ├─ main.tsx
       ├─ styles.css
-      └─ vite-env.d.ts
+      ├─ types.ts
+      ├─ vite-env.d.ts
+      ├─ api/
+      │  └─ client.ts
+      ├─ components/
+      │  ├─ CaseDetailView.tsx
+      │  └─ ui.tsx
+      ├─ hooks/
+      │  └─ useAsyncData.ts
+      └─ pages/
+         ├─ CasesPage.tsx
+         ├─ Dashboard.tsx
+         ├─ SearchPage.tsx
+         └─ StatisticsPage.tsx
 ```
 
 未掃描但專案會使用的產物目錄：
@@ -166,7 +180,14 @@ frontend/dist/
 - `frontend/vite.config.ts`：Vite 設定，使用 React plugin，dev server 固定 `127.0.0.1:5173`。
 - `frontend/tsconfig.json`：前端 TypeScript 設定。
 - `frontend/tsconfig.node.json`：Vite config 使用的 TypeScript 設定。
-- `frontend/src/main.tsx`：目前所有 React 頁面、元件、API 型別與資料存取邏輯集中於此。
+- `frontend/src/main.tsx`：React app 掛載入口。
+- `frontend/src/App.tsx`：主版面、側邊欄導覽與 route state 管理。
+- `frontend/src/api/client.ts`：API base URL、`apiGet`、`apiGetOptional`。
+- `frontend/src/types.ts`：前端 API response 型別。
+- `frontend/src/hooks/useAsyncData.ts`：共用非同步資料載入 hook。
+- `frontend/src/components/CaseDetailView.tsx`：案件詳情、摘要、相似案件區塊。
+- `frontend/src/components/ui.tsx`：PageHeader、PanelHeader、Metric、AsyncBlock、EmptyState。
+- `frontend/src/pages/`：Dashboard、案件管理、全文搜尋、統計分析頁。
 - `frontend/src/styles.css`：前端全域樣式與 responsive layout。
 - `frontend/src/vite-env.d.ts`：Vite TypeScript 型別宣告。
 
@@ -266,7 +287,21 @@ VITE_API_BASE_URL 若存在則使用該值
 - 全文搜尋：關鍵字輸入，搜尋結果，snippet，點擊進入案件詳情。
 - 統計分析：爭議類型分布與決定日期分布。
 
-目前所有前端邏輯集中在 `frontend/src/main.tsx`，樣式集中在 `frontend/src/styles.css`。
+目前前端已拆分為：
+
+```text
+frontend/src/
+├─ api/
+├─ components/
+├─ hooks/
+├─ pages/
+├─ App.tsx
+├─ main.tsx
+├─ styles.css
+└─ types.ts
+```
+
+樣式仍集中於 `frontend/src/styles.css`。
 
 ## 6. 資料庫 schema
 
@@ -583,29 +618,9 @@ GET /api/statistics/decision-dates
 
 - 後續用 embedding / pgvector 或其他向量索引升級。
 
-### 前端目前集中在單一檔案
+### 前端仍未使用正式 router
 
-`frontend/src/main.tsx` 同時包含：
-
-- API type
-- API helper
-- custom hook
-- App layout
-- 四個頁面
-- 多個 UI 元件
-
-影響：
-
-- 短期 MVP 可接受。
-- 後續擴充摘要、相似案件、比較頁時，維護成本會快速上升。
-
-建議：
-
-- 拆成 `api/`、`types/`、`components/`、`pages/`。
-
-### 前端沒有正式 router
-
-目前用 React state 控制頁面，不會改變 URL。
+前端已拆分檔案，但頁面切換仍使用 React state，沒有 URL route。
 
 影響：
 
@@ -615,7 +630,7 @@ GET /api/statistics/decision-dates
 
 建議：
 
-- 第四或第五階段加入 React Router。
+- 後續加入 React Router 或等價 routing。
 
 ### 案件詳情一次回傳全文
 
@@ -881,42 +896,19 @@ http://127.0.0.1:5173
 - 後端 pytest。
 - 規則式相似案件 API。
 - 前端相似案件區塊。
+- 前端結構拆分。
 
-### 下一步：前端結構整理
-
-優先原因：
-
-- `frontend/src/main.tsx` 已集中 Dashboard、案件管理、搜尋、統計、摘要、相似案件等邏輯。
-- 後續加入 embedding 或跨年度功能前，應先降低單檔維護成本。
-
-建議工作：
-
-建議拆分：
-
-```text
-frontend/src/
-├─ api/
-├─ types/
-├─ hooks/
-├─ components/
-├─ pages/
-└─ main.tsx
-```
-
-### 第 7 階段：相似案件搜尋
+### 下一步：embedding 相似案件或跨年度擴充
 
 優先原因：
 
-- 是系統核心亮點，但需要更穩定的資料與摘要基礎。
+- 規則式摘要與相似案件 baseline 已完成。
+- 前端結構已整理，後續可以承接更複雜功能。
 
 建議工作：
 
-1. normalized text chunking。
-2. embedding 建立。
-3. 儲存向量或相似度索引。
-4. 新增 API：
-   - `GET /api/cases/{case_id}/similar`
-5. 前端詳情頁顯示 top 5 相似案件。
+1. 若要強化智慧搜尋：建立 chunking、embedding 與向量相似案件。
+2. 若要強化資料範圍：支援跨年度匯入與統計。
 
 ### 第 8 階段：跨年度擴充
 

@@ -188,7 +188,26 @@ py .\backend\scripts\verify_case_db.py
 - 相似案件多數落在相近爭議類型。
 - 回傳結果顯示分數與命中原因。
 
-## 第 6 階段：跨年度擴充
+## 第 6 階段：前端結構整理
+
+目標：降低前端單檔維護成本，讓後續 embedding、跨年度與部署功能更容易擴充。
+
+完成項目：
+
+- 將 `frontend/src/main.tsx` 縮小為 app 掛載入口。
+- 新增 `frontend/src/App.tsx` 作為主版面與 route state 管理。
+- 新增 `frontend/src/api/client.ts` 管理 API base 與 fetch helper。
+- 新增 `frontend/src/types.ts` 集中 API response 型別。
+- 新增 `frontend/src/hooks/useAsyncData.ts`。
+- 新增 `frontend/src/components/` 放共用 UI 與案件詳情元件。
+- 新增 `frontend/src/pages/` 放 Dashboard、案件、搜尋、統計頁。
+
+驗證方式：
+
+- `pnpm build` 成功。
+- 既有頁面與 API 行為不變。
+
+## 第 7 階段：跨年度擴充
 
 目標：支援更多年度與後續資料更新。
 
@@ -213,4 +232,5 @@ py .\backend\scripts\verify_case_db.py
 4. 實作 React 前端。
 5. 加入規則式摘要。
 6. 加入相似案件搜尋。
-7. 擴充跨年度資料。
+7. 整理前端結構。
+8. 擴充跨年度資料。

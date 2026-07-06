@@ -252,6 +252,6 @@ GET /api/cases/{case_id}/similar?limit=5
 
 ## 目前待處理事項
 
-- 前端尚未拆分大型 `main.tsx`。
-- 尚未建立相似案件搜尋。
 - 尚未建立向量索引。
+- 尚未建立 embedding 相似案件搜尋。
+- 尚未建立跨年度資料整合。
