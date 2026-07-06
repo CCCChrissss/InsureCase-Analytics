@@ -217,7 +217,22 @@ GET /api/cases/{case_id}/summary
 
 ### 7. 向量索引
 
-第三階段再做。
+規則式相似案件搜尋已先作為 baseline 完成。
+
+目前 API：
+
+```text
+GET /api/cases/{case_id}/similar?limit=5
+```
+
+目前依據：
+
+- 相同爭議類型。
+- 相同評議結果。
+- 相同決定類別。
+- 摘要文字中的保險關鍵詞重疊。
+
+後續再新增向量索引。
 
 預計新增：
 

@@ -162,6 +162,7 @@ GET /api/statistics/dispute-types
 GET /api/statistics/decision-dates
 GET /api/files/{case_id}/pdf
 GET /api/cases/{case_id}/summary
+GET /api/cases/{case_id}/similar
 ```
 
 ## React 前端
@@ -205,6 +206,8 @@ http://127.0.0.1:8000/api
 - 案件管理：篩選、分頁、案件詳情、PDF 連結。
 - 全文搜尋：關鍵字搜尋與命中片段。
 - 統計分析：爭議類型與決定日期統計。
+- 案件摘要：主文、申請人主張、判斷理由。
+- 相似案件：依規則式分數推薦相近案件。
 
 ## 規則式案件摘要
 
@@ -229,6 +232,23 @@ rule_based_v1
 ```
 
 注意：規則式摘要是根據評議書段落標題擷取重點文字，不是法律判斷，也不是 LLM 生成摘要。若格式變異，可能會出現部分欄位未擷取到。
+
+## 規則式相似案件
+
+第 5 階段新增規則式相似案件搜尋，會依下列特徵計分：
+
+- 相同爭議類型。
+- 相同評議結果。
+- 相同決定類別。
+- 摘要文字中的保險關鍵詞重疊。
+
+API：
+
+```text
+GET /api/cases/{case_id}/similar?limit=5
+```
+
+注意：目前是可解釋的 baseline，不是 embedding 或語意向量搜尋。分數只代表排序依據，不代表法律結論。
 
 ## 目前待處理事項
 

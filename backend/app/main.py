@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.app.routers import cases, health, search, statistics, summaries
+from backend.app.routers import cases, health, search, similar_cases, statistics, summaries
 
 
 app = FastAPI(
@@ -23,5 +23,6 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(cases.router)
 app.include_router(search.router)
+app.include_router(similar_cases.router)
 app.include_router(statistics.router)
 app.include_router(summaries.router)

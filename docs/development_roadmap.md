@@ -156,18 +156,37 @@ py .\backend\scripts\verify_case_db.py
 
 目標：讓使用者可從單一案件找到相似案例。
 
-預計完成：
+完成項目：
+
+- 規則式相似度計分。
+- 相似案件 API。
+- 詳情頁顯示 top 5 相似案件。
+
+相似度依據：
+
+- 相同爭議類型。
+- 相同評議結果。
+- 相同決定類別。
+- 摘要文字中的保險關鍵詞重疊。
+
+新增檔案：
+
+- `backend/app/routers/similar_cases.py`
+- `backend/app/services/similar_case_service.py`
+- `backend/tests/test_similar_case_service.py`
+
+後續再做：
 
 - normalized text chunking。
 - embedding 建立。
 - 相似案件 API。
-- 詳情頁顯示 top 5 相似案件。
+- 向量搜尋。
 
 驗證方式：
 
 - 任一案件可回傳 top 5 相似案件。
 - 相似案件多數落在相近爭議類型。
-- 回傳結果顯示相似段落或理由。
+- 回傳結果顯示分數與命中原因。
 
 ## 第 6 階段：跨年度擴充
 

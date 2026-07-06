@@ -72,6 +72,22 @@ type CaseSummaryDetail = {
   created_at: string | null;
 };
 
+type SimilarCase = {
+  case_id: string;
+  case_number: string;
+  decision_date: string | null;
+  dispute_type: string | null;
+  decision_result: string | null;
+  score: number;
+  matched_reasons: string[];
+};
+
+type SimilarCasesResponse = {
+  case_id: string;
+  items: SimilarCase[];
+  total_candidates: number;
+};
+
 type SearchResult = {
   case_id: string;
   case_number: string;
@@ -303,6 +319,10 @@ function CasesPage({
     () => (selectedCaseId ? apiGetOptional<CaseSummaryDetail>(`/cases/${selectedCaseId}/summary`) : Promise.resolve(null)),
     [selectedCaseId]
   );
+  const similar = useAsyncData(
+    () => (selectedCaseId ? apiGet<SimilarCasesResponse>(`/cases/${selectedCaseId}/similar?limit=5`) : Promise.resolve(null)),
+    [selectedCaseId]
+  );
 
   const totalPages = Math.max(1, Math.ceil((cases.data?.total ?? 0) / (cases.data?.page_size ?? 12)));
 
@@ -365,6 +385,10 @@ function CasesPage({
                   summary={summary.data}
                   summaryError={summary.error}
                   summaryLoading={summary.loading}
+                  similar={similar.data}
+                  similarError={similar.error}
+                  similarLoading={similar.loading}
+                  onOpenCase={onSelectCase}
                 />
               )}
             </AsyncBlock>
@@ -458,12 +482,20 @@ function CaseDetailView({
   caseDetail,
   summary,
   summaryError,
-  summaryLoading
+  summaryLoading,
+  similar,
+  similarError,
+  similarLoading,
+  onOpenCase
 }: {
   caseDetail: CaseDetail;
   summary: CaseSummaryDetail | null;
   summaryError: string | null;
   summaryLoading: boolean;
+  similar: SimilarCasesResponse | null;
+  similarError: string | null;
+  similarLoading: boolean;
+  onOpenCase: (caseId: string) => void;
 }) {
   return (
     <div className="case-detail">
@@ -492,6 +524,28 @@ function CaseDetailView({
             <SummaryBlock title="主文" text={summary.holding} />
             <SummaryBlock title="申請人主張" text={summary.applicant_claim} />
             <SummaryBlock title="判斷理由" text={summary.reasoning} />
+          </div>
+        )}
+      </section>
+      <section className="similar-section">
+        <div className="summary-header">
+          <h3>相似案件</h3>
+          {similar && <span>{similar.total_candidates} 個候選</span>}
+        </div>
+        {similarLoading && <div className="state-box compact">相似案件載入中</div>}
+        {!similarLoading && similarError && <div className="state-box error compact">相似案件讀取失敗：{similarError}</div>}
+        {!similarLoading && !similarError && similar && similar.items.length === 0 && (
+          <div className="state-box compact">目前沒有找到相似案件。</div>
+        )}
+        {!similarLoading && !similarError && similar && similar.items.length > 0 && (
+          <div className="similar-list">
+            {similar.items.map((item) => (
+              <button key={item.case_id} className="similar-row" type="button" onClick={() => onOpenCase(item.case_id)}>
+                <span className="case-number">{item.case_number}</span>
+                <span className="case-meta">{item.decision_date} · {item.dispute_type} · 分數 {item.score}</span>
+                <span className="reason-list">{item.matched_reasons.join(" / ")}</span>
+              </button>
+            ))}
           </div>
         )}
       </section>

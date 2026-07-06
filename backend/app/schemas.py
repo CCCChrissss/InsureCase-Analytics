@@ -51,6 +51,22 @@ class CaseSummaryDetail(BaseModel):
     created_at: str | None
 
 
+class SimilarCase(BaseModel):
+    case_id: str
+    case_number: str
+    decision_date: str | None
+    dispute_type: str | None
+    decision_result: str | None
+    score: float
+    matched_reasons: list[str]
+
+
+class SimilarCasesResponse(BaseModel):
+    case_id: str
+    items: list[SimilarCase]
+    total_candidates: int
+
+
 class SearchResult(BaseModel):
     case_id: str
     case_number: str

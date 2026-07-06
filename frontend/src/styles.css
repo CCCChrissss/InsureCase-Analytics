@@ -348,7 +348,8 @@ button {
   font-weight: 700;
 }
 
-.summary-section {
+.summary-section,
+.similar-section {
   display: grid;
   gap: 12px;
   padding: 14px;
@@ -400,6 +401,32 @@ button {
   overflow-wrap: anywhere;
   color: #33413e;
   font-size: 0.94rem;
+}
+
+.similar-list {
+  display: grid;
+  gap: 8px;
+}
+
+.similar-row {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #e1e9e7;
+  border-radius: 6px;
+  background: #ffffff;
+  text-align: left;
+}
+
+.similar-row:hover {
+  background: #edf5f3;
+}
+
+.reason-list {
+  color: #4f615d;
+  font-size: 0.86rem;
+  overflow-wrap: anywhere;
 }
 
 .text-viewer {

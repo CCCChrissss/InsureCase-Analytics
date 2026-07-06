@@ -73,3 +73,25 @@ def test_case_summary() -> None:
     assert data["summary_method"] == "rule_based_v1"
     assert data["holding"]
     assert data["reasoning"]
+
+
+def test_similar_cases() -> None:
+    cases_response = client.get("/api/cases", params={"page_size": 1})
+    case_id = cases_response.json()["items"][0]["case_id"]
+
+    response = client.get(f"/api/cases/{case_id}/similar", params={"limit": 5})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["case_id"] == case_id
+    assert data["total_candidates"] >= 1
+    assert 1 <= len(data["items"]) <= 5
+    assert all(item["case_id"] != case_id for item in data["items"])
+    assert data["items"][0]["score"] > 0
+    assert data["items"][0]["matched_reasons"]
+
+
+def test_similar_cases_not_found() -> None:
+    response = client.get("/api/cases/not-a-real-case-id/similar")
+
+    assert response.status_code == 404
