@@ -126,7 +126,7 @@ data/foi_ods/metadata/foi_ods_life_roc115_case_organize_report.json
 
 ### 4. 匯入 SQLite
 
-預計新增：
+程式：
 
 ```text
 backend/scripts/import_cases_to_db.py
@@ -139,6 +139,18 @@ backend/scripts/import_cases_to_db.py
 - 寫入 `cases`、`case_texts`。
 - 建立或更新 `case_search`。
 
+預設輸出：
+
+```text
+backend/data/insurance_cases.db
+```
+
+執行指令：
+
+```powershell
+py .\backend\scripts\import_cases_to_db.py --recreate
+```
+
 驗證：
 
 - `cases` 筆數 = 492。
@@ -147,16 +159,19 @@ backend/scripts/import_cases_to_db.py
 
 ### 5. 建立全文搜尋索引
 
-預計新增：
+目前全文搜尋索引已整合在 SQLite 匯入流程中，匯入時會同步更新 `case_search` FTS5 table。
+
+驗證程式：
 
 ```text
-backend/scripts/build_search_index.py
+backend/scripts/verify_case_db.py
 ```
 
-功能：
+執行指令：
 
-- 重建 SQLite FTS5 index。
-- 支援後續重新匯入資料後重建搜尋索引。
+```powershell
+py .\backend\scripts\verify_case_db.py
+```
 
 驗證：
 

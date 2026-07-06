@@ -27,7 +27,7 @@
 
 目標：將 492 筆案件匯入 SQLite，建立查詢與搜尋基礎。
 
-預計完成：
+完成項目：
 
 - 建立 SQLite schema。
 - 匯入 `cases`。
@@ -35,18 +35,18 @@
 - 建立 `case_search` FTS5 index。
 - 建立資料匯入腳本。
 
-預計新增檔案：
+新增檔案：
 
 - `backend/scripts/import_cases_to_db.py`
-- `backend/scripts/build_search_index.py`
+- `backend/scripts/verify_case_db.py`
 - `backend/app/database.py`
+- `backend/schema.sql`
 
 驗證方式：
 
-```sql
-SELECT COUNT(*) FROM cases;
-SELECT COUNT(*) FROM case_texts;
-SELECT COUNT(*) FROM case_search;
+```powershell
+py .\backend\scripts\import_cases_to_db.py --recreate
+py .\backend\scripts\verify_case_db.py
 ```
 
 成功標準：

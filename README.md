@@ -95,9 +95,42 @@ MVP 優先完成：
 - [開發路線](docs/development_roadmap.md)
 - [資料處理 Pipeline](docs/pipeline.md)
 
+## SQLite 匯入
+
+第 1 階段新增 SQLite 匯入流程，預設會讀取：
+
+```text
+data/foi_ods/metadata/foi_ods_life_roc115_metadata.json
+```
+
+並建立：
+
+```text
+backend/data/insurance_cases.db
+```
+
+匯入指令：
+
+```powershell
+py .\backend\scripts\import_cases_to_db.py --recreate
+```
+
+驗證指令：
+
+```powershell
+py .\backend\scripts\verify_case_db.py
+```
+
+成功標準：
+
+- `cases` = 492
+- `case_texts` = 492
+- `case_search` = 492
+- `data/` 內原始案件資料不會被修改
+- `backend/data/insurance_cases.db` 是本機產物，不提交 Git
+
 ## 目前待處理事項
 
-- `.git` 目錄目前存在但內容為空，`git status` 仍回報不是有效 Git repository。後續開發前應先修正版本控管狀態。
-- 尚未建立 SQLite 資料庫與 API。
+- 尚未建立 FastAPI 查詢 API。
 - 尚未建立前端介面。
 - 尚未建立自動化測試。
