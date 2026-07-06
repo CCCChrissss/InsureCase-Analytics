@@ -20,6 +20,33 @@ def make_snippet(text: str | None, query: str, radius: int = 70) -> str | None:
     return f"{prefix}{text[start:end].strip()}{suffix}"
 
 
+def search_with_like(
+    connection: sqlite3.Connection,
+    query: str,
+    *,
+    page_size: int,
+    offset: int,
+) -> tuple[int, list[sqlite3.Row]]:
+    like_query = f"%{query}%"
+    total = connection.execute(
+        "SELECT COUNT(*) FROM case_texts WHERE normalized_text LIKE ?",
+        (like_query,),
+    ).fetchone()[0]
+    rows = connection.execute(
+        """
+        SELECT cases.case_id, cases.case_number, cases.decision_date,
+               cases.dispute_type, case_texts.normalized_text
+        FROM case_texts
+        JOIN cases ON cases.case_id = case_texts.case_id
+        WHERE case_texts.normalized_text LIKE ?
+        ORDER BY cases.decision_date DESC, cases.case_number DESC
+        LIMIT ? OFFSET ?;
+        """,
+        (like_query, page_size, offset),
+    ).fetchall()
+    return total, rows
+
+
 def search_cases(query: str, *, page: int = 1, page_size: int = 20) -> dict[str, Any]:
     safe_page, safe_page_size, offset = clamp_pagination(page, page_size)
     cleaned_query = query.strip()
@@ -49,24 +76,22 @@ def search_cases(query: str, *, page: int = 1, page_size: int = 20) -> dict[str,
                 (cleaned_query, safe_page_size, offset),
             ).fetchall()
         except sqlite3.OperationalError:
-            match_source = "like"
-            like_query = f"%{cleaned_query}%"
-            total = connection.execute(
-                "SELECT COUNT(*) FROM case_texts WHERE normalized_text LIKE ?",
-                (like_query,),
-            ).fetchone()[0]
-            rows = connection.execute(
-                """
-                SELECT cases.case_id, cases.case_number, cases.decision_date,
-                       cases.dispute_type, case_texts.normalized_text
-                FROM case_texts
-                JOIN cases ON cases.case_id = case_texts.case_id
-                WHERE case_texts.normalized_text LIKE ?
-                ORDER BY cases.decision_date DESC, cases.case_number DESC
-                LIMIT ? OFFSET ?;
-                """,
-                (like_query, safe_page_size, offset),
-            ).fetchall()
+            match_source = "like_fallback_error"
+            total, rows = search_with_like(
+                connection,
+                cleaned_query,
+                page_size=safe_page_size,
+                offset=offset,
+            )
+        else:
+            if total == 0:
+                match_source = "like_fallback_empty_fts5"
+                total, rows = search_with_like(
+                    connection,
+                    cleaned_query,
+                    page_size=safe_page_size,
+                    offset=offset,
+                )
 
     return {
         "items": [
