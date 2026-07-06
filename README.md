@@ -209,6 +209,14 @@ http://127.0.0.1:8000/api
 - 案件摘要：主文、申請人主張、判斷理由。
 - 相似案件：依規則式分數推薦相近案件。
 
+前端會同步基本 URL 狀態：
+
+```text
+?view=cases&case_id=<case_id>
+```
+
+案件詳情可用 URL 分享，重新整理後也會回到同一頁面與案件。
+
 ## 規則式案件摘要
 
 第 4 階段新增規則式摘要 pipeline，會從 `case_texts.normalized_text` 擷取主文、申請人主張與判斷理由，並寫入 SQLite 的 `case_summaries` table。

@@ -272,12 +272,20 @@ VITE_API_BASE_URL 若存在則使用該值
 否則預設 http://127.0.0.1:8000/api
 ```
 
-目前頁面以內部 route state 切換：
+目前頁面以 React state 切換，並同步基本 URL query：
 
 - `dashboard`
 - `cases`
 - `search`
 - `statistics`
+
+案件詳情可分享：
+
+```text
+?view=cases&case_id=<case_id>
+```
+
+重新整理或使用瀏覽器上一頁/下一頁時，會依 URL 還原頁面與選中案件。
 
 主要 UI：
 
@@ -575,6 +583,7 @@ GET /api/statistics/decision-dates
 - PDF 連結。
 - Responsive layout。
 - API 連線狀態顯示。
+- 基本 URL 狀態同步，可分享案件詳情。
 
 ### Git
 
@@ -599,8 +608,7 @@ GET /api/statistics/decision-dates
 - 部署設定。
 - `.env.example`。
 - API 錯誤回應格式統一。
-- 前端路由 URL 化，例如 React Router。
-- 前端元件拆分。
+- 正式 React Router。
 - 前端自動化測試。
 - 規則式相似案件升級為 embedding 相似案件。
 
@@ -618,19 +626,18 @@ GET /api/statistics/decision-dates
 
 - 後續用 embedding / pgvector 或其他向量索引升級。
 
-### 前端仍未使用正式 router
+### 前端尚未使用正式 router
 
-前端已拆分檔案，但頁面切換仍使用 React state，沒有 URL route。
+前端已支援 `view` 與 `case_id` query 同步，但尚未使用 React Router 這類正式 router。
 
 影響：
 
-- 無法直接分享案件詳情連結。
-- 重新整理會回到 Dashboard。
-- 瀏覽器上一頁/下一頁無法反映系統頁面狀態。
+- 基本案件詳情分享已可用。
+- 若未來頁面狀態變多，例如篩選條件、搜尋字串、分頁，手寫 History API 會變得難維護。
 
 建議：
 
-- 後續加入 React Router 或等價 routing。
+- 後續在功能複雜後加入 React Router 或等價 routing。
 
 ### 案件詳情一次回傳全文
 

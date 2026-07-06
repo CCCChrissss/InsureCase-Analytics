@@ -9,10 +9,66 @@ import { SearchPage } from "./pages/SearchPage";
 import { StatisticsPage } from "./pages/StatisticsPage";
 import type { HealthResponse, Route } from "./types";
 
+const ROUTES: Route[] = ["dashboard", "cases", "search", "statistics"];
+
+function parseRoute(value: string | null): Route | null {
+  return ROUTES.includes(value as Route) ? (value as Route) : null;
+}
+
+function readUrlState(): { route: Route; selectedCaseId: string | null } {
+  const params = new URLSearchParams(window.location.search);
+  const caseId = params.get("case_id");
+  return {
+    route: parseRoute(params.get("view")) ?? (caseId ? "cases" : "dashboard"),
+    selectedCaseId: caseId,
+  };
+}
+
+function writeUrlState(route: Route, selectedCaseId: string | null) {
+  const params = new URLSearchParams();
+  if (route !== "dashboard") {
+    params.set("view", route);
+  }
+  if (route === "cases" && selectedCaseId) {
+    params.set("case_id", selectedCaseId);
+  }
+
+  const query = params.toString();
+  const nextUrl = `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`;
+  const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  if (nextUrl !== currentUrl) {
+    window.history.pushState({}, "", nextUrl);
+  }
+}
+
 export function App() {
-  const [route, setRoute] = React.useState<Route>("dashboard");
-  const [selectedCaseId, setSelectedCaseId] = React.useState<string | null>(null);
+  const initialUrlState = React.useMemo(readUrlState, []);
+  const [route, setRoute] = React.useState<Route>(initialUrlState.route);
+  const [selectedCaseId, setSelectedCaseId] = React.useState<string | null>(initialUrlState.selectedCaseId);
   const health = useAsyncData(() => apiGet<HealthResponse>("/health"), []);
+
+  React.useEffect(() => {
+    const handlePopState = () => {
+      const nextState = readUrlState();
+      setRoute(nextState.route);
+      setSelectedCaseId(nextState.selectedCaseId);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  const navigate = React.useCallback((nextRoute: Route, nextCaseId?: string | null) => {
+    const resolvedCaseId = nextRoute === "cases" ? nextCaseId ?? selectedCaseId : null;
+    setRoute(nextRoute);
+    setSelectedCaseId(resolvedCaseId);
+    writeUrlState(nextRoute, resolvedCaseId);
+  }, [selectedCaseId]);
+
+  const selectCase = React.useCallback((caseId: string) => {
+    setRoute("cases");
+    setSelectedCaseId(caseId);
+    writeUrlState("cases", caseId);
+  }, []);
 
   const navItems: Array<{ route: Route; label: string; icon: React.ReactNode }> = [
     { route: "dashboard", label: "總覽", icon: <LayoutDashboard size={18} /> },
@@ -37,7 +93,7 @@ export function App() {
               key={item.route}
               className={route === item.route ? "nav-button active" : "nav-button"}
               type="button"
-              onClick={() => setRoute(item.route)}
+              onClick={() => navigate(item.route)}
             >
               {item.icon}
               <span>{item.label}</span>
@@ -51,19 +107,16 @@ export function App() {
       </aside>
 
       <main className="main-content">
-        {route === "dashboard" && <Dashboard onOpenCases={() => setRoute("cases")} />}
+        {route === "dashboard" && <Dashboard onOpenCases={() => navigate("cases")} />}
         {route === "cases" && (
           <CasesPage
             selectedCaseId={selectedCaseId}
-            onSelectCase={(caseId) => setSelectedCaseId(caseId)}
+            onSelectCase={selectCase}
           />
         )}
         {route === "search" && (
           <SearchPage
-            onOpenCase={(caseId) => {
-              setSelectedCaseId(caseId);
-              setRoute("cases");
-            }}
+            onOpenCase={selectCase}
           />
         )}
         {route === "statistics" && <StatisticsPage />}

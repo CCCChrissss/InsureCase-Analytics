@@ -201,11 +201,13 @@ py .\backend\scripts\verify_case_db.py
 - 新增 `frontend/src/hooks/useAsyncData.ts`。
 - 新增 `frontend/src/components/` 放共用 UI 與案件詳情元件。
 - 新增 `frontend/src/pages/` 放 Dashboard、案件、搜尋、統計頁。
+- 使用 URL query 同步目前頁面與選中案件，例如 `?view=cases&case_id=<case_id>`。
 
 驗證方式：
 
 - `pnpm build` 成功。
 - 既有頁面與 API 行為不變。
+- 案件詳情 URL 可分享，重新整理後可回到同一案件。
 
 ## 第 7 階段：跨年度擴充
 
