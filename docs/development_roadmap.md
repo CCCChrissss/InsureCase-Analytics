@@ -216,13 +216,15 @@ py .\backend\scripts\verify_case_db.py
 目前進度：
 
 - 已完成匯入腳本前置能力，可指定多個 `--metadata` 或使用 `--metadata-dir` 匯入多個 `*_metadata.json`。
+- 已完成統計 API 的 `roc_year` 篩選。
+- 已完成 Dashboard、案件管理與統計分析頁的年度篩選 UI。
 - 尚未實際匯入 ROC 114、ROC 116 或其他年度資料。
 
 預計完成：
 
 - 支援匯入 ROC 114、ROC 115、ROC 116。
-- API 支援年度篩選。
-- 前端支援跨年度統計。
+- 實際匯入其他年度資料。
+- 抽樣驗證跨年度統計。
 - pipeline 可重跑且不覆蓋舊資料。
 
 驗證方式：

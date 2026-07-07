@@ -1,10 +1,10 @@
 import React from "react";
 
-import { apiGet, apiGetOptional } from "../api/client";
+import { apiGet, apiGetOptional, apiPath } from "../api/client";
 import { CaseDetailView } from "../components/CaseDetailView";
 import { AsyncBlock, EmptyState, PageHeader, PanelHeader } from "../components/ui";
 import { useAsyncData } from "../hooks/useAsyncData";
-import type { CaseDetail, CaseSummaryDetail, CountItem, PaginatedCases, SimilarCasesResponse } from "../types";
+import type { CaseDetail, CaseSummaryDetail, CountItem, OverviewStatistics, PaginatedCases, SimilarCasesResponse } from "../types";
 
 export function CasesPage({
   selectedCaseId,
@@ -16,23 +16,22 @@ export function CasesPage({
   const [page, setPage] = React.useState(1);
   const [caseNumber, setCaseNumber] = React.useState("");
   const [disputeType, setDisputeType] = React.useState("");
-  const [rocYear, setRocYear] = React.useState("115");
+  const [rocYear, setRocYear] = React.useState("");
 
-  const query = new URLSearchParams({
-    page: String(page),
-    page_size: "12"
-  });
-  if (rocYear) query.set("roc_year", rocYear);
-  if (disputeType) query.set("dispute_type", disputeType);
-  if (caseNumber) query.set("case_number", caseNumber);
-
-  const cases = useAsyncData(() => apiGet<PaginatedCases>(`/cases?${query.toString()}`), [
+  const cases = useAsyncData(() => apiGet<PaginatedCases>(apiPath("/cases", {
+    page,
+    page_size: 12,
+    roc_year: rocYear,
+    dispute_type: disputeType,
+    case_number: caseNumber
+  })), [
     page,
     caseNumber,
     disputeType,
     rocYear
   ]);
-  const disputeTypes = useAsyncData(() => apiGet<CountItem[]>("/dispute-types"), []);
+  const overview = useAsyncData(() => apiGet<OverviewStatistics>("/statistics/overview"), []);
+  const disputeTypes = useAsyncData(() => apiGet<CountItem[]>(apiPath("/statistics/dispute-types", { roc_year: rocYear })), [rocYear]);
   const detail = useAsyncData(
     () => (selectedCaseId ? apiGet<CaseDetail>(`/cases/${selectedCaseId}`) : Promise.resolve(null)),
     [selectedCaseId]
@@ -47,6 +46,7 @@ export function CasesPage({
   );
 
   const totalPages = Math.max(1, Math.ceil((cases.data?.total ?? 0) / (cases.data?.page_size ?? 12)));
+  const years = overview.data?.roc_years ?? [];
 
   return (
     <section className="page">
@@ -54,7 +54,12 @@ export function CasesPage({
       <div className="filters">
         <label>
           年度
-          <input value={rocYear} onChange={(event) => { setPage(1); setRocYear(event.target.value); }} />
+          <select value={rocYear} onChange={(event) => { setPage(1); setRocYear(event.target.value); }}>
+            <option value="">全部年度</option>
+            {years.map((year) => (
+              <option key={year} value={year}>ROC {year}</option>
+            ))}
+          </select>
         </label>
         <label>
           爭議類型

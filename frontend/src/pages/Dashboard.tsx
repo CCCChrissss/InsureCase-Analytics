@@ -1,30 +1,48 @@
+import React from "react";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-import { apiGet } from "../api/client";
+import { apiGet, apiPath } from "../api/client";
 import { AsyncBlock, Metric, PageHeader, PanelHeader } from "../components/ui";
 import { useAsyncData } from "../hooks/useAsyncData";
 import type { CountItem, DateCountItem, OverviewStatistics } from "../types";
 
 export function Dashboard({ onOpenCases }: { onOpenCases: () => void }) {
-  const overview = useAsyncData(() => apiGet<OverviewStatistics>("/statistics/overview"), []);
-  const disputeTypes = useAsyncData(() => apiGet<CountItem[]>("/statistics/dispute-types"), []);
-  const dates = useAsyncData(() => apiGet<DateCountItem[]>("/statistics/decision-dates"), []);
+  const [rocYear, setRocYear] = React.useState("");
+  const statsParams = { roc_year: rocYear };
+  const overview = useAsyncData(() => apiGet<OverviewStatistics>(apiPath("/statistics/overview", statsParams)), [rocYear]);
+  const disputeTypes = useAsyncData(() => apiGet<CountItem[]>(apiPath("/statistics/dispute-types", statsParams)), [rocYear]);
+  const dates = useAsyncData(() => apiGet<DateCountItem[]>(apiPath("/statistics/decision-dates", statsParams)), [rocYear]);
 
   const topDisputes = disputeTypes.data?.slice(0, 8) ?? [];
+  const years = overview.data?.roc_years ?? [];
+  const yearLabel = rocYear ? `ROC ${rocYear}` : "全部年度";
 
   return (
     <section className="page">
       <PageHeader
         title="資料總覽"
-        description="目前已匯入 ROC 115 人壽保險評議案件，提供查詢、搜尋與統計。"
-        action={<button className="primary-button" onClick={onOpenCases}>查看案件</button>}
+        description="檢視已匯入的人壽保險評議案件，提供查詢、搜尋與統計。"
+        action={
+          <div className="header-actions">
+            <label className="compact-field">
+              年度
+              <select value={rocYear} onChange={(event) => setRocYear(event.target.value)}>
+                <option value="">全部年度</option>
+                {years.map((year) => (
+                  <option key={year} value={year}>ROC {year}</option>
+                ))}
+              </select>
+            </label>
+            <button className="primary-button" onClick={onOpenCases}>查看案件</button>
+          </div>
+        }
       />
       <AsyncBlock loading={overview.loading} error={overview.error}>
         {overview.data && (
           <div className="metric-grid">
             <Metric label="案件數" value={overview.data.case_count.toLocaleString()} />
             <Metric label="爭議類型" value={overview.data.dispute_type_count.toLocaleString()} />
-            <Metric label="年度" value={overview.data.roc_years.join(", ")} />
+            <Metric label="篩選年度" value={yearLabel} />
             <Metric label="決定日期" value={`${overview.data.first_decision_date} - ${overview.data.last_decision_date}`} />
           </div>
         )}

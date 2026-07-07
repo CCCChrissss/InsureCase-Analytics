@@ -180,13 +180,15 @@ GET /api/cases
 GET /api/cases/{case_id}
 GET /api/dispute-types
 GET /api/search?q=癌症
-GET /api/statistics/overview
-GET /api/statistics/dispute-types
-GET /api/statistics/decision-dates
+GET /api/statistics/overview?roc_year=115
+GET /api/statistics/dispute-types?roc_year=115
+GET /api/statistics/decision-dates?roc_year=115
 GET /api/files/{case_id}/pdf
 GET /api/cases/{case_id}/summary
 GET /api/cases/{case_id}/similar
 ```
+
+統計 API 的 `roc_year` 是可選參數；不帶參數時會統計全部年度。
 
 ## React 前端
 
@@ -233,10 +235,10 @@ VITE_API_BASE_URL=http://127.0.0.1:8000/api
 
 目前頁面：
 
-- Dashboard：案件數、爭議類型、日期分布。
-- 案件管理：篩選、分頁、案件詳情、PDF 連結。
+- Dashboard：年度篩選、案件數、爭議類型、日期分布。
+- 案件管理：年度、爭議類型、案號篩選、分頁、案件詳情、PDF 連結。
 - 全文搜尋：關鍵字搜尋與命中片段。
-- 統計分析：爭議類型與決定日期統計。
+- 統計分析：年度篩選、爭議類型與決定日期統計。
 - 案件摘要：主文、申請人主張、判斷理由。
 - 相似案件：依規則式分數推薦相近案件。
 
@@ -293,4 +295,4 @@ GET /api/cases/{case_id}/similar?limit=5
 
 - 尚未建立向量索引。
 - 尚未建立 embedding 相似案件搜尋。
-- 匯入腳本已支援多 metadata，但尚未實際匯入其他年度資料，也尚未完成跨年度前端統計展示。
+- 匯入腳本、統計 API 與前端年度篩選已具備多年度前置能力，但尚未實際匯入其他年度資料。

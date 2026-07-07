@@ -162,12 +162,12 @@ frontend/dist/
 - `backend/app/routers/cases.py`：案件列表、案件詳情、爭議類型、PDF 讀取 API。
 - `backend/app/routers/search.py`：全文搜尋 API。
 - `backend/app/routers/similar_cases.py`：相似案件 API。
-- `backend/app/routers/statistics.py`：統計 API。
+- `backend/app/routers/statistics.py`：統計 API，支援可選 `roc_year` 篩選。
 - `backend/app/routers/summaries.py`：案件摘要 API。
 - `backend/app/services/case_service.py`：案件查詢、篩選、分頁、PDF path resolver。
 - `backend/app/services/search_service.py`：FTS5 搜尋、LIKE fallback、snippet 產生；FTS5 報錯或 0 筆時會進 LIKE fallback。
 - `backend/app/services/similar_case_service.py`：規則式相似案件計分。
-- `backend/app/services/statistics_service.py`：總覽、爭議類型、決定日期統計。
+- `backend/app/services/statistics_service.py`：總覽、爭議類型、決定日期統計，支援可選年度條件。
 - `backend/app/services/summary_service.py`：案件摘要查詢。
 - `backend/scripts/extract_case_summaries.py`：從 normalized text 產生規則式摘要並寫入 `case_summaries`。
 - `backend/scripts/import_cases_to_db.py`：讀取單一或多個 metadata 與文字檔，匯入 SQLite。
@@ -303,10 +303,10 @@ VITE_API_BASE_URL 若存在則使用該值
 主要 UI：
 
 - 側邊欄導覽：總覽、案件、搜尋、統計。
-- Dashboard：案件數、爭議類型數、年度、決定日期、前十大爭議類型圖、日期分布圖。
+- Dashboard：年度篩選、案件數、爭議類型數、年度、決定日期、前十大爭議類型圖、日期分布圖。
 - 案件管理：年度、爭議類型、案號 filter，案件列表，案件詳情。
 - 全文搜尋：關鍵字輸入，搜尋結果，snippet，點擊進入案件詳情。
-- 統計分析：爭議類型分布與決定日期分布。
+- 統計分析：年度篩選、爭議類型分布與決定日期分布。
 
 目前前端已拆分為：
 
@@ -530,17 +530,29 @@ GET /api/statistics/overview
 
 用途：總案件數、爭議類型數、年度清單、最早與最晚決定日期。
 
+Query parameters：
+
+- `roc_year`：可選；指定後只統計該年度案件。
+
 ```text
 GET /api/statistics/dispute-types
 ```
 
 用途：依爭議類型統計案件數。
 
+Query parameters：
+
+- `roc_year`：可選；指定後只統計該年度案件。
+
 ```text
 GET /api/statistics/decision-dates
 ```
 
 用途：依決定日期統計案件數。
+
+Query parameters：
+
+- `roc_year`：可選；指定後只統計該年度案件。
 
 ## 8. 目前已完成功能
 
@@ -581,18 +593,18 @@ GET /api/statistics/decision-dates
 - 全文搜尋 API。
 - 摘要 API。
 - 規則式相似案件 API。
-- 統計 API。
+- 統計 API，支援年度篩選。
 - 後端 pytest 測試。
 - OpenAPI docs 可由 FastAPI 自動產生。
 
 ### 前端
 
 - React + Vite 專案。
-- Dashboard。
-- 案件管理頁。
+- Dashboard 年度篩選。
+- 案件管理頁年度篩選。
 - 案件詳情區。
 - 全文搜尋頁。
-- 統計分析頁。
+- 統計分析頁年度篩選。
 - 案件摘要區塊。
 - 相似案件區塊。
 - PDF 連結。
@@ -616,7 +628,7 @@ GET /api/statistics/decision-dates
 - embedding 建立。
 - 向量索引。
 - OCR fallback。
-- 實際跨年度資料匯入、前端跨年度展示與跨年度統計驗證。
+- 實際跨年度資料匯入與跨年度統計驗證。
 - 後台管理 API，例如重新匯入、重建索引。
 - Docker。
 - CI。
@@ -877,6 +889,7 @@ py -m pytest
 目前覆蓋：
 
 - API smoke tests。
+- 統計 API 年度篩選 tests。
 - 搜尋 fallback service test。
 - 摘要擷取與 summary service tests。
 - 相似案件 service tests。
@@ -895,6 +908,7 @@ py .\backend\scripts\verify_case_db.py
 ```powershell
 Invoke-WebRequest -Uri http://127.0.0.1:8000/api/health -UseBasicParsing
 Invoke-WebRequest -Uri http://127.0.0.1:8000/api/statistics/overview -UseBasicParsing
+Invoke-WebRequest -Uri "http://127.0.0.1:8000/api/statistics/overview?roc_year=115" -UseBasicParsing
 Invoke-WebRequest -Uri "http://127.0.0.1:8000/api/search?q=癌症" -UseBasicParsing
 Invoke-WebRequest -Uri "http://127.0.0.1:8000/api/cases/{case_id}/summary" -UseBasicParsing
 Invoke-WebRequest -Uri "http://127.0.0.1:8000/api/cases/{case_id}/similar" -UseBasicParsing
@@ -904,6 +918,7 @@ Invoke-WebRequest -Uri "http://127.0.0.1:8000/api/cases/{case_id}/similar" -UseB
 
 - `/api/health` 回傳 `status: ok` 且 `database_ready: true`。
 - `/api/statistics/overview` 的 `case_count` 應為 492。
+- `/api/statistics/overview?roc_year=115` 應可回傳年度篩選後的統計。
 - `/api/search?q=癌症` 應有搜尋結果。
 - `/api/cases/{case_id}/summary` 應回傳 `rule_based_v1` 摘要。
 - `/api/cases/{case_id}/similar` 應回傳相似案件與命中原因。
@@ -933,12 +948,15 @@ http://127.0.0.1:5173
 檢查：
 
 - Dashboard 顯示 492 案件。
+- Dashboard 年度下拉可選全部年度或 ROC 115。
 - 案件頁可篩選、分頁、點選案件。
+- 案件頁可依年度篩選。
 - 案件詳情可看到 metadata、全文與 PDF 連結。
 - 案件詳情可看到案件摘要。
 - 案件詳情可看到相似案件。
 - 搜尋頁可查「癌症」。
 - 統計頁可看到爭議類型與日期分布。
+- 統計頁可依年度篩選。
 - 瀏覽器 console 無 error。
 
 ## 13. 建議下一步開發順序
@@ -957,6 +975,7 @@ http://127.0.0.1:5173
 - 前端結構拆分。
 - 環境設定集中化與 `.env.example`。
 - SQLite 匯入腳本支援多 metadata。
+- 統計 API 與前端年度篩選。
 
 ### 下一步：embedding 相似案件或跨年度擴充
 
@@ -978,10 +997,10 @@ http://127.0.0.1:5173
 
 建議工作：
 
-1. API 與前端年度 filter 正式化。
-2. 實際新增其他年度資料並匯入。
-3. 檢查 `case_id` 是否能跨年度穩定唯一。
-4. 增加跨年度統計。
+1. 實際新增其他年度資料並匯入。
+2. 檢查 `case_id` 是否能跨年度穩定唯一。
+3. 抽樣驗證跨年度統計結果。
+4. 視資料量調整前端統計呈現。
 
 ### 第 9 階段：部署與實務化
 
