@@ -238,6 +238,29 @@ metadata 目錄匯入：
 py .\backend\scripts\import_cases_to_db.py --metadata-dir .\data\foi_ods\metadata --recreate
 ```
 
+匯入前建議先檢查 metadata 是否有 mojibake 類異常字元：
+
+```powershell
+py .\backend\scripts\check_data_quality.py --metadata .\data\foi_ods\metadata\foi_ods_life_roc115_metadata.json
+```
+
+跨年度匯入前可同時檢查多個 metadata：
+
+```powershell
+py .\backend\scripts\check_data_quality.py --metadata .\data\foi_ods\metadata\foi_ods_life_roc114_metadata.json --metadata .\data\foi_ods\metadata\foi_ods_life_roc115_metadata.json
+```
+
+匯入 DB 後建議再檢查一次：
+
+```powershell
+py .\backend\scripts\check_data_quality.py --db .\backend\data\insurance_cases.db
+```
+
+成功標準：
+
+- `issue_count` = 0
+- `passed` = true
+
 ### 4. Extract rule-based summaries
 
 ```powershell

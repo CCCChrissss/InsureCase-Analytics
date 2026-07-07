@@ -134,7 +134,45 @@ data/foi_ods/metadata/foi_ods_life_roc115_case_organize_report.json
 
 ## 後續新增 Pipeline
 
-### 4. 匯入 SQLite
+### 4. 資料品質檢查
+
+程式：
+
+```text
+backend/scripts/check_data_quality.py
+```
+
+功能：
+
+- 檢查 metadata 與 SQLite DB 是否含 mojibake 類異常字元。
+- 目前會偵測 replacement character 與 Cyrillic 字元。
+- 用來避免 FOI ODS 結果頁編碼誤判後，把亂碼案號或爭議類型匯入 DB。
+
+metadata 匯入前檢查：
+
+```powershell
+py .\backend\scripts\check_data_quality.py --metadata .\data\foi_ods\metadata\foi_ods_life_roc115_metadata.json
+```
+
+跨年度 metadata 檢查：
+
+```powershell
+py .\backend\scripts\check_data_quality.py --metadata .\data\foi_ods\metadata\foi_ods_life_roc114_metadata.json --metadata .\data\foi_ods\metadata\foi_ods_life_roc115_metadata.json
+```
+
+DB 匯入後檢查：
+
+```powershell
+py .\backend\scripts\check_data_quality.py --db .\backend\data\insurance_cases.db
+```
+
+驗證：
+
+- `issue_count` = 0。
+- `passed` = true。
+- 若品質檢查失敗，不要匯入或切換正式展示 DB。
+
+### 5. 匯入 SQLite
 
 程式：
 
@@ -181,8 +219,9 @@ py .\backend\scripts\import_cases_to_db.py --metadata-dir .\data\foi_ods\metadat
 - `case_texts` 筆數 = 492。
 - `case_search` 可查詢關鍵字。
 - 多 metadata 匯入時，輸出 report 的 `metadata_files` 與 `metadata_sources` 應列出每個來源檔案。
+- 匯入後需再次執行 `check_data_quality.py --db <db_path>`。
 
-### 5. 建立全文搜尋索引
+### 6. 建立全文搜尋索引
 
 目前全文搜尋索引已整合在 SQLite 匯入流程中，匯入時會同步更新 `case_search` FTS5 table。
 
@@ -204,7 +243,7 @@ py .\backend\scripts\verify_case_db.py
 - 搜尋「癌症」有結果。
 - 搜尋結果可回到正確 case。
 
-### 6. 規則式摘要
+### 7. 規則式摘要
 
 程式：
 
@@ -240,7 +279,7 @@ GET /api/cases/{case_id}/summary
 - 抽樣人工檢查。
 - 摘要內容可回溯原文。
 
-### 7. 向量索引
+### 8. 向量索引
 
 規則式相似案件搜尋已先作為 baseline 完成。
 
@@ -280,10 +319,12 @@ backend/scripts/build_embeddings.py
 
 1. 不要直接覆蓋原始資料，除非明確指定。
 2. 匯入資料庫時要設計成可重跑。
-3. 每個階段都要產生 report 或可查驗的統計結果。
-4. metadata 的檔案路徑更新要保持一致。
-5. 未來跨年度時，資料夾與資料庫都不可寫死 `roc115`。
-6. 目前匯入腳本已支援多 metadata，但不代表其他年度資料已經完成蒐集與匯入。
+3. metadata 完成後先跑 `check_data_quality.py --metadata`。
+4. SQLite 匯入後再跑 `check_data_quality.py --db`。
+5. 每個階段都要產生 report 或可查驗的統計結果。
+6. metadata 的檔案路徑更新要保持一致。
+7. 未來跨年度時，資料夾與資料庫都不可寫死 `roc115`。
+8. 目前匯入腳本已支援多 metadata，但不代表其他年度資料已經完成蒐集與匯入。
 
 ## API 讀取流程
 
