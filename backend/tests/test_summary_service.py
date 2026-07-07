@@ -70,6 +70,57 @@ def test_extract_summary_accepts_substantive_section_as_claim() -> None:
     assert "符合失能給付" in summary["applicant_claim"]
 
 
+def test_extract_summary_accepts_claim_heading_without_possessive_particle() -> None:
+    text = """
+    主文
+    本中心就申請人之請求尚難為有利申請人之認定。
+    事實及理由
+    一、 程序事項：
+    程序內容。
+    二、 申請人主張：
+    (一) 請求標的：
+    請求確認保險契約效力存在。
+    (二) 陳述：
+    申請人主張相對人不應解除契約。
+    三、 相對人主張：
+    申請人之請求為無理由。
+    六、 判斷理由：
+    本中心認為尚難認定相對人應負給付責任。
+    七、 綜上所述，本中心就申請人之請求尚難為有利申請人之認定。
+    """
+
+    summary = extract_summary(text)
+
+    assert summary["applicant_claim"] is not None
+    assert "請求確認保險契約效力存在" in summary["applicant_claim"]
+    assert "不應解除契約" in summary["applicant_claim"]
+
+
+def test_extract_summary_accepts_non_sixth_reasoning_heading() -> None:
+    text = """
+    主文
+    本中心就申請人之請求尚難為有利申請人之認定。
+    事實及理由
+    一、程序事項：
+    程序內容。
+    二、申請人之主張：
+    相對人應給付保險金。
+    三、相對人之主張：
+    申請人之請求為無理由。
+    三、本件爭點：
+    申請人請求是否有據。
+    四、判斷理由：
+    本中心審酌醫療顧問意見後，認為申請人之請求難認有據。
+    七、綜上所述，本中心就申請人之請求尚難為有利申請人之認定。
+    """
+
+    summary = extract_summary(text)
+
+    assert summary["reasoning"] is not None
+    assert "醫療顧問意見" in summary["reasoning"]
+    assert "難認有據" in summary["reasoning"]
+
+
 def test_get_case_summary_from_database(tmp_path: Path, monkeypatch) -> None:
     db_path = tmp_path / "test_cases.db"
     with connect_test_db(db_path) as connection:

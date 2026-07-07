@@ -92,7 +92,13 @@ def extract_reasoning(lines: list[str], *, max_chars: int = 1600) -> str | None:
     }
     start_index = find_marker_index(lines, start_markers)
     if start_index is None:
-        return None
+        for index, line in enumerate(lines):
+            normalized = normalize_marker(line)
+            if TOP_LEVEL_HEADING_RE.match(line) and normalized.endswith("判斷理由"):
+                start_index = index
+                break
+        else:
+            return None
 
     end_index = len(lines)
     for index in range(start_index + 1, len(lines)):
@@ -119,10 +125,17 @@ def extract_summary(text: str | None) -> dict[str, str | None]:
         start_markers={
             normalize_marker("二、申請人之主張"),
             normalize_marker("二、 申請人之主張"),
+            normalize_marker("二、申請人主張"),
+            normalize_marker("二、 申請人主張"),
             normalize_marker("二、實體事項"),
             normalize_marker("二、 實體事項"),
         },
-        end_markers={normalize_marker("三、相對人之主張"), normalize_marker("三、 相對人之主張")},
+        end_markers={
+            normalize_marker("三、相對人之主張"),
+            normalize_marker("三、 相對人之主張"),
+            normalize_marker("三、相對人主張"),
+            normalize_marker("三、 相對人主張"),
+        },
         max_chars=1200,
     )
     reasoning = extract_reasoning(lines)

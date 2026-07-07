@@ -36,6 +36,7 @@
 - 跨年度 trial DB：ROC 114 全年度 2500 筆 + ROC 115 492 筆，共 2992 筆
 - trial DB 路徑：`backend/data/insurance_cases_cross_year_trial.db`
 - trial DB 資料品質檢查：`issue_count = 0`
+- trial DB 規則式摘要：2992 筆，`holding`、`applicant_claim`、`reasoning` 均已補齊到 2992 筆
 
 注意：查詢期間是 ROC 115/1/1 到 ROC 115/7/1，但目前文件記錄的實際 `decision_date` 範圍是 `115.01.09` 到 `115.03.20`。
 
@@ -178,7 +179,7 @@ frontend/dist/
 - `backend/app/services/similar_case_service.py`：規則式相似案件計分。
 - `backend/app/services/statistics_service.py`：總覽、爭議類型、決定日期統計，支援可選年度條件。
 - `backend/app/services/summary_service.py`：案件摘要查詢。
-- `backend/scripts/extract_case_summaries.py`：從 normalized text 產生規則式摘要並寫入 `case_summaries`。
+- `backend/scripts/extract_case_summaries.py`：從 normalized text 產生規則式摘要並寫入 `case_summaries`；已支援「二、申請人主張」與非固定序號的「判斷理由」標題。
 - `backend/scripts/import_cases_to_db.py`：讀取單一或多個 metadata 與文字檔，匯入 SQLite。
 - `backend/scripts/verify_case_db.py`：驗證 SQLite 筆數、搜尋、路徑與 sample case。
 - `backend/scripts/check_data_quality.py`：檢查 metadata 與 SQLite DB 是否含 mojibake 類異常字元。
@@ -188,7 +189,7 @@ frontend/dist/
 - `backend/tests/test_import_cases_to_db.py`：SQLite 匯入腳本測試，包含多 metadata 匯入與 metadata 目錄解析。
 - `backend/tests/test_search_service.py`：搜尋 fallback 單元測試。
 - `backend/tests/test_similar_case_service.py`：相似案件 service 單元測試。
-- `backend/tests/test_summary_service.py`：摘要擷取與 summary service 測試。
+- `backend/tests/test_summary_service.py`：摘要擷取與 summary service 測試，包含 FOI 標題格式變異的 regression tests。
 
 ### frontend
 
@@ -593,7 +594,7 @@ Query parameters：
 - 已寫入 492 筆規則式摘要。
 - 提供資料庫驗證腳本。
 - 已建立跨年度 trial DB：`backend/data/insurance_cases_cross_year_trial.db`，匯入 ROC 114 全年度 2500 筆與 ROC 115 492 筆，共 2992 筆。
-- trial DB 已重建規則式摘要，共 2992 筆。
+- trial DB 已重建規則式摘要，共 2992 筆；`holding`、`applicant_claim`、`reasoning` 均為 2992 筆。
 - 正式展示 DB `backend/data/insurance_cases.db` 尚未切換，仍維持 ROC 115 共 492 筆。
 
 ### 後端
@@ -753,6 +754,11 @@ Query parameters：
 ### 摘要與相似案件規則需要持續抽樣校正
 
 目前摘要與相似案件都採規則式方法，已可展示，但遇到新年度或格式變異時仍可能需要調整規則。
+
+已知已修正格式變異：
+
+- 「二、申請人主張」缺少「之」時，仍可抽取 `applicant_claim`。
+- 「判斷理由」不固定為第六段時，例如「四、判斷理由」，仍可抽取 `reasoning`。
 
 建議：
 
@@ -927,7 +933,7 @@ py -m pytest
 - API smoke tests。
 - 統計 API 年度篩選 tests。
 - 搜尋 fallback service test。
-- 摘要擷取與 summary service tests。
+- 摘要擷取與 summary service tests，包含「申請人主張」標題缺少「之」與「判斷理由」非第六段的 regression tests。
 - 相似案件 service tests。
 - 匯入腳本多 metadata tests。
 
@@ -1015,7 +1021,7 @@ http://127.0.0.1:5173
 - 跨年度 pipeline 預設檔名修正與 readiness 報告。
 - ROC 114 一月資料小期間試跑，metadata / PDF text / case organizer 均成功 112 筆。
 - ROC 114 全年度資料試跑，metadata / PDF text / case organizer 均成功 2500 筆。
-- 已建立跨年度 trial DB，ROC 114 全年度 2500 筆加 ROC 115 492 筆共 2992 筆，並已產生 2992 筆規則式摘要；正式 DB 尚未切換。
+- 已建立跨年度 trial DB，ROC 114 全年度 2500 筆加 ROC 115 492 筆共 2992 筆，並已產生 2992 筆規則式摘要；`holding`、`applicant_claim`、`reasoning` 欄位均已補齊；正式 DB 尚未切換。
 - 已修正 ROC 114 一月 32 筆亂碼資料，並新增資料品質檢查腳本。
 
 ### 下一步：擴大跨年度資料或導入 embedding

@@ -162,9 +162,16 @@ py .\backend\scripts\extract_case_summaries.py --db .\backend\data\insurance_cas
 - `processed_count`：2992
 - `total_summaries`：2992
 - `holding`：2992
-- `applicant_claim`：2984
-- `reasoning`：2991
+- `applicant_claim`：2992
+- `reasoning`：2992
 - `empty_case_count`：0
+
+補充說明：
+
+- 第一次重建時，8 筆 `違反告知義務` 案件的申請人主張欄位未命中，原因是原文標題為「二、申請人主張」，少了「之」。
+- 第一次重建時，1 筆 `必要性醫療` 案件的判斷理由欄位未命中，原因是原文標題為「四、判斷理由」，不是原規則預期的「六、判斷理由」。
+- 已修正 `backend/scripts/extract_case_summaries.py`，並重新抽取 trial DB 摘要；目前三個摘要欄位均為 2992/2992。
+- 已新增 regression tests，避免上述兩種格式變異再次退化。
 
 ## 驗證結果
 
@@ -214,6 +221,7 @@ ROC 114 全年度資料已完成 metadata、PDF/text、case organizer、trial DB
 
 - ROC 114 全年度資料可處理到 trial DB。
 - 跨年度 trial DB 共 2992 筆。
+- trial DB 規則式摘要三個欄位 `holding`、`applicant_claim`、`reasoning` 均已補齊到 2992 筆。
 - 資料品質檢查通過，沒有 mojibake 類異常字元。
 - 正式展示 DB 尚未切換，前端預設仍使用 ROC 115 的 492 筆。
 
