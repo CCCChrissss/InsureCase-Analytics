@@ -97,4 +97,65 @@ export type SearchResponse = {
   page_size: number;
 };
 
-export type Route = "dashboard" | "cases" | "search" | "statistics";
+export type QualityReport = {
+  report_title: string;
+  report_date: string;
+  method_version: string;
+  scope: {
+    roc_year: number;
+    case_count: number;
+    dispute_type_count: number;
+    formal_database_case_count: number;
+    formal_database_year_distribution: Record<string, number>;
+  };
+  top_dispute_types: CountItem[];
+  summary_field_stats: Array<{
+    field: string;
+    non_empty: number;
+    min_length: number;
+    median_length: number;
+    average_length: number;
+    max_length: number;
+  }>;
+  contamination_checks: Array<{
+    name: string;
+    issue_count: number;
+  }>;
+  scoring_rules: Array<{
+    name: string;
+    points: number;
+    description: string;
+  }>;
+  sample_cases: Array<{
+    case_number: string;
+    dispute_type: string;
+    decision_date: string;
+    holding_length: number;
+    applicant_claim_length: number;
+    reasoning_length: number;
+    top5_same_dispute_type_count: number;
+  }>;
+  similar_stats: {
+    evaluated_cases: number;
+    top1_same_dispute_type: number;
+    top1_same_dispute_type_rate: number;
+    top5_contains_same_dispute_type: number;
+    top5_contains_same_dispute_type_rate: number;
+    average_same_type_count_in_top5: number;
+    min_same_type_count_in_top5: number;
+  };
+  known_exceptions: Array<{
+    case_number: string;
+    dispute_type: string;
+    decision_date: string;
+    reason: string;
+  }>;
+  conclusions: Array<{
+    title: string;
+    items: string[];
+  }>;
+  limitations: string[];
+  next_steps: string[];
+};
+
+export type Route = "dashboard" | "cases" | "search" | "statistics" | "quality";

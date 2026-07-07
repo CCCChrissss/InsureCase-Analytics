@@ -100,3 +100,80 @@ class CountItem(BaseModel):
 class DateCountItem(BaseModel):
     decision_date: str
     count: int
+
+
+class QualityScope(BaseModel):
+    roc_year: int
+    case_count: int
+    dispute_type_count: int
+    formal_database_case_count: int
+    formal_database_year_distribution: dict[str, int]
+
+
+class QualitySummaryFieldStat(BaseModel):
+    field: str
+    non_empty: int
+    min_length: int
+    median_length: float
+    average_length: float
+    max_length: int
+
+
+class QualityContaminationCheck(BaseModel):
+    name: str
+    issue_count: int
+
+
+class QualityScoringRule(BaseModel):
+    name: str
+    points: int
+    description: str
+
+
+class QualitySampleCase(BaseModel):
+    case_number: str
+    dispute_type: str
+    decision_date: str
+    holding_length: int
+    applicant_claim_length: int
+    reasoning_length: int
+    top5_same_dispute_type_count: int
+
+
+class QualitySimilarStats(BaseModel):
+    evaluated_cases: int
+    top1_same_dispute_type: int
+    top1_same_dispute_type_rate: float
+    top5_contains_same_dispute_type: int
+    top5_contains_same_dispute_type_rate: float
+    average_same_type_count_in_top5: float
+    min_same_type_count_in_top5: int
+
+
+class QualityKnownException(BaseModel):
+    case_number: str
+    dispute_type: str
+    decision_date: str
+    reason: str
+
+
+class QualityConclusion(BaseModel):
+    title: str
+    items: list[str]
+
+
+class QualityReport(BaseModel):
+    report_title: str
+    report_date: str
+    method_version: str
+    scope: QualityScope
+    top_dispute_types: list[CountItem]
+    summary_field_stats: list[QualitySummaryFieldStat]
+    contamination_checks: list[QualityContaminationCheck]
+    scoring_rules: list[QualityScoringRule]
+    sample_cases: list[QualitySampleCase]
+    similar_stats: QualitySimilarStats
+    known_exceptions: list[QualityKnownException]
+    conclusions: list[QualityConclusion]
+    limitations: list[str]
+    next_steps: list[str]

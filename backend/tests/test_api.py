@@ -111,3 +111,15 @@ def test_similar_cases_not_found() -> None:
     response = client.get("/api/cases/not-a-real-case-id/similar")
 
     assert response.status_code == 404
+
+
+def test_roc114_quality_report() -> None:
+    response = client.get("/api/quality/roc114-summary-similarity")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["scope"]["roc_year"] == 114
+    assert data["scope"]["case_count"] == 2500
+    assert data["similar_stats"]["top1_same_dispute_type_rate"] == 99.92
+    assert len(data["sample_cases"]) == 10
+    assert len(data["known_exceptions"]) == 2

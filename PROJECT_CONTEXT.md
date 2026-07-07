@@ -77,6 +77,7 @@
 │  │  │  ├─ __init__.py
 │  │  │  ├─ health.py
 │  │  │  ├─ cases.py
+│  │  │  ├─ quality.py
 │  │  │  ├─ search.py
 │  │  │  ├─ similar_cases.py
 │  │  │  ├─ statistics.py
@@ -84,6 +85,7 @@
 │  │  └─ services/
 │  │     ├─ __init__.py
 │  │     ├─ case_service.py
+│  │     ├─ quality_service.py
 │  │     ├─ search_service.py
 │  │     ├─ similar_case_service.py
 │  │     ├─ statistics_service.py
@@ -123,6 +125,7 @@
       └─ pages/
          ├─ CasesPage.tsx
          ├─ Dashboard.tsx
+         ├─ QualityPage.tsx
          ├─ SearchPage.tsx
          └─ StatisticsPage.tsx
 ```
@@ -175,11 +178,13 @@ frontend/dist/
 - `backend/app/schemas.py`：Pydantic response models。
 - `backend/app/routers/health.py`：健康檢查 API。
 - `backend/app/routers/cases.py`：案件列表、案件詳情、爭議類型、PDF 讀取 API。
+- `backend/app/routers/quality.py`：分析驗證 API，回傳 ROC 114 摘要與相似案件品質檢查結果。
 - `backend/app/routers/search.py`：全文搜尋 API。
 - `backend/app/routers/similar_cases.py`：相似案件 API。
 - `backend/app/routers/statistics.py`：統計 API，支援可選 `roc_year` 篩選。
 - `backend/app/routers/summaries.py`：案件摘要 API。
 - `backend/app/services/case_service.py`：案件查詢、篩選、分頁、PDF path resolver。
+- `backend/app/services/quality_service.py`：ROC 114 分析驗證報告資料。
 - `backend/app/services/search_service.py`：FTS5 搜尋、LIKE fallback、snippet 產生；FTS5 報錯或 0 筆時會進 LIKE fallback。
 - `backend/app/services/similar_case_service.py`：規則式相似案件計分。
 - `backend/app/services/statistics_service.py`：總覽、爭議類型、決定日期統計，支援可選年度條件。
@@ -213,7 +218,7 @@ frontend/dist/
 - `frontend/src/hooks/useAsyncData.ts`：共用非同步資料載入 hook。
 - `frontend/src/components/CaseDetailView.tsx`：案件詳情、摘要、相似案件區塊。
 - `frontend/src/components/ui.tsx`：PageHeader、PanelHeader、Metric、AsyncBlock、EmptyState。
-- `frontend/src/pages/`：Dashboard、案件管理、全文搜尋、統計分析頁。
+- `frontend/src/pages/`：Dashboard、案件管理、全文搜尋、統計分析、分析驗證頁。
 - `frontend/src/styles.css`：前端全域樣式與 responsive layout。
 - `frontend/src/vite-env.d.ts`：Vite TypeScript 型別宣告。
 
@@ -228,12 +233,14 @@ FastAPI app
   ├─ routers
   │  ├─ health
   │  ├─ cases
+  │  ├─ quality
   │  ├─ search
   │  ├─ similar_cases
   │  ├─ summaries
   │  └─ statistics
   ├─ services
   │  ├─ case_service
+  │  ├─ quality_service
   │  ├─ search_service
   │  ├─ similar_case_service
   │  ├─ summary_service
@@ -309,6 +316,7 @@ VITE_API_BASE_URL 若存在則使用該值
 - `cases`
 - `search`
 - `statistics`
+- `quality`
 
 案件詳情可分享：
 
@@ -325,6 +333,7 @@ VITE_API_BASE_URL 若存在則使用該值
 - 案件管理：年度、爭議類型、案號 filter，案件列表，案件詳情。
 - 全文搜尋：關鍵字輸入，搜尋結果，snippet，點擊進入案件詳情。
 - 統計分析：年度篩選、爭議類型分布與決定日期分布。
+- 分析驗證：展示 ROC 114 摘要覆蓋率、截段污染檢查、相似度計分規則、抽樣案件、已知例外與限制。
 
 目前前端已拆分為：
 
@@ -540,6 +549,26 @@ GET /api/cases/{case_id}/similar?limit=5
 - `matched_reasons`
 - top N 相似案件基本資料。
 
+### Quality
+
+```text
+GET /api/quality/roc114-summary-similarity
+```
+
+用途：取得 ROC 114 摘要與相似案件品質檢查結果，供前端「分析驗證」頁展示。
+
+回傳內容包含：
+
+- 分析範圍。
+- 前十大爭議類型。
+- 摘要欄位覆蓋率與長度統計。
+- 截段污染檢查。
+- 相似案件計分規則。
+- 抽樣案件檢查結果。
+- 整體 Top 1 / Top 5 同爭議類型率。
+- 已知低信心例外。
+- 方法限制與下一步。
+
 ### Statistics
 
 ```text
@@ -615,6 +644,7 @@ Query parameters：
 - 全文搜尋 API。
 - 摘要 API。
 - 規則式相似案件 API。
+- 分析驗證 API。
 - 統計 API，支援年度篩選。
 - 後端 pytest 測試。
 - OpenAPI docs 可由 FastAPI 自動產生。
@@ -627,6 +657,7 @@ Query parameters：
 - 案件詳情區。
 - 全文搜尋頁。
 - 統計分析頁年度篩選。
+- 分析驗證頁。
 - 案件摘要區塊。
 - 相似案件區塊。
 - PDF 連結。
@@ -936,6 +967,7 @@ py -m pytest
 目前覆蓋：
 
 - API smoke tests。
+- 分析驗證 API tests。
 - 統計 API 年度篩選 tests。
 - 搜尋 fallback service test。
 - 摘要擷取與 summary service tests，包含「申請人主張」標題缺少「之」與「判斷理由」非第六段的 regression tests。
@@ -959,6 +991,7 @@ Invoke-WebRequest -Uri "http://127.0.0.1:8000/api/statistics/overview?roc_year=1
 Invoke-WebRequest -Uri "http://127.0.0.1:8000/api/search?q=癌症" -UseBasicParsing
 Invoke-WebRequest -Uri "http://127.0.0.1:8000/api/cases/{case_id}/summary" -UseBasicParsing
 Invoke-WebRequest -Uri "http://127.0.0.1:8000/api/cases/{case_id}/similar" -UseBasicParsing
+Invoke-WebRequest -Uri "http://127.0.0.1:8000/api/quality/roc114-summary-similarity" -UseBasicParsing
 ```
 
 預期：
@@ -969,6 +1002,7 @@ Invoke-WebRequest -Uri "http://127.0.0.1:8000/api/cases/{case_id}/similar" -UseB
 - `/api/search?q=癌症` 應有搜尋結果。
 - `/api/cases/{case_id}/summary` 應回傳 `rule_based_v1` 摘要。
 - `/api/cases/{case_id}/similar` 應回傳相似案件與命中原因。
+- `/api/quality/roc114-summary-similarity` 應回傳 ROC 114 品質檢查報告。
 
 ### 前端 build 驗證
 
@@ -1004,6 +1038,7 @@ http://127.0.0.1:5173
 - 搜尋頁可查「癌症」。
 - 統計頁可看到爭議類型與日期分布。
 - 統計頁可依年度篩選。
+- 分析驗證頁可看到摘要品質、相似度規則、抽樣案件與已知例外。
 - 瀏覽器 console 無 error。
 
 ## 13. 建議下一步開發順序
@@ -1019,6 +1054,7 @@ http://127.0.0.1:5173
 - 後端 pytest。
 - 規則式相似案件 API。
 - 前端相似案件區塊。
+- 分析驗證 API 與前端頁面。
 - 前端結構拆分。
 - 環境設定集中化與 `.env.example`。
 - SQLite 匯入腳本支援多 metadata。

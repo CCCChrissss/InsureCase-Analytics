@@ -8,6 +8,12 @@
 
 本次不修改 DB、不修改原始 PDF、raw text 或 normalized text。
 
+目前已提供前端「分析驗證」頁展示本報告的結構化結果，API 為：
+
+```text
+GET /api/quality/roc114-summary-similarity
+```
+
 ## 檢查範圍
 
 - DB：`backend/data/insurance_cases.db`

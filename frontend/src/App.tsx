@@ -1,15 +1,16 @@
 import React from "react";
-import { Activity, BarChart3, FileSearch, LayoutDashboard, ListFilter } from "lucide-react";
+import { Activity, BarChart3, FileSearch, LayoutDashboard, ListChecks, ListFilter } from "lucide-react";
 
 import { apiGet } from "./api/client";
 import { useAsyncData } from "./hooks/useAsyncData";
 import { CasesPage } from "./pages/CasesPage";
 import { Dashboard } from "./pages/Dashboard";
+import { QualityPage } from "./pages/QualityPage";
 import { SearchPage } from "./pages/SearchPage";
 import { StatisticsPage } from "./pages/StatisticsPage";
 import type { HealthResponse, Route } from "./types";
 
-const ROUTES: Route[] = ["dashboard", "cases", "search", "statistics"];
+const ROUTES: Route[] = ["dashboard", "cases", "search", "statistics", "quality"];
 
 function parseRoute(value: string | null): Route | null {
   return ROUTES.includes(value as Route) ? (value as Route) : null;
@@ -74,7 +75,8 @@ export function App() {
     { route: "dashboard", label: "總覽", icon: <LayoutDashboard size={18} /> },
     { route: "cases", label: "案件", icon: <ListFilter size={18} /> },
     { route: "search", label: "搜尋", icon: <FileSearch size={18} /> },
-    { route: "statistics", label: "統計", icon: <BarChart3 size={18} /> }
+    { route: "statistics", label: "統計", icon: <BarChart3 size={18} /> },
+    { route: "quality", label: "分析驗證", icon: <ListChecks size={18} /> }
   ];
 
   return (
@@ -120,6 +122,7 @@ export function App() {
           />
         )}
         {route === "statistics" && <StatisticsPage />}
+        {route === "quality" && <QualityPage />}
       </main>
     </div>
   );

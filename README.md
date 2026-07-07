@@ -23,6 +23,7 @@
 - 年度篩選
 - 規則式案件摘要
 - 規則式相似案件推薦
+- 分析驗證頁，展示摘要與相似案件品質檢查過程
 - 後端 pytest 測試
 - 前端基本 build 驗證
 - 跨年度匯入前置支援
@@ -173,6 +174,7 @@ GET /api/files/{case_id}/pdf
 GET /api/search
 GET /api/cases/{case_id}/summary
 GET /api/cases/{case_id}/similar
+GET /api/quality/roc114-summary-similarity
 GET /api/statistics/overview
 GET /api/statistics/dispute-types
 GET /api/statistics/decision-dates
@@ -212,6 +214,16 @@ created_at
 ```
 
 此方法具可解釋性，但尚不等同於語意相似度或法律判斷。後續可升級為 embedding / pgvector。
+
+### Quality Report
+
+分析驗證 API 回傳 ROC 114 摘要與相似案件品質檢查結果：
+
+```text
+GET /api/quality/roc114-summary-similarity
+```
+
+前端「分析驗證」頁會顯示分析範圍、摘要覆蓋率、截段污染檢查、相似度計分規則、抽樣案件、整體指標、已知例外與方法限制。
 
 ## Setup
 
@@ -357,6 +369,7 @@ py -m pytest
 目前測試涵蓋：
 
 - API smoke tests
+- 分析驗證 API
 - 統計 API 年度篩選
 - 搜尋 fallback
 - 摘要擷取與 summary service

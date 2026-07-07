@@ -493,6 +493,154 @@ button {
   overflow-wrap: anywhere;
 }
 
+.quality-intro {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+
+.quality-intro p {
+  margin: 0;
+  color: #40514d;
+}
+
+.quality-scope {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.quality-scope div,
+.scoring-card,
+.exception-card {
+  border: 1px solid #e1e9e7;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.quality-scope div {
+  padding: 12px;
+}
+
+.quality-scope dt {
+  color: #687873;
+  font-size: 0.82rem;
+}
+
+.quality-scope dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.quality-table-wrapper {
+  overflow-x: auto;
+}
+
+.quality-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  background: #ffffff;
+}
+
+.quality-table th,
+.quality-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #ebf0ef;
+  text-align: left;
+  vertical-align: top;
+}
+
+.quality-table th {
+  color: #4c5e5a;
+  background: #f2f7f6;
+  font-size: 0.88rem;
+}
+
+.quality-check-list,
+.quality-summary-list,
+.quality-conclusions,
+.exception-list {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+}
+
+.quality-check-row,
+.quality-summary-list div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #e1e9e7;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.quality-check-row svg {
+  color: #4f9b68;
+}
+
+.scoring-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px;
+}
+
+.scoring-card {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+
+.scoring-card strong {
+  color: #2f6f73;
+  font-size: 1.3rem;
+}
+
+.scoring-card h4,
+.exception-card h4,
+.quality-conclusions h4 {
+  margin: 0;
+}
+
+.scoring-card p,
+.exception-card p {
+  margin: 0;
+  color: #586966;
+}
+
+.warning-panel {
+  border-color: #ead8a8;
+}
+
+.exception-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px;
+  background: #fffaf0;
+}
+
+.exception-card svg {
+  color: #ae7a25;
+}
+
+.quality-conclusions article {
+  display: grid;
+  gap: 8px;
+}
+
+.quality-conclusions ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #40514d;
+}
+
 @media (max-width: 1080px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -506,7 +654,7 @@ button {
   }
 
   .nav-list {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .sidebar-status {
@@ -516,7 +664,9 @@ button {
   .metric-grid,
   .two-columns,
   .case-layout,
-  .detail-grid {
+  .detail-grid,
+  .quality-scope,
+  .scoring-grid {
     grid-template-columns: 1fr;
   }
 }
