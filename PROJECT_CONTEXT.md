@@ -584,6 +584,9 @@ Query parameters：
 - 建立全文搜尋索引。
 - 已寫入 492 筆規則式摘要。
 - 提供資料庫驗證腳本。
+- 已建立跨年度 trial DB：`backend/data/insurance_cases_cross_year_trial.db`，匯入 ROC 114 一月 112 筆與 ROC 115 492 筆，共 604 筆。
+- trial DB 已重建規則式摘要，共 604 筆。
+- 正式展示 DB `backend/data/insurance_cases.db` 尚未切換，仍維持 ROC 115 共 492 筆。
 
 ### 後端
 
@@ -633,7 +636,8 @@ Query parameters：
 - embedding 建立。
 - 向量索引。
 - OCR fallback。
-- 實際跨年度資料匯入與跨年度統計驗證。
+- 正式跨年度資料匯入與跨年度統計驗證。
+- ROC 114 一月 32 筆亂碼資料修正。
 - 後台管理 API，例如重新匯入、重建索引。
 - Docker。
 - CI。
@@ -656,6 +660,22 @@ Query parameters：
 建議：
 
 - 後續用 embedding / pgvector 或其他向量索引升級。
+
+### ROC 114 一月資料有部分亂碼
+
+跨年度 trial DB 已成功匯入 604 筆並通過筆數與路徑驗證，但 ROC 114 一月資料中有 32 筆案號、爭議類型與整理後路徑出現亂碼。
+
+影響：
+
+- 年度統計與總筆數可驗證。
+- 搜尋、案件列表與統計中的部分 ROC 114 顯示文字不可靠。
+- 不適合直接將 trial DB 切為正式展示資料庫。
+
+建議：
+
+- 先追查爬蟲回應編碼與該批次爭議類型資料來源。
+- 修正後重跑 ROC 114 一月 metadata、PDF/text pipeline、case organizer 與 trial DB 匯入。
+- 增加資料品質檢查，例如偵測案號或爭議類型是否含異常 Cyrillic 字元。
 
 ### 前端尚未使用正式 router
 
@@ -982,19 +1002,25 @@ http://127.0.0.1:5173
 - SQLite 匯入腳本支援多 metadata。
 - 統計 API 與前端年度篩選。
 - 跨年度 pipeline 預設檔名修正與 readiness 報告。
-- ROC 114 一月資料小期間試跑，metadata / PDF text / case organizer 均成功 112 筆；尚未匯入正式 SQLite DB。
+- ROC 114 一月資料小期間試跑，metadata / PDF text / case organizer 均成功 112 筆。
+- 已建立跨年度 trial DB，ROC 114 一月 112 筆加 ROC 115 492 筆共 604 筆，並已產生 604 筆規則式摘要；正式 DB 尚未切換。
+- 已發現 ROC 114 一月 trial data 內 32 筆亂碼資料，下一步應先修正資料品質。
 
-### 下一步：embedding 相似案件或跨年度擴充
+### 下一步：修正 ROC 114 資料品質
 
 優先原因：
 
 - 規則式摘要與相似案件 baseline 已完成。
 - 前端結構已整理，後續可以承接更複雜功能。
+- 跨年度 trial DB 已建立，但 ROC 114 一月仍有 32 筆亂碼，不適合直接切成正式展示資料。
 
 建議工作：
 
-1. 若要強化智慧搜尋：建立 chunking、embedding 與向量相似案件。
-2. 若要強化資料範圍：支援跨年度匯入與統計。
+1. 追查 ROC 114 亂碼來源。
+2. 修正或重跑受影響的 32 筆資料。
+3. 重建並驗證跨年度 trial DB。
+4. 確認無亂碼後再擴大 ROC 114 或 ROC 116 資料。
+5. 智慧搜尋強化可接續做 chunking、embedding 與向量相似案件。
 
 ### 第 8 階段：跨年度擴充
 
