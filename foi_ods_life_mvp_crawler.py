@@ -103,18 +103,24 @@ def make_session() -> requests.Session:
     return session
 
 
+def response_text(response: requests.Response) -> str:
+    """Decode response text without overriding an explicit charset from headers."""
+    if response.encoding:
+        return response.content.decode(response.encoding, errors="replace")
+    fallback_encoding = response.apparent_encoding or "utf-8"
+    return response.content.decode(fallback_encoding, errors="replace")
+
+
 def fetch_soup(session: requests.Session) -> BeautifulSoup:
     response = session.get(BASE_URL, timeout=30)
     response.raise_for_status()
-    response.encoding = response.apparent_encoding or response.encoding
-    return BeautifulSoup(response.text, "html.parser")
+    return BeautifulSoup(response_text(response), "html.parser")
 
 
 def post_search(session: requests.Session, payload: dict[str, str]) -> BeautifulSoup:
     response = session.post(BASE_URL, data=payload, timeout=30)
     response.raise_for_status()
-    response.encoding = response.apparent_encoding or response.encoding
-    soup = BeautifulSoup(response.text, "html.parser")
+    soup = BeautifulSoup(response_text(response), "html.parser")
     title = soup.title.get_text(strip=True) if soup.title else ""
     if "runtime error" in title.lower() or "執行階段錯誤" in title:
         raise CrawlerError("FOI ODS returned ASP.NET runtime error for the submitted payload.")
@@ -522,6 +528,12 @@ def query_batch(
     return records, status | batch_context
 
 
+def has_suspicious_text(value: str) -> bool:
+    if "\ufffd" in value:
+        return True
+    return any("\u0400" <= character <= "\u04ff" for character in value)
+
+
 def collect_batches(
     *,
     session: requests.Session,
@@ -615,14 +627,19 @@ def validate_output(data: dict[str, Any]) -> list[str]:
             errors.append(f"record {index}: missing case_number")
         elif case_number in seen_case_numbers:
             errors.append(f"record {index}: duplicate case_number {case_number}")
+        elif has_suspicious_text(str(case_number)):
+            errors.append(f"record {index}: suspicious case_number {case_number!r}")
         else:
             seen_case_numbers.add(case_number)
 
         if not record.get("decision_date"):
             errors.append(f"record {index}: missing decision_date")
         dispute_type = record.get("dispute_type") or {}
-        if not dispute_type.get("label"):
+        dispute_label = dispute_type.get("label")
+        if not dispute_label:
             errors.append(f"record {index}: missing dispute_type.label")
+        elif has_suspicious_text(str(dispute_label)):
+            errors.append(f"record {index}: suspicious dispute_type.label {dispute_label!r}")
         source = record.get("source") or {}
         pdf_url = source.get("pdf_url")
         if not pdf_url:

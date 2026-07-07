@@ -184,29 +184,39 @@ py .\backend\scripts\extract_case_summaries.py --db .\backend\data\insurance_cas
 
 ## 資料品質注意事項
 
-跨年度測試 DB 建立成功，但 ROC 114 一月資料中發現 32 筆 metadata 與整理後路徑存在亂碼，集中在同一個爭議類型。
+跨年度測試 DB 建立後，曾發現 ROC 114 一月資料中有 32 筆 metadata 與整理後路徑存在亂碼，集中在「必要性醫療」爭議類型。
+
+根因：
+
+- FOI ODS 結果頁明確回傳 `charset=utf-8`。
+- `requests.Response.apparent_encoding` 對 ROC 114/1/16「必要性醫療」結果頁誤判為 `MacCyrillic`。
+- 舊版爬蟲用 `apparent_encoding` 覆蓋 header charset，導致中文案號與爭議類型被解成 Cyrillic 亂碼。
 
 已確認：
 
 - ROC 114 metadata 總數仍為 112。
 - trial DB 總數仍為 604。
-- 亂碼資料列的 PDF/text/metadata 檔案路徑存在，`path_error_count` 為 0。
-- 問題影響案號與爭議類型文字品質，不是 SQLite 匯入筆數失敗。
+- 修正爬蟲後，ROC 114 metadata 品質檢查 `issue_count` 為 0。
+- ROC 114 `data/foi_ods/cases/roc114/` 內 `decision.pdf`、`raw_text.txt`、`normalized_text.txt`、`metadata.json` 均為 112 份。
+- 跨年度 trial DB 品質檢查 `issue_count` 為 0。
+- trial DB 年度分布仍為 ROC 114 = 112、ROC 115 = 492。
+- ROC 114「必要性醫療」案件為 32 筆。
 
-下一步不建議直接把 trial DB 切成正式展示 DB，應先處理 ROC 114 亂碼資料來源或補做資料清理驗證。
+已新增 `backend/scripts/check_data_quality.py`，可檢查 metadata 與 SQLite DB 是否含異常 Cyrillic 或 replacement character。
 
 ## 建議下一步
 
-建議先處理資料品質，再擴大抓取：
+資料品質問題已修正。後續建議：
 
-1. 追查 ROC 114 亂碼來源，優先確認爬蟲回應編碼、批次查詢結果與 case organizer 輸出。
-2. 修正或重跑受影響的 32 筆資料。
-3. 重建 `backend/data/insurance_cases_cross_year_trial.db` 並重新驗證 604 筆。
-4. 驗證無亂碼後，再決定是否擴大 ROC 114 到完整年度。
-5. 最後才考慮將正式展示 DB 切換為跨年度資料。
+1. 擴大 ROC 114 到完整年度前，先把 `check_data_quality.py` 納入每次 pipeline 驗證。
+2. 重跑其他年度時，若品質檢查失敗，不要匯入正式 DB。
+3. 再決定是否擴大 ROC 114 到完整年度。
+4. 最後才考慮將正式展示 DB 切換為跨年度資料。
 
 ## 結論
 
 ROC 114 一月小期間 metadata、PDF 下載、文字抽取、案件整理與跨年度 trial DB 匯入均已完成。
 
-目前不建議直接覆蓋現有展示 DB。下一步應先修正 ROC 114 中 32 筆亂碼資料，再擴大年度資料量。
+ROC 114 中 32 筆亂碼資料已修正，跨年度 trial DB 已重建並通過資料品質檢查。
+
+正式展示 DB 仍未切換；下一步可以開始規劃擴大 ROC 114 完整年度，或先把資料品質檢查整合成固定 pipeline 步驟。

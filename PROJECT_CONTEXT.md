@@ -176,8 +176,10 @@ frontend/dist/
 - `backend/scripts/extract_case_summaries.py`：從 normalized text 產生規則式摘要並寫入 `case_summaries`。
 - `backend/scripts/import_cases_to_db.py`：讀取單一或多個 metadata 與文字檔，匯入 SQLite。
 - `backend/scripts/verify_case_db.py`：驗證 SQLite 筆數、搜尋、路徑與 sample case。
+- `backend/scripts/check_data_quality.py`：檢查 metadata 與 SQLite DB 是否含 mojibake 類異常字元。
 - `backend/tests/test_api.py`：API smoke tests。
 - `backend/tests/test_cross_year_pipeline_defaults.py`：跨年度 pipeline 預設輸出路徑測試。
+- `backend/tests/test_data_quality.py`：資料品質檢查測試。
 - `backend/tests/test_import_cases_to_db.py`：SQLite 匯入腳本測試，包含多 metadata 匯入與 metadata 目錄解析。
 - `backend/tests/test_search_service.py`：搜尋 fallback 單元測試。
 - `backend/tests/test_similar_case_service.py`：相似案件 service 單元測試。
@@ -637,7 +639,6 @@ Query parameters：
 - 向量索引。
 - OCR fallback。
 - 正式跨年度資料匯入與跨年度統計驗證。
-- ROC 114 一月 32 筆亂碼資料修正。
 - 後台管理 API，例如重新匯入、重建索引。
 - Docker。
 - CI。
@@ -661,21 +662,25 @@ Query parameters：
 
 - 後續用 embedding / pgvector 或其他向量索引升級。
 
-### ROC 114 一月資料有部分亂碼
+### ROC 114 一月亂碼問題已修正
 
-跨年度 trial DB 已成功匯入 604 筆並通過筆數與路徑驗證，但 ROC 114 一月資料中有 32 筆案號、爭議類型與整理後路徑出現亂碼。
+跨年度 trial DB 第一次建立時，ROC 114 一月資料中有 32 筆案號、爭議類型與整理後路徑出現亂碼。根因是 FOI ODS 結果頁已宣告 `charset=utf-8`，但爬蟲用 `response.apparent_encoding` 覆蓋 header charset，而該批結果頁被誤判為 `MacCyrillic`。
 
-影響：
+已修正：
 
-- 年度統計與總筆數可驗證。
-- 搜尋、案件列表與統計中的部分 ROC 114 顯示文字不可靠。
-- 不適合直接將 trial DB 切為正式展示資料庫。
+- `foi_ods_life_mvp_crawler.py` 改為優先使用 response header 宣告的 charset。
+- 爬蟲 validation 會偵測案號與爭議類型是否含異常 Cyrillic 字元。
+- 新增 `backend/scripts/check_data_quality.py`，可檢查 metadata 與 SQLite DB。
+- 已重跑 ROC 114 一月 metadata、PDF/text pipeline、case organizer。
+- 已刪除舊的 ROC 114 亂碼資料夾殘留。
+- 已重建跨年度 trial DB 與 604 筆摘要。
 
-建議：
+驗證結果：
 
-- 先追查爬蟲回應編碼與該批次爭議類型資料來源。
-- 修正後重跑 ROC 114 一月 metadata、PDF/text pipeline、case organizer 與 trial DB 匯入。
-- 增加資料品質檢查，例如偵測案號或爭議類型是否含異常 Cyrillic 字元。
+- ROC 114 metadata 品質檢查 `issue_count` = 0。
+- ROC 114 cases 資料夾中 `decision.pdf`、`raw_text.txt`、`normalized_text.txt`、`metadata.json` 均為 112 份。
+- 跨年度 trial DB 品質檢查 `issue_count` = 0。
+- trial DB 年度分布為 ROC 114 = 112、ROC 115 = 492。
 
 ### 前端尚未使用正式 router
 
@@ -1004,23 +1009,21 @@ http://127.0.0.1:5173
 - 跨年度 pipeline 預設檔名修正與 readiness 報告。
 - ROC 114 一月資料小期間試跑，metadata / PDF text / case organizer 均成功 112 筆。
 - 已建立跨年度 trial DB，ROC 114 一月 112 筆加 ROC 115 492 筆共 604 筆，並已產生 604 筆規則式摘要；正式 DB 尚未切換。
-- 已發現 ROC 114 一月 trial data 內 32 筆亂碼資料，下一步應先修正資料品質。
+- 已修正 ROC 114 一月 32 筆亂碼資料，並新增資料品質檢查腳本。
 
-### 下一步：修正 ROC 114 資料品質
+### 下一步：擴大跨年度資料或導入 embedding
 
 優先原因：
 
 - 規則式摘要與相似案件 baseline 已完成。
 - 前端結構已整理，後續可以承接更複雜功能。
-- 跨年度 trial DB 已建立，但 ROC 114 一月仍有 32 筆亂碼，不適合直接切成正式展示資料。
+- 跨年度 trial DB 已建立並通過資料品質檢查，但正式 DB 尚未切換。
 
 建議工作：
 
-1. 追查 ROC 114 亂碼來源。
-2. 修正或重跑受影響的 32 筆資料。
-3. 重建並驗證跨年度 trial DB。
-4. 確認無亂碼後再擴大 ROC 114 或 ROC 116 資料。
-5. 智慧搜尋強化可接續做 chunking、embedding 與向量相似案件。
+1. 若要強化資料範圍：擴大 ROC 114 完整年度或試跑 ROC 116 小期間。
+2. 每次新資料進來後，先執行 `check_data_quality.py` 再匯入正式 DB。
+3. 若要強化智慧搜尋：建立 chunking、embedding 與向量相似案件。
 
 ### 第 8 階段：跨年度擴充
 
