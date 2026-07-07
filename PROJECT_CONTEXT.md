@@ -54,7 +54,8 @@
 │  ├─ project_plan.md
 │  ├─ development_roadmap.md
 │  ├─ pipeline.md
-│  └─ cross_year_readiness.md
+│  ├─ cross_year_readiness.md
+│  └─ cross_year_trial_run_roc114_january.md
 ├─ backend/
 │  ├─ schema.sql
 │  ├─ app/
@@ -152,6 +153,7 @@ frontend/dist/
 - `docs/development_roadmap.md`：階段式開發路線，目前已記錄第 0 到第 6 階段。
 - `docs/pipeline.md`：資料處理 pipeline 說明，包含爬蟲、PDF 文字抽取、案件整理、SQLite 匯入、API 與前端讀取流程。
 - `docs/cross_year_readiness.md`：跨年度資料匯入前檢查報告，包含已支援項目、風險與正式匯入前 checklist。
+- `docs/cross_year_trial_run_roc114_january.md`：ROC 114 一月小期間跨年度試跑報告，記錄 112 筆 metadata、PDF/text 與案件整理成功結果。
 
 ### backend
 
@@ -980,6 +982,7 @@ http://127.0.0.1:5173
 - SQLite 匯入腳本支援多 metadata。
 - 統計 API 與前端年度篩選。
 - 跨年度 pipeline 預設檔名修正與 readiness 報告。
+- ROC 114 一月資料小期間試跑，metadata / PDF text / case organizer 均成功 112 筆；尚未匯入正式 SQLite DB。
 
 ### 下一步：embedding 相似案件或跨年度擴充
 

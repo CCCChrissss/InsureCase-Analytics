@@ -220,7 +220,8 @@ py .\backend\scripts\verify_case_db.py
 - 已完成 Dashboard、案件管理與統計分析頁的年度篩選 UI。
 - 已完成跨年度 readiness 檢查報告。
 - 已修正爬蟲、PDF 文字 pipeline、案件整理 pipeline 的跨年度預設輸出檔名。
-- 尚未實際匯入 ROC 114、ROC 116 或其他年度資料。
+- 已完成 ROC 114 一月小期間試跑，metadata、PDF 文字抽取與案件整理均成功 112 筆。
+- 尚未將 ROC 114 匯入 SQLite，也尚未蒐集 ROC 114 完整年度或 ROC 116 資料。
 
 預計完成：
 
