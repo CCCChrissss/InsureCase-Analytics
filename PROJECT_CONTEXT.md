@@ -53,7 +53,8 @@
 ├─ docs/
 │  ├─ project_plan.md
 │  ├─ development_roadmap.md
-│  └─ pipeline.md
+│  ├─ pipeline.md
+│  └─ cross_year_readiness.md
 ├─ backend/
 │  ├─ schema.sql
 │  ├─ app/
@@ -150,6 +151,7 @@ frontend/dist/
 - `docs/project_plan.md`：完整專案計畫，包含目標、MVP 範圍、架構、資料庫、搜尋、API、前端與風險。
 - `docs/development_roadmap.md`：階段式開發路線，目前已記錄第 0 到第 6 階段。
 - `docs/pipeline.md`：資料處理 pipeline 說明，包含爬蟲、PDF 文字抽取、案件整理、SQLite 匯入、API 與前端讀取流程。
+- `docs/cross_year_readiness.md`：跨年度資料匯入前檢查報告，包含已支援項目、風險與正式匯入前 checklist。
 
 ### backend
 
@@ -173,6 +175,7 @@ frontend/dist/
 - `backend/scripts/import_cases_to_db.py`：讀取單一或多個 metadata 與文字檔，匯入 SQLite。
 - `backend/scripts/verify_case_db.py`：驗證 SQLite 筆數、搜尋、路徑與 sample case。
 - `backend/tests/test_api.py`：API smoke tests。
+- `backend/tests/test_cross_year_pipeline_defaults.py`：跨年度 pipeline 預設輸出路徑測試。
 - `backend/tests/test_import_cases_to_db.py`：SQLite 匯入腳本測試，包含多 metadata 匯入與 metadata 目錄解析。
 - `backend/tests/test_search_service.py`：搜尋 fallback 單元測試。
 - `backend/tests/test_similar_case_service.py`：相似案件 service 單元測試。
@@ -976,6 +979,7 @@ http://127.0.0.1:5173
 - 環境設定集中化與 `.env.example`。
 - SQLite 匯入腳本支援多 metadata。
 - 統計 API 與前端年度篩選。
+- 跨年度 pipeline 預設檔名修正與 readiness 報告。
 
 ### 下一步：embedding 相似案件或跨年度擴充
 

@@ -18,7 +18,6 @@ from bs4 import BeautifulSoup, Tag
 BASE_URL = "https://ods.foi.org.tw/"
 HELP_URL = "https://ods.foi.org.tw/help.aspx"
 
-DEFAULT_OUTPUT = Path("data/foi_ods/metadata/foi_ods_life_roc115_metadata.json")
 DATA_ROOT = Path("data/foi_ods")
 
 VISIBLE_LIMIT = 100
@@ -52,6 +51,10 @@ FIELD_PAGE_COUNT = "Foi$cph_content$HFrecPageCount"
 
 class CrawlerError(RuntimeError):
     pass
+
+
+def default_metadata_path(roc_year: int) -> Path:
+    return DATA_ROOT / "metadata" / f"foi_ods_life_roc{roc_year}_metadata.json"
 
 
 @dataclass(frozen=True)
@@ -791,8 +794,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--end-month", type=int, default=7)
     parser.add_argument("--end-day", type=int, default=1)
     parser.add_argument("--delay-seconds", type=float, default=0.3)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
-    return parser.parse_args()
+    parser.add_argument("--output", type=Path, default=None)
+    args = parser.parse_args()
+    if args.output is None:
+        args.output = default_metadata_path(args.roc_year)
+    return args
 
 
 def main() -> None:

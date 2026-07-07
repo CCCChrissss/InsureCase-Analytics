@@ -50,6 +50,12 @@ foi_ods_life_mvp_crawler.py
 data/foi_ods/metadata/foi_ods_life_roc115_metadata.json
 ```
 
+若指定其他 `--roc-year` 且未指定 `--output`，輸出檔名會自動改為：
+
+```text
+data/foi_ods/metadata/foi_ods_life_roc<year>_metadata.json
+```
+
 驗證重點：
 
 - records 筆數正確。
@@ -80,6 +86,8 @@ foi_ods_pdf_text_pipeline.py
 ```text
 data/foi_ods/metadata/foi_ods_life_roc115_pdf_text_report.json
 ```
+
+若指定其他年度 metadata 且未指定 `--report`，report 檔名會依 metadata 檔名自動推導為 `*_pdf_text_report.json`。
 
 驗證重點：
 
@@ -114,6 +122,8 @@ foi_ods_case_organizer.py
 data/foi_ods/cases/roc115/<爭議類型>/<案號>/
 data/foi_ods/metadata/foi_ods_life_roc115_case_organize_report.json
 ```
+
+若指定其他年度 metadata 且未指定 `--report`，report 檔名會依 metadata 檔名自動推導為 `*_case_organize_report.json`。
 
 驗證重點：
 

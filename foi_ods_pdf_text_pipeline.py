@@ -14,11 +14,16 @@ from pypdf import PdfReader
 
 
 DEFAULT_METADATA = Path("data/foi_ods/metadata/foi_ods_life_roc115_metadata.json")
-DEFAULT_REPORT = Path("data/foi_ods/metadata/foi_ods_life_roc115_pdf_text_report.json")
 
 
 class PipelineError(RuntimeError):
     pass
+
+
+def default_report_path(metadata_path: Path) -> Path:
+    if metadata_path.name.endswith("_metadata.json"):
+        return metadata_path.with_name(metadata_path.name.replace("_metadata.json", "_pdf_text_report.json"))
+    return metadata_path.with_name(f"{metadata_path.stem}_pdf_text_report.json")
 
 
 def now_iso() -> str:
@@ -321,11 +326,14 @@ def run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Download FOI ODS PDFs and extract text files.")
     parser.add_argument("--metadata", type=Path, default=DEFAULT_METADATA)
-    parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
+    parser.add_argument("--report", type=Path, default=None)
     parser.add_argument("--delay-seconds", type=float, default=0.2)
     parser.add_argument("--progress-every", type=int, default=25)
     parser.add_argument("--overwrite", action="store_true")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.report is None:
+        args.report = default_report_path(args.metadata)
+    return args
 
 
 def main() -> None:
