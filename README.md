@@ -27,10 +27,11 @@
 - 前端基本 build 驗證
 - 跨年度匯入前置支援
 - ROC 114 一月小期間跨年度試跑文件
+- ROC 114 全年度跨年度 trial DB 試跑文件
 
 ## Data Scope
 
-目前主要資料範圍：
+目前正式展示資料範圍：
 
 - 年度：ROC 115
 - 產業：保險業
@@ -45,6 +46,16 @@
 - 爭議類型：35 種
 
 注意：查詢期間是 ROC 115/1/1 到 ROC 115/7/1，但目前 metadata records 內的實際 `decision_date` 範圍是 `115.01.09` 到 `115.03.20`。展示與文件中應區分「查詢期間」與「實際取得案件決定日期範圍」。
+
+目前跨年度 trial 資料範圍：
+
+- ROC 114 全年度：2500 筆
+- ROC 115：492 筆
+- trial DB：2992 筆
+- trial DB 路徑：`backend/data/insurance_cases_cross_year_trial.db`
+- trial DB data quality `issue_count`：0
+
+注意：trial DB 尚未切換為正式展示 DB。前端與後端預設仍讀取 `backend/data/insurance_cases.db`。
 
 ## Tech Stack
 
@@ -90,7 +101,8 @@
 │  ├─ development_roadmap.md
 │  ├─ pipeline.md
 │  ├─ cross_year_readiness.md
-│  └─ cross_year_trial_run_roc114_january.md
+│  ├─ cross_year_trial_run_roc114_january.md
+│  └─ cross_year_trial_run_roc114_full_year.md
 ├─ backend/
 │  ├─ schema.sql
 │  ├─ app/
@@ -364,6 +376,7 @@ pnpm build
 - `docs/pipeline.md`：資料處理 pipeline
 - `docs/cross_year_readiness.md`：跨年度匯入前檢查
 - `docs/cross_year_trial_run_roc114_january.md`：ROC 114 一月試跑報告
+- `docs/cross_year_trial_run_roc114_full_year.md`：ROC 114 全年度試跑報告
 
 ## Current Limitations
 
@@ -372,7 +385,7 @@ pnpm build
 - embedding 建立
 - 向量索引
 - OCR fallback
-- 正式跨年度完整資料匯入
+- 正式展示 DB 切換為跨年度資料
 - Docker
 - CI
 - 部署設定
@@ -386,8 +399,8 @@ pnpm build
 ```text
 1. 驗證摘要與相似案件品質
 2. 根據抽樣結果修正規則
-3. 完成跨年度資料匯入
-4. 更新跨年度統計與搜尋驗證
+3. 抽樣檢查 ROC 114 全年度摘要與相似案件品質
+4. 決定是否將正式展示 DB 切換為跨年度 trial DB
 5. 規劃 embedding 相似案件
 6. 導入 Docker / CI / 部署設定
 ```

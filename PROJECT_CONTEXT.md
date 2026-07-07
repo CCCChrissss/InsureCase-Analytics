@@ -25,7 +25,7 @@
 
 目前已處理資料範圍：
 
-- 年度：ROC 115
+- 正式展示 DB 年度：ROC 115
 - 產業：保險業
 - 保險類別：人壽保險
 - 文件類型：評議決定書
@@ -33,6 +33,9 @@
 - metadata records：492 筆
 - PDF / raw text / normalized text / 單案 metadata：各 492 份
 - 爭議類型：35 種
+- 跨年度 trial DB：ROC 114 全年度 2500 筆 + ROC 115 492 筆，共 2992 筆
+- trial DB 路徑：`backend/data/insurance_cases_cross_year_trial.db`
+- trial DB 資料品質檢查：`issue_count = 0`
 
 注意：查詢期間是 ROC 115/1/1 到 ROC 115/7/1，但目前文件記錄的實際 `decision_date` 範圍是 `115.01.09` 到 `115.03.20`。
 
@@ -55,7 +58,8 @@
 │  ├─ development_roadmap.md
 │  ├─ pipeline.md
 │  ├─ cross_year_readiness.md
-│  └─ cross_year_trial_run_roc114_january.md
+│  ├─ cross_year_trial_run_roc114_january.md
+│  └─ cross_year_trial_run_roc114_full_year.md
 ├─ backend/
 │  ├─ schema.sql
 │  ├─ app/
@@ -154,6 +158,7 @@ frontend/dist/
 - `docs/pipeline.md`：資料處理 pipeline 說明，包含爬蟲、PDF 文字抽取、案件整理、SQLite 匯入、API 與前端讀取流程。
 - `docs/cross_year_readiness.md`：跨年度資料匯入前檢查報告，包含已支援項目、風險與正式匯入前 checklist。
 - `docs/cross_year_trial_run_roc114_january.md`：ROC 114 一月小期間跨年度試跑報告，記錄 112 筆 metadata、PDF/text 與案件整理成功結果。
+- `docs/cross_year_trial_run_roc114_full_year.md`：ROC 114 全年度跨年度試跑報告，記錄 2500 筆 metadata、PDF/text、案件整理與 trial DB 驗證結果。
 
 ### backend
 
@@ -573,6 +578,7 @@ Query parameters：
 - raw text 與 normalized text 產生。
 - 依年度、爭議類型、案號整理案件資料夾。
 - metadata 回寫本地檔案路徑。
+- ROC 114 全年度 metadata / PDF text / case organizer 均完成 2500 筆。
 
 ### SQLite
 
@@ -586,8 +592,8 @@ Query parameters：
 - 建立全文搜尋索引。
 - 已寫入 492 筆規則式摘要。
 - 提供資料庫驗證腳本。
-- 已建立跨年度 trial DB：`backend/data/insurance_cases_cross_year_trial.db`，匯入 ROC 114 一月 112 筆與 ROC 115 492 筆，共 604 筆。
-- trial DB 已重建規則式摘要，共 604 筆。
+- 已建立跨年度 trial DB：`backend/data/insurance_cases_cross_year_trial.db`，匯入 ROC 114 全年度 2500 筆與 ROC 115 492 筆，共 2992 筆。
+- trial DB 已重建規則式摘要，共 2992 筆。
 - 正式展示 DB `backend/data/insurance_cases.db` 尚未切換，仍維持 ROC 115 共 492 筆。
 
 ### 後端
@@ -673,14 +679,14 @@ Query parameters：
 - 新增 `backend/scripts/check_data_quality.py`，可檢查 metadata 與 SQLite DB。
 - 已重跑 ROC 114 一月 metadata、PDF/text pipeline、case organizer。
 - 已刪除舊的 ROC 114 亂碼資料夾殘留。
-- 已重建跨年度 trial DB 與 604 筆摘要。
+- 後續已擴大到 ROC 114 全年度，並重建跨年度 trial DB 與 2992 筆摘要。
 
 驗證結果：
 
 - ROC 114 metadata 品質檢查 `issue_count` = 0。
-- ROC 114 cases 資料夾中 `decision.pdf`、`raw_text.txt`、`normalized_text.txt`、`metadata.json` 均為 112 份。
+- ROC 114 一月修正當時，cases 資料夾中 `decision.pdf`、`raw_text.txt`、`normalized_text.txt`、`metadata.json` 均為 112 份。
 - 跨年度 trial DB 品質檢查 `issue_count` = 0。
-- trial DB 年度分布為 ROC 114 = 112、ROC 115 = 492。
+- 目前 trial DB 年度分布為 ROC 114 = 2500、ROC 115 = 492。
 
 ### 前端尚未使用正式 router
 
@@ -1008,7 +1014,8 @@ http://127.0.0.1:5173
 - 統計 API 與前端年度篩選。
 - 跨年度 pipeline 預設檔名修正與 readiness 報告。
 - ROC 114 一月資料小期間試跑，metadata / PDF text / case organizer 均成功 112 筆。
-- 已建立跨年度 trial DB，ROC 114 一月 112 筆加 ROC 115 492 筆共 604 筆，並已產生 604 筆規則式摘要；正式 DB 尚未切換。
+- ROC 114 全年度資料試跑，metadata / PDF text / case organizer 均成功 2500 筆。
+- 已建立跨年度 trial DB，ROC 114 全年度 2500 筆加 ROC 115 492 筆共 2992 筆，並已產生 2992 筆規則式摘要；正式 DB 尚未切換。
 - 已修正 ROC 114 一月 32 筆亂碼資料，並新增資料品質檢查腳本。
 
 ### 下一步：擴大跨年度資料或導入 embedding
@@ -1021,9 +1028,10 @@ http://127.0.0.1:5173
 
 建議工作：
 
-1. 若要強化資料範圍：擴大 ROC 114 完整年度或試跑 ROC 116 小期間。
-2. 每次新資料進來後，先執行 `check_data_quality.py` 再匯入正式 DB。
-3. 若要強化智慧搜尋：建立 chunking、embedding 與向量相似案件。
+1. 抽樣檢查 ROC 114 全年度摘要與相似案件品質。
+2. 決定是否將正式展示 DB 切換為跨年度 trial DB。
+3. 若要強化資料範圍：試跑 ROC 116 小期間。
+4. 若要強化智慧搜尋：建立 chunking、embedding 與向量相似案件。
 
 ### 第 8 階段：跨年度擴充
 
