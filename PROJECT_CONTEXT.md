@@ -63,7 +63,8 @@
 │  ├─ pipeline.md
 │  ├─ cross_year_readiness.md
 │  ├─ cross_year_trial_run_roc114_january.md
-│  └─ cross_year_trial_run_roc114_full_year.md
+│  ├─ cross_year_trial_run_roc114_full_year.md
+│  └─ roc114_summary_similarity_quality_check.md
 ├─ backend/
 │  ├─ schema.sql
 │  ├─ app/
@@ -163,6 +164,7 @@ frontend/dist/
 - `docs/cross_year_readiness.md`：跨年度資料匯入前檢查報告，包含已支援項目、風險與正式匯入前 checklist。
 - `docs/cross_year_trial_run_roc114_january.md`：ROC 114 一月小期間跨年度試跑報告，記錄 112 筆 metadata、PDF/text 與案件整理成功結果。
 - `docs/cross_year_trial_run_roc114_full_year.md`：ROC 114 全年度跨年度試跑報告，記錄 2500 筆 metadata、PDF/text、案件整理與 trial DB 驗證結果。
+- `docs/roc114_summary_similarity_quality_check.md`：ROC 114 摘要與相似案件抽樣品質檢查，記錄摘要覆蓋率、截段污染檢查、相似案件 top 5 檢查與已知例外。
 
 ### backend
 
@@ -1026,6 +1028,7 @@ http://127.0.0.1:5173
 - ROC 114 全年度資料試跑，metadata / PDF text / case organizer 均成功 2500 筆。
 - 已建立跨年度 trial DB，ROC 114 全年度 2500 筆加 ROC 115 492 筆共 2992 筆，並已產生 2992 筆規則式摘要；`holding`、`applicant_claim`、`reasoning` 欄位均已補齊；正式 DB 已切換。
 - 已修正 ROC 114 一月 32 筆亂碼資料，並新增資料品質檢查腳本。
+- 已完成 ROC 114 摘要與相似案件品質檢查：摘要三欄覆蓋率 2500/2500，Top 1 同爭議類型率 99.92%，已知 2 筆稀有爭議類型因無同類候選而只能回傳低信心相似案件。
 
 ### 下一步：擴大跨年度資料或導入 embedding
 
@@ -1037,7 +1040,7 @@ http://127.0.0.1:5173
 
 建議工作：
 
-1. 抽樣檢查 ROC 114 全年度摘要與相似案件品質。
+1. 在相似案件區塊加入低信心提示。
 2. 若要強化資料範圍：試跑 ROC 116 小期間。
 3. 若要強化智慧搜尋：建立 chunking、embedding 與向量相似案件。
 

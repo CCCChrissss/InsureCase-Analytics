@@ -29,6 +29,7 @@
 - ROC 114 一月小期間跨年度試跑文件
 - ROC 114 全年度跨年度 trial DB 試跑文件
 - 正式展示 DB 已切換為 ROC 114 + ROC 115 跨年度資料
+- ROC 114 摘要與相似案件品質檢查文件
 
 ## Data Scope
 
@@ -106,7 +107,8 @@
 │  ├─ pipeline.md
 │  ├─ cross_year_readiness.md
 │  ├─ cross_year_trial_run_roc114_january.md
-│  └─ cross_year_trial_run_roc114_full_year.md
+│  ├─ cross_year_trial_run_roc114_full_year.md
+│  └─ roc114_summary_similarity_quality_check.md
 ├─ backend/
 │  ├─ schema.sql
 │  ├─ app/
@@ -381,6 +383,7 @@ pnpm build
 - `docs/cross_year_readiness.md`：跨年度匯入前檢查
 - `docs/cross_year_trial_run_roc114_january.md`：ROC 114 一月試跑報告
 - `docs/cross_year_trial_run_roc114_full_year.md`：ROC 114 全年度試跑報告
+- `docs/roc114_summary_similarity_quality_check.md`：ROC 114 摘要與相似案件抽樣品質檢查
 
 ## Current Limitations
 
@@ -400,11 +403,10 @@ pnpm build
 建議後續開發順序：
 
 ```text
-1. 驗證摘要與相似案件品質
-2. 根據抽樣結果修正規則
-3. 規劃 embedding 相似案件
-4. 試跑 ROC 116 小期間資料
-5. 導入 Docker / CI / 部署設定
+1. 在相似案件區塊加入低信心提示
+2. 規劃 embedding 相似案件
+3. 試跑 ROC 116 小期間資料
+4. 導入 Docker / CI / 部署設定
 ```
 
 ## Project Positioning
