@@ -25,20 +25,23 @@
 
 目前已處理資料範圍：
 
-- 正式展示 DB 年度：ROC 115
+- 正式展示 DB 年度：ROC 114 + ROC 115
 - 產業：保險業
 - 保險類別：人壽保險
 - 文件類型：評議決定書
-- 查詢期間：ROC 115/1/1 到 ROC 115/7/1
-- metadata records：492 筆
-- PDF / raw text / normalized text / 單案 metadata：各 492 份
-- 爭議類型：35 種
+- ROC 114 查詢期間：ROC 114/1/1 到 ROC 114/12/31
+- ROC 115 查詢期間：ROC 115/1/1 到 ROC 115/7/1
+- metadata records：2992 筆
+- PDF / raw text / normalized text / 單案 metadata：各 2992 份
+- 爭議類型：41 種
+- 正式 DB：`backend/data/insurance_cases.db`
+- 正式 DB 年度分布：ROC 114 = 2500，ROC 115 = 492
 - 跨年度 trial DB：ROC 114 全年度 2500 筆 + ROC 115 492 筆，共 2992 筆
 - trial DB 路徑：`backend/data/insurance_cases_cross_year_trial.db`
 - trial DB 資料品質檢查：`issue_count = 0`
 - trial DB 規則式摘要：2992 筆，`holding`、`applicant_claim`、`reasoning` 均已補齊到 2992 筆
 
-注意：查詢期間是 ROC 115/1/1 到 ROC 115/7/1，但目前文件記錄的實際 `decision_date` 範圍是 `115.01.09` 到 `115.03.20`。
+注意：ROC 115 查詢期間是 ROC 115/1/1 到 ROC 115/7/1，但目前文件記錄的實際 `decision_date` 範圍是 `115.01.09` 到 `115.03.20`。ROC 114 全年度實際 `decision_date` 範圍是 `114.01.16` 到 `114.12.26`。
 
 ## 2. 目前資料夾結構
 
@@ -393,7 +396,7 @@ FOREIGN KEY(case_id) REFERENCES cases(case_id) ON DELETE CASCADE
 
 ### `case_summaries`
 
-摘要表，目前由 `backend/scripts/extract_case_summaries.py` 寫入；目前本機 DB 已產生 492 筆 `rule_based_v1` 摘要。
+摘要表，目前由 `backend/scripts/extract_case_summaries.py` 寫入；目前正式 DB 已產生 2992 筆 `rule_based_v1` 摘要。
 
 ```sql
 case_id TEXT PRIMARY KEY
@@ -587,15 +590,15 @@ Query parameters：
 - 建立 `case_texts`。
 - 建立 `case_summaries`。
 - 建立 `case_search` FTS5 virtual table。
-- 匯入 492 筆案件。
-- 匯入 492 筆文字。
+- 匯入 2992 筆案件。
+- 匯入 2992 筆文字。
 - 匯入腳本支援多個 `--metadata` 與 `--metadata-dir`。
 - 建立全文搜尋索引。
-- 已寫入 492 筆規則式摘要。
+- 已寫入 2992 筆規則式摘要。
 - 提供資料庫驗證腳本。
 - 已建立跨年度 trial DB：`backend/data/insurance_cases_cross_year_trial.db`，匯入 ROC 114 全年度 2500 筆與 ROC 115 492 筆，共 2992 筆。
 - trial DB 已重建規則式摘要，共 2992 筆；`holding`、`applicant_claim`、`reasoning` 均為 2992 筆。
-- 正式展示 DB `backend/data/insurance_cases.db` 尚未切換，仍維持 ROC 115 共 492 筆。
+- 正式展示 DB `backend/data/insurance_cases.db` 已切換為 ROC 114 + ROC 115 共 2992 筆；原 ROC 115 DB 已備份為 `backend/data/insurance_cases_roc115_backup_20260707_163248.db`。
 
 ### 後端
 
@@ -708,7 +711,7 @@ Query parameters：
 
 影響：
 
-- 492 筆本機 MVP 可接受。
+- 2992 筆本機 MVP 可接受。
 - 未來跨年度或文字更長時，API payload 可能偏大。
 
 建議：
@@ -827,7 +830,7 @@ py .\backend\scripts\import_cases_to_db.py --metadata-dir .\data\foi_ods\metadat
 
 - `--metadata` 可重複指定。
 - `--metadata-dir` 只讀取目錄下的 `*_metadata.json`。
-- 目前實際完成資料仍是 ROC 115 的 492 筆；多 metadata 匯入是跨年度擴充前置能力。
+- 目前正式展示資料已是 ROC 114 + ROC 115 共 2992 筆；多 metadata 匯入仍可用於後續新增年度。
 
 預設輸出：
 
@@ -843,10 +846,10 @@ py .\backend\scripts\verify_case_db.py
 
 成功標準：
 
-- `cases` = 492
-- `case_texts` = 492
-- `case_search` = 492
-- `case_summaries` = 492
+- `cases` = 2992
+- `case_texts` = 2992
+- `case_search` = 2992
+- `case_summaries` = 2992
 - path errors = 0
 - 關鍵字查詢有結果
 
@@ -858,11 +861,11 @@ py .\backend\scripts\extract_case_summaries.py
 
 目前成功標準：
 
-- `processed_count` = 492
-- `total_summaries` = 492
-- `holding` = 492
-- `applicant_claim` = 492
-- `reasoning` = 492
+- `processed_count` = 2992
+- `total_summaries` = 2992
+- `holding` = 2992
+- `applicant_claim` = 2992
+- `reasoning` = 2992
 
 ### 啟動後端 API
 
@@ -959,7 +962,7 @@ Invoke-WebRequest -Uri "http://127.0.0.1:8000/api/cases/{case_id}/similar" -UseB
 預期：
 
 - `/api/health` 回傳 `status: ok` 且 `database_ready: true`。
-- `/api/statistics/overview` 的 `case_count` 應為 492。
+- `/api/statistics/overview` 的 `case_count` 應為 2992。
 - `/api/statistics/overview?roc_year=115` 應可回傳年度篩選後的統計。
 - `/api/search?q=癌症` 應有搜尋結果。
 - `/api/cases/{case_id}/summary` 應回傳 `rule_based_v1` 摘要。
@@ -989,8 +992,8 @@ http://127.0.0.1:5173
 
 檢查：
 
-- Dashboard 顯示 492 案件。
-- Dashboard 年度下拉可選全部年度或 ROC 115。
+- Dashboard 顯示 2992 案件。
+- Dashboard 年度下拉可選全部年度、ROC 114 或 ROC 115。
 - 案件頁可篩選、分頁、點選案件。
 - 案件頁可依年度篩選。
 - 案件詳情可看到 metadata、全文與 PDF 連結。
@@ -1021,7 +1024,7 @@ http://127.0.0.1:5173
 - 跨年度 pipeline 預設檔名修正與 readiness 報告。
 - ROC 114 一月資料小期間試跑，metadata / PDF text / case organizer 均成功 112 筆。
 - ROC 114 全年度資料試跑，metadata / PDF text / case organizer 均成功 2500 筆。
-- 已建立跨年度 trial DB，ROC 114 全年度 2500 筆加 ROC 115 492 筆共 2992 筆，並已產生 2992 筆規則式摘要；`holding`、`applicant_claim`、`reasoning` 欄位均已補齊；正式 DB 尚未切換。
+- 已建立跨年度 trial DB，ROC 114 全年度 2500 筆加 ROC 115 492 筆共 2992 筆，並已產生 2992 筆規則式摘要；`holding`、`applicant_claim`、`reasoning` 欄位均已補齊；正式 DB 已切換。
 - 已修正 ROC 114 一月 32 筆亂碼資料，並新增資料品質檢查腳本。
 
 ### 下一步：擴大跨年度資料或導入 embedding
@@ -1030,14 +1033,13 @@ http://127.0.0.1:5173
 
 - 規則式摘要與相似案件 baseline 已完成。
 - 前端結構已整理，後續可以承接更複雜功能。
-- 跨年度 trial DB 已建立並通過資料品質檢查，但正式 DB 尚未切換。
+- 跨年度 trial DB 已建立並通過資料品質檢查，正式 DB 也已切換為跨年度資料。
 
 建議工作：
 
 1. 抽樣檢查 ROC 114 全年度摘要與相似案件品質。
-2. 決定是否將正式展示 DB 切換為跨年度 trial DB。
-3. 若要強化資料範圍：試跑 ROC 116 小期間。
-4. 若要強化智慧搜尋：建立 chunking、embedding 與向量相似案件。
+2. 若要強化資料範圍：試跑 ROC 116 小期間。
+3. 若要強化智慧搜尋：建立 chunking、embedding 與向量相似案件。
 
 ### 第 8 階段：跨年度擴充
 

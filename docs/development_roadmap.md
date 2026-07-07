@@ -228,13 +228,14 @@ py .\backend\scripts\verify_case_db.py
 - 已重建跨年度 trial DB：ROC 114 全年度 2500 筆加 ROC 115 492 筆，共 2992 筆。
 - 已在 trial DB 產生 2992 筆規則式摘要。
 - 跨年度 trial DB 資料品質檢查 `issue_count` 為 0。
-- 已確認正式展示 DB 仍維持 ROC 115 共 492 筆，尚未切換為跨年度資料。
+- 已將正式展示 DB 切換為 ROC 114 全年度 2500 筆加 ROC 115 492 筆，共 2992 筆。
+- 已備份原 ROC 115 正式 DB 至 `backend/data/insurance_cases_roc115_backup_20260707_163248.db`。
+- 已用正式 DB 通過 `verify_case_db.py --expected-count 2992`、`py -m pytest` 與 `pnpm build`。
 - 尚未蒐集 ROC 116 資料。
 
 預計完成：
 
 - 支援匯入 ROC 114、ROC 115、ROC 116。
-- 決定是否將正式展示 DB 切換為跨年度 trial DB。
 - 實際匯入更多年度資料。
 - 抽樣驗證跨年度統計。
 - pipeline 可重跑且不覆蓋舊資料。
@@ -245,7 +246,7 @@ py .\backend\scripts\verify_case_db.py
 - 新年度資料匯入不覆蓋舊資料。
 - 跨年度案件數正確。
 - 年度篩選正常。
-- trial DB 年度分布為 ROC 114 = 2500、ROC 115 = 492，且異常字元檢查為 0。
+- 正式 DB 年度分布為 ROC 114 = 2500、ROC 115 = 492，且異常字元檢查為 0。
 
 ## 建議執行順序
 

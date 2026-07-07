@@ -8,7 +8,7 @@
 
 本次目標是將 ROC 114 從一月小期間試跑擴大為全年度資料，並在不覆蓋正式展示 DB 的前提下，建立跨年度 trial DB。
 
-正式展示 DB 仍維持：
+本次試跑期間，正式展示 DB 原先維持：
 
 ```text
 backend/data/insurance_cases.db
@@ -201,17 +201,24 @@ py .\backend\scripts\check_data_quality.py --metadata .\data\foi_ods\metadata\fo
 - `issue_count`：0
 - `passed`：true
 
-正式展示 DB 驗證：
+正式展示 DB 切換後驗證：
 
 ```powershell
-py .\backend\scripts\verify_case_db.py
+py .\backend\scripts\verify_case_db.py --expected-count 2992
 ```
 
 結果：
 
-- `backend/data/insurance_cases.db` 仍維持 ROC 115 共 492 筆。
-- `case_summaries` 仍為 492 筆。
+- `backend/data/insurance_cases.db` 已切換為 ROC 114 + ROC 115 共 2992 筆。
+- `case_summaries` 為 2992 筆。
+- 年度分布：ROC 114 = 2500，ROC 115 = 492。
 - `passed`：true。
+
+切換備份：
+
+```text
+backend/data/insurance_cases_roc115_backup_20260707_163248.db
+```
 
 ## 結論
 
@@ -223,11 +230,10 @@ ROC 114 全年度資料已完成 metadata、PDF/text、case organizer、trial DB
 - 跨年度 trial DB 共 2992 筆。
 - trial DB 規則式摘要三個欄位 `holding`、`applicant_claim`、`reasoning` 均已補齊到 2992 筆。
 - 資料品質檢查通過，沒有 mojibake 類異常字元。
-- 正式展示 DB 尚未切換，前端預設仍使用 ROC 115 的 492 筆。
+- 正式展示 DB 已切換為 ROC 114 + ROC 115 的 2992 筆。
 
 建議下一步：
 
 1. 抽樣檢查 ROC 114 摘要與相似案件品質。
-2. 決定是否將正式展示 DB 切換為跨年度 trial DB。
-3. 若切換正式 DB，需同步驗證前端年度篩選、統計頁與搜尋頁效能。
-4. 再考慮試跑 ROC 116 小期間。
+2. 試跑 ROC 116 小期間。
+3. 規劃 embedding 相似案件。
