@@ -60,6 +60,31 @@ def test_vectorize_text_is_deterministic() -> None:
     assert first_token_count > 0
 
 
+def test_create_local_embedding_provider() -> None:
+    provider = embedding_service.create_embedding_provider(
+        provider_name="local",
+        model_name="local_hashing_cjk_v1",
+        dims=32,
+    )
+
+    embedded = provider.embed_texts(["癌症 保險金"])[0]
+
+    assert provider.provider_name == "local"
+    assert provider.model_name == "local_hashing_cjk_v1"
+    assert provider.dims == 32
+    assert len(embedded.vector) == 32
+    assert embedded.token_count > 0
+
+
+def test_openai_embedding_provider_is_explicitly_not_implemented() -> None:
+    try:
+        embedding_service.create_embedding_provider(provider_name="openai")
+    except embedding_service.EmbeddingProviderError as error:
+        assert "not implemented" in str(error)
+    else:
+        raise AssertionError("Expected EmbeddingProviderError")
+
+
 def test_build_chunk_embeddings_writes_one_embedding_per_chunk(tmp_path: Path) -> None:
     db_path = tmp_path / "insurance_cases.db"
     with make_connection(db_path) as connection:

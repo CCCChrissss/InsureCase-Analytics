@@ -12,6 +12,14 @@
 local_hashing_cjk_v1
 ```
 
+目前 provider 設定：
+
+```text
+EMBEDDING_PROVIDER=local
+EMBEDDING_MODEL=local_hashing_cjk_v1
+EMBEDDING_DIMS=384
+```
+
 方法：
 
 - 對中文文字抽取 CJK 2-gram 與 3-gram。
@@ -153,11 +161,16 @@ GET /api/cases/{case_id}/semantic-similar?limit=5
 
 ## 串接實際 AI 模型的替換點
 
-目前 `local_hashing_cjk_v1` 是本機 MVP。未來若要改成實際 AI embedding model，建議做法：
+目前 `local_hashing_cjk_v1` 是本機 MVP。程式已先建立 provider factory：
 
-1. 在 `backend/app/services/embedding_service.py` 新增 provider 介面，例如 `embed_texts(texts) -> list[list[float]]`。
-2. 保留目前 `local_hashing_cjk_v1` 作為 fallback provider。
-3. 新增 AI provider，例如 OpenAI embedding 或其他中文/多語 embedding model。
+- `local`：目前可用，使用本機 CJK hashing vector。
+- `openai` / `ai`：目前會明確回報尚未實作，避免誤以為已經串接外部模型。
+
+未來若要改成實際 AI embedding model，建議做法：
+
+1. 在 `backend/app/services/embedding_service.py` 實作 OpenAI 或其他 AI provider 的 `embed_texts(texts)`。
+2. 保留目前 `local` provider 作為 fallback。
+3. 新增必要環境變數，例如 provider、model、API key 名稱。
 4. 重跑 `backend/scripts/build_chunk_embeddings.py`，用新 `embedding_model` 名稱寫入 `chunk_embeddings`。
 5. API query 可增加 `embedding_model` 參數，讓展示時能比較 local model 與 AI model。
 6. 若資料量擴大，再將 SQLite BLOB 改成 PostgreSQL + pgvector 或其他 ANN index。
@@ -168,4 +181,4 @@ GET /api/cases/{case_id}/semantic-similar?limit=5
 
 1. 抽樣評估目前 local model 的語意相似品質。
 2. 決定要串接哪一個正式 AI embedding model。
-3. 建立 provider 介面與環境變數設定。
+3. 實作對應 provider 並用新 model 重建 embeddings。

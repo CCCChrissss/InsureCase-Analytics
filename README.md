@@ -256,6 +256,16 @@ GET /api/cases/{case_id}/semantic-similar?limit=5
 
 未來若要串接實際 AI 語意分析模型，主要替換 `backend/app/services/embedding_service.py` 的向量產生流程與 `chunk_embeddings` 重建腳本，API 與前端展示可以大致沿用。
 
+目前已加入 embedding provider 設定：
+
+```text
+EMBEDDING_PROVIDER=local
+EMBEDDING_MODEL=local_hashing_cjk_v1
+EMBEDDING_DIMS=384
+```
+
+`local` 是目前可用 provider；`openai` / AI provider 介面已預留，但尚未實作外部 API 呼叫。
+
 ### Quality Report
 
 分析驗證 API 回傳 ROC 114 摘要與相似案件品質檢查結果：
@@ -490,7 +500,7 @@ pnpm build
 建議後續開發順序：
 
 ```text
-1. 串接實務級 AI embedding model，替換目前 local_hashing_cjk_v1
+1. 實作 OpenAI 或其他正式 AI embedding provider
 2. 試跑 ROC 116 小期間資料
 3. 導入 Docker / CI / 部署設定
 ```

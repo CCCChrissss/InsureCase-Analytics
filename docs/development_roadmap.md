@@ -353,6 +353,27 @@ cd frontend
 pnpm build
 ```
 
+## 第 7.9 階段：Embedding provider 介面
+
+目標：先把目前本機 embedding 實作包成 provider，為後續串接正式 AI embedding model 預留切換點。
+
+完成項目：
+
+- `backend/app/config.py` 新增 `EMBEDDING_PROVIDER`、`EMBEDDING_MODEL`、`EMBEDDING_DIMS`。
+- `backend/app/services/embedding_service.py` 新增 provider factory。
+- 目前可用 provider：`local`。
+- `openai` / `ai` provider 目前會明確回報尚未實作，避免誤用。
+- `backend/scripts/build_chunk_embeddings.py` 新增 `--provider`。
+- `.env.example` 新增 embedding provider 設定。
+- 新增 provider 單元測試。
+
+驗證方式：
+
+```powershell
+py -m py_compile .\backend\app\config.py .\backend\app\services\embedding_service.py .\backend\scripts\build_chunk_embeddings.py
+py -m pytest .\backend\tests\test_embedding_service.py
+```
+
 ## 建議執行順序
 
 1. 完成第 0 階段文件與 Git 狀態處理。
@@ -368,4 +389,5 @@ pnpm build
 11. 將語意搜尋與向量分析細節接到前端。
 12. 將 chunk 層級語意結果聚合為案件層級相似案件。
 13. 建立 embedding provider 介面並串接實際 AI embedding model。
-14. 視需求升級為 ANN 向量索引。
+14. 實作 OpenAI 或其他正式 AI embedding provider。
+15. 視需求升級為 ANN 向量索引。

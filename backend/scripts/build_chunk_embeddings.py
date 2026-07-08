@@ -11,6 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.app.services.embedding_service import DEFAULT_DIMS
+from backend.app.services.embedding_service import EMBEDDING_PROVIDER
 from backend.app.services.embedding_service import MODEL_NAME
 from backend.app.services.embedding_service import build_chunk_embeddings
 
@@ -26,6 +27,7 @@ DEFAULT_DB_PATH = resolve_project_path(os.environ.get("INSURANCE_CASES_DB_PATH",
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build local embeddings for case chunks.")
     parser.add_argument("--db", type=Path, default=DEFAULT_DB_PATH)
+    parser.add_argument("--provider", default=EMBEDDING_PROVIDER)
     parser.add_argument("--model", default=MODEL_NAME)
     parser.add_argument("--dims", type=int, default=DEFAULT_DIMS)
     parser.add_argument("--limit", type=int, default=None)
@@ -36,6 +38,7 @@ def main() -> None:
     args = parse_args()
     report = build_chunk_embeddings(
         resolve_project_path(args.db),
+        provider_name=args.provider,
         model_name=args.model,
         dims=args.dims,
         limit=args.limit,

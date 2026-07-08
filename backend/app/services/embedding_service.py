@@ -6,16 +6,77 @@ import re
 import sqlite3
 import struct
 from collections import Counter
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Protocol
 
+from backend.app.config import EMBEDDING_DIMS
+from backend.app.config import EMBEDDING_MODEL
+from backend.app.config import EMBEDDING_PROVIDER
 from backend.app.database import connect
 
-MODEL_NAME = "local_hashing_cjk_v1"
-DEFAULT_DIMS = 384
+LOCAL_PROVIDER_NAME = "local"
+LOCAL_MODEL_NAME = "local_hashing_cjk_v1"
+MODEL_NAME = EMBEDDING_MODEL
+DEFAULT_DIMS = EMBEDDING_DIMS
 TOKEN_RE = re.compile(r"[A-Za-z0-9_]{2,}")
 CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
+
+
+class EmbeddingProviderError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class EmbeddedText:
+    vector: list[float]
+    norm: float
+    token_count: int
+
+
+class EmbeddingProvider(Protocol):
+    provider_name: str
+    model_name: str
+    dims: int
+
+    def embed_texts(self, texts: list[str]) -> list[EmbeddedText]:
+        pass
+
+
+@dataclass(frozen=True)
+class LocalHashingEmbeddingProvider:
+    model_name: str = LOCAL_MODEL_NAME
+    dims: int = 384
+    provider_name: str = LOCAL_PROVIDER_NAME
+
+    def embed_texts(self, texts: list[str]) -> list[EmbeddedText]:
+        return [EmbeddedText(*vectorize_text(text, dims=self.dims)) for text in texts]
+
+
+def create_embedding_provider(
+    *,
+    provider_name: str | None = None,
+    model_name: str | None = None,
+    dims: int | None = None,
+) -> EmbeddingProvider:
+    resolved_provider = (provider_name or EMBEDDING_PROVIDER).strip().lower()
+    resolved_model = (model_name or EMBEDDING_MODEL).strip()
+    resolved_dims = dims or EMBEDDING_DIMS
+
+    if resolved_provider in {LOCAL_PROVIDER_NAME, "local_hashing"}:
+        return LocalHashingEmbeddingProvider(
+            model_name=resolved_model or LOCAL_MODEL_NAME,
+            dims=resolved_dims,
+        )
+
+    if resolved_provider in {"openai", "ai"}:
+        raise EmbeddingProviderError(
+            "OpenAI embedding provider is configured but not implemented in this code path yet. "
+            "Use EMBEDDING_PROVIDER=local for the current MVP, or add an OpenAI provider implementation before rebuilding embeddings."
+        )
+
+    raise EmbeddingProviderError(f"Unsupported embedding provider: {resolved_provider}")
 
 
 def now_iso() -> str:
@@ -83,24 +144,27 @@ def replace_chunk_embeddings(
     *,
     model_name: str = MODEL_NAME,
     dims: int = DEFAULT_DIMS,
+    provider_name: str | None = None,
     created_at: str | None = None,
 ) -> dict[str, Any]:
     timestamp = created_at or now_iso()
+    provider = create_embedding_provider(provider_name=provider_name, model_name=model_name, dims=dims)
     payloads: list[tuple[Any, ...]] = []
     empty_chunk_ids: list[str] = []
 
-    for row in rows:
-        vector, norm, token_count = vectorize_text(row["chunk_text"] or "", dims=dims)
-        if token_count == 0 or norm == 0:
+    texts = [row["chunk_text"] or "" for row in rows]
+    embeddings = provider.embed_texts(texts)
+    for row, embedded in zip(rows, embeddings):
+        if embedded.token_count == 0 or embedded.norm == 0:
             empty_chunk_ids.append(row["chunk_id"])
             continue
         payloads.append(
             (
                 row["chunk_id"],
-                model_name,
-                dims,
-                pack_vector(vector),
-                norm,
+                provider.model_name,
+                provider.dims,
+                pack_vector(embedded.vector),
+                embedded.norm,
                 timestamp,
             )
         )
@@ -111,7 +175,7 @@ def replace_chunk_embeddings(
         WHERE chunk_id = ?
           AND embedding_model = ?;
         """,
-        [(row["chunk_id"], model_name) for row in rows],
+        [(row["chunk_id"], provider.model_name) for row in rows],
     )
     connection.executemany(
         """
@@ -146,6 +210,7 @@ def build_chunk_embeddings(
     *,
     model_name: str = MODEL_NAME,
     dims: int = DEFAULT_DIMS,
+    provider_name: str | None = None,
     limit: int | None = None,
 ) -> dict[str, Any]:
     with sqlite3.connect(db_path) as connection:
@@ -153,20 +218,28 @@ def build_chunk_embeddings(
         connection.execute("PRAGMA foreign_keys = ON;")
         initialize_schema(connection)
         rows = list_chunks_for_embedding(connection, limit)
-        report = replace_chunk_embeddings(connection, rows, model_name=model_name, dims=dims)
+        provider = create_embedding_provider(provider_name=provider_name, model_name=model_name, dims=dims)
+        report = replace_chunk_embeddings(
+            connection,
+            rows,
+            model_name=provider.model_name,
+            dims=provider.dims,
+            provider_name=provider.provider_name,
+        )
         total_embeddings = connection.execute(
             """
             SELECT COUNT(*)
             FROM chunk_embeddings
             WHERE embedding_model = ?;
             """,
-            (model_name,),
+            (provider.model_name,),
         ).fetchone()[0]
 
     return {
         "database": str(db_path),
-        "embedding_model": model_name,
-        "embedding_dims": dims,
+        "embedding_provider": provider.provider_name,
+        "embedding_model": provider.model_name,
+        "embedding_dims": provider.dims,
         "total_embeddings_in_table": int(total_embeddings),
         "created_at": now_iso(),
         **report,
@@ -178,14 +251,16 @@ def semantic_search(
     *,
     limit: int = 10,
     model_name: str = MODEL_NAME,
+    provider_name: str | None = None,
     min_score: float = 0.0,
 ) -> dict[str, Any]:
-    vector, norm, token_count = vectorize_text(query)
+    provider = create_embedding_provider(provider_name=provider_name, model_name=model_name)
+    embedded_query = provider.embed_texts([query])[0]
     safe_limit = min(max(limit, 1), 50)
-    if token_count == 0 or norm == 0:
+    if embedded_query.token_count == 0 or embedded_query.norm == 0:
         return {
             "query": query,
-            "embedding_model": model_name,
+            "embedding_model": provider.model_name,
             "items": [],
             "total_candidates": 0,
         }
@@ -203,13 +278,13 @@ def semantic_search(
             JOIN cases ON cases.case_id = case_chunks.case_id
             WHERE chunk_embeddings.embedding_model = ?;
             """,
-            (model_name,),
+            (provider.model_name,),
         ).fetchall()
 
     scored: list[dict[str, Any]] = []
     for row in rows:
         candidate_vector = unpack_vector(row["embedding"], row["embedding_dims"])
-        score = dot_product(vector, candidate_vector)
+        score = dot_product(embedded_query.vector, candidate_vector)
         if score <= min_score:
             continue
         scored.append(
@@ -237,7 +312,7 @@ def semantic_search(
     )
     return {
         "query": query,
-        "embedding_model": model_name,
+        "embedding_model": provider.model_name,
         "items": scored[:safe_limit],
         "total_candidates": len(scored),
     }
@@ -299,24 +374,26 @@ def semantic_similar_cases(
     *,
     limit: int = 5,
     model_name: str = MODEL_NAME,
+    provider_name: str | None = None,
     min_score: float = 0.0,
     chunks_per_case: int = 2,
 ) -> dict[str, Any] | None:
     if not case_exists(case_id):
         return None
 
+    provider = create_embedding_provider(provider_name=provider_name, model_name=model_name)
     safe_limit = min(max(limit, 1), 20)
     safe_chunks_per_case = min(max(chunks_per_case, 1), 5)
     with connect() as connection:
         source_vector, source_chunk_count = source_case_centroid(
             connection,
             case_id=case_id,
-            model_name=model_name,
+            model_name=provider.model_name,
         )
         if source_vector is None:
             return {
                 "case_id": case_id,
-                "embedding_model": model_name,
+                "embedding_model": provider.model_name,
                 "source_chunk_count": 0,
                 "items": [],
                 "total_candidates": 0,
@@ -335,7 +412,7 @@ def semantic_similar_cases(
             WHERE chunk_embeddings.embedding_model = ?
               AND case_chunks.case_id != ?;
             """,
-            (model_name, case_id),
+            (provider.model_name, case_id),
         ).fetchall()
 
     grouped: dict[str, dict[str, Any]] = {}
@@ -389,7 +466,7 @@ def semantic_similar_cases(
     )
     return {
         "case_id": case_id,
-        "embedding_model": model_name,
+        "embedding_model": provider.model_name,
         "source_chunk_count": source_chunk_count,
         "items": items[:safe_limit],
         "total_candidates": len(items),

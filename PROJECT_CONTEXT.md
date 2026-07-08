@@ -159,7 +159,7 @@ frontend/dist/
 ### 根目錄
 
 - `.gitignore`：忽略 Python cache、虛擬環境、`.env`、資料產物、SQLite DB、前端 dependencies、前端 build 產物與本機工具狀態。
-- `.env.example`：根目錄環境變數範例，包含後端 DB path、CORS origins 與前端 API base URL。
+- `.env.example`：根目錄環境變數範例，包含後端 DB path、CORS origins、embedding provider 設定與前端 API base URL。
 - `README.md`：專案介紹、目前資料狀態、pipeline、後端與前端啟動方式。
 - `requirements.txt`：Python 相依套件，包含 `beautifulsoup4`、`fastapi`、`httpx`、`pdfplumber`、`pypdf`、`pytest`、`requests`、`uvicorn`。
 - `foi_ods_life_mvp_crawler.py`：FOI ODS metadata 與 PDF URL 爬蟲。
@@ -1200,6 +1200,7 @@ http://127.0.0.1:5173
 - 已建立本機 chunk embedding pipeline，正式 DB 目前有 17254 筆 `local_hashing_cjk_v1` embedding，且每個 chunk 皆有 embedding。
 - 已新增前端語意搜尋頁，可展示 query、embedding 模型、候選 chunk、命中 chunk、score、section hint 與案件來源。
 - 已新增案件層級語意相似 API 與案件詳情頁區塊，可展示相似案件、分數與實際命中 chunk。
+- 已建立 embedding provider 介面，目前可用 provider 為 `local`，`openai` / `ai` 會明確提示尚未實作。
 
 ### 下一步：串接實際 AI embedding model 或擴大跨年度資料
 
@@ -1212,7 +1213,7 @@ http://127.0.0.1:5173
 
 建議工作：
 
-1. 若要強化語意品質：建立 embedding provider 介面，串接實際 AI embedding model，並以新 `embedding_model` 重建 `chunk_embeddings`。
+1. 若要強化語意品質：實作 OpenAI 或其他正式 AI embedding provider，並以新 `embedding_model` 重建 `chunk_embeddings`。
 2. 若要強化資料範圍：試跑 ROC 116 小期間。
 
 ### 第 8 階段：跨年度擴充
