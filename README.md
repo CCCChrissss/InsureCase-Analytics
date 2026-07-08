@@ -416,10 +416,9 @@ pnpm build
 建議後續開發順序：
 
 ```text
-1. 在相似案件區塊加入低信心提示
-2. 規劃 embedding 相似案件
-3. 試跑 ROC 116 小期間資料
-4. 導入 Docker / CI / 部署設定
+1. 規劃 embedding 相似案件
+2. 試跑 ROC 116 小期間資料
+3. 導入 Docker / CI / 部署設定
 ```
 
 ## Project Positioning

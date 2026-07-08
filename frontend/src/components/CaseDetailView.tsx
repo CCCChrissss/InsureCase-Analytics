@@ -20,6 +20,8 @@ export function CaseDetailView({
   similarLoading: boolean;
   onOpenCase: (caseId: string) => void;
 }) {
+  const similarConfidence = getSimilarConfidence(caseDetail, similar);
+
   return (
     <div className="case-detail">
       <div className="detail-title">
@@ -62,6 +64,12 @@ export function CaseDetailView({
         )}
         {!similarLoading && !similarError && similar && similar.items.length > 0 && (
           <div className="similar-list">
+            {similarConfidence.isLowConfidence && (
+              <div className="low-confidence-note">
+                <strong>低信心提示</strong>
+                <span>{similarConfidence.reason}</span>
+              </div>
+            )}
             {similar.items.map((item) => (
               <button key={item.case_id} className="similar-row" type="button" onClick={() => onOpenCase(item.case_id)}>
                 <span className="case-number">{item.case_number}</span>
@@ -77,6 +85,34 @@ export function CaseDetailView({
       </div>
     </div>
   );
+}
+
+function getSimilarConfidence(caseDetail: CaseDetail, similar: SimilarCasesResponse | null) {
+  if (!similar || similar.items.length === 0) {
+    return { isLowConfidence: false, reason: "" };
+  }
+
+  const sourceDisputeType = caseDetail.dispute_type;
+  const sameDisputeTypeCount = sourceDisputeType
+    ? similar.items.filter((item) => item.dispute_type === sourceDisputeType).length
+    : 0;
+  const topScore = similar.items[0]?.score ?? 0;
+
+  if (sameDisputeTypeCount === 0) {
+    return {
+      isLowConfidence: true,
+      reason: "Top 5 相似案件沒有同爭議類型，通常代表此爭議類型案件數不足，結果僅供參考。"
+    };
+  }
+
+  if (topScore <= 20) {
+    return {
+      isLowConfidence: true,
+      reason: "最高相似分數偏低，主要只命中評議結果或決定類別，尚未形成穩定相似關係。"
+    };
+  }
+
+  return { isLowConfidence: false, reason: "" };
 }
 
 function SummaryBlock({ title, text }: { title: string; text: string | null }) {
