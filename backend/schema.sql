@@ -41,6 +41,20 @@ CREATE TABLE IF NOT EXISTS case_summaries (
   FOREIGN KEY(case_id) REFERENCES cases(case_id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS case_chunks (
+  chunk_id TEXT PRIMARY KEY,
+  case_id TEXT NOT NULL,
+  chunk_index INTEGER NOT NULL,
+  section_hint TEXT,
+  chunk_text TEXT NOT NULL,
+  char_start INTEGER NOT NULL,
+  char_end INTEGER NOT NULL,
+  chunk_chars INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(case_id) REFERENCES cases(case_id) ON DELETE CASCADE,
+  UNIQUE(case_id, chunk_index)
+);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS case_search USING fts5(
   case_id UNINDEXED,
   case_number,
@@ -52,3 +66,4 @@ CREATE INDEX IF NOT EXISTS idx_cases_roc_year ON cases(roc_year);
 CREATE INDEX IF NOT EXISTS idx_cases_decision_date ON cases(decision_date);
 CREATE INDEX IF NOT EXISTS idx_cases_dispute_type ON cases(dispute_type);
 CREATE INDEX IF NOT EXISTS idx_cases_case_number ON cases(case_number);
+CREATE INDEX IF NOT EXISTS idx_case_chunks_case_id ON case_chunks(case_id);

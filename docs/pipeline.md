@@ -298,7 +298,23 @@ GET /api/cases/{case_id}/similar?limit=5
 
 後續再新增向量索引。
 
-預計新增：
+已新增：
+
+```text
+backend/scripts/build_case_chunks.py
+```
+
+功能：
+
+- 將 normalized text 切成 chunks。
+
+目前正式 DB 結果：
+
+- `case_chunks` = 17254
+- `processed_cases` = 2992
+- `empty_case_count` = 0
+
+後續預計新增：
 
 ```text
 backend/scripts/build_embeddings.py
@@ -306,7 +322,6 @@ backend/scripts/build_embeddings.py
 
 功能：
 
-- 將 normalized text 切成 chunks。
 - 產生 embedding。
 - 建立相似案件搜尋資料。
 

@@ -177,9 +177,7 @@ py .\backend\scripts\verify_case_db.py
 
 後續再做：
 
-- normalized text chunking。
 - embedding 建立。
-- 相似案件 API。
 - 向量搜尋。
 
 驗證方式：
@@ -248,6 +246,30 @@ py .\backend\scripts\verify_case_db.py
 - 年度篩選正常。
 - 正式 DB 年度分布為 ROC 114 = 2500、ROC 115 = 492，且異常字元檢查為 0。
 
+## 第 7.5 階段：Embedding 前置 chunking
+
+目標：先把長篇 normalized text 切成可追溯、可重跑、可驗證的文字 chunk，避免後續 embedding 直接吃整篇決定書而失去段落定位能力。
+
+完成項目：
+
+- 新增 `case_chunks` SQLite table。
+- 新增 `backend/scripts/build_case_chunks.py`。
+- chunk 欄位包含 `chunk_id`、`case_id`、`chunk_index`、`section_hint`、`chunk_text`、`char_start`、`char_end`、`chunk_chars`、`created_at`。
+- 預設切片參數為 `target_chars=1000`、`overlap_chars=180`。
+- 可辨識常見段落提示，例如主文、申請人主張、相對人主張、判斷理由與結論。
+- 新增 `backend/tests/test_build_case_chunks.py`。
+- `verify_case_db.py` 新增 `--require-chunks`，可驗證每筆案件都有 chunk。
+- 正式 DB 已產生 17254 段 chunk，2992 筆案件皆有 chunk。
+
+驗證方式：
+
+```powershell
+py -m py_compile .\backend\scripts\build_case_chunks.py .\backend\scripts\verify_case_db.py .\backend\scripts\import_cases_to_db.py
+py -m pytest
+py .\backend\scripts\build_case_chunks.py --db .\backend\data\insurance_cases.db
+py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks
+```
+
 ## 建議執行順序
 
 1. 完成第 0 階段文件與 Git 狀態處理。
@@ -259,4 +281,4 @@ py .\backend\scripts\verify_case_db.py
 7. 整理前端結構。
 8. 擴充跨年度資料。
 9. 將資料品質檢查納入固定 pipeline。
-10. 視需求導入 embedding 相似案件搜尋。
+10. 導入 embedding 產生、向量索引與語意相似案件搜尋。

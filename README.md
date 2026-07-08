@@ -24,6 +24,7 @@
 - 規則式案件摘要
 - 規則式相似案件推薦
 - 分析驗證頁，展示摘要與相似案件品質檢查過程
+- 案件文字 chunking pipeline，作為後續 embedding 與向量搜尋前置資料
 - 後端 pytest 測試
 - 前端基本 build 驗證
 - 跨年度匯入前置支援
@@ -47,6 +48,7 @@
 - raw text：2992 份
 - normalized text：2992 份
 - 單案 metadata：2992 份
+- case chunks：17254 段
 - 爭議類型：41 種
 - 正式 DB：`backend/data/insurance_cases.db`
 - 正式 DB 年度分布：ROC 114 = 2500，ROC 115 = 492
@@ -155,6 +157,10 @@ foi_ods_case_organizer.py
 backend/scripts/import_cases_to_db.py
   ↓
 SQLite + FTS5
+  ↓
+backend/scripts/build_case_chunks.py
+  ↓
+case_chunks
   ↓
 FastAPI
   ↓
@@ -297,13 +303,25 @@ py .\backend\scripts\check_data_quality.py --db .\backend\data\insurance_cases.d
 py .\backend\scripts\extract_case_summaries.py
 ```
 
-### 5. Verify database
+### 5. Build case chunks
 
 ```powershell
-py .\backend\scripts\verify_case_db.py
+py .\backend\scripts\build_case_chunks.py --db .\backend\data\insurance_cases.db
 ```
 
-### 6. Start backend
+目前正式 DB 驗證結果：
+
+- `processed_cases` = 2992
+- `total_chunks_in_table` = 17254
+- `empty_case_count` = 0
+
+### 6. Verify database
+
+```powershell
+py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks
+```
+
+### 7. Start backend
 
 ```powershell
 py -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
@@ -315,7 +333,7 @@ Open:
 http://127.0.0.1:8000/docs
 ```
 
-### 7. Start frontend
+### 8. Start frontend
 
 ```powershell
 cd frontend
@@ -356,6 +374,7 @@ py -m py_compile .\foi_ods_life_mvp_crawler.py
 py -m py_compile .\foi_ods_pdf_text_pipeline.py
 py -m py_compile .\foi_ods_case_organizer.py
 py -m py_compile .\backend\scripts\import_cases_to_db.py
+py -m py_compile .\backend\scripts\build_case_chunks.py
 py -m py_compile .\backend\scripts\verify_case_db.py
 py -m py_compile .\backend\scripts\extract_case_summaries.py
 ```
@@ -372,6 +391,7 @@ py -m pytest
 - 分析驗證 API
 - 統計 API 年度篩選
 - 搜尋 fallback
+- 案件文字 chunking pipeline
 - 摘要擷取與 summary service
 - 相似案件 service
 - SQLite 匯入腳本
@@ -397,12 +417,13 @@ pnpm build
 - `docs/cross_year_trial_run_roc114_january.md`：ROC 114 一月試跑報告
 - `docs/cross_year_trial_run_roc114_full_year.md`：ROC 114 全年度試跑報告
 - `docs/roc114_summary_similarity_quality_check.md`：ROC 114 摘要與相似案件抽樣品質檢查
+- `docs/chunking_pipeline.md`：案件文字 chunking 設計、欄位與正式 DB 驗證結果
 
 ## Current Limitations
 
 目前尚未完成：
 
-- embedding 建立
+- embedding 產生
 - 向量索引
 - OCR fallback
 - Docker
@@ -416,7 +437,7 @@ pnpm build
 建議後續開發順序：
 
 ```text
-1. 規劃 embedding 相似案件
+1. 實作 embedding 產生與向量索引
 2. 試跑 ROC 116 小期間資料
 3. 導入 Docker / CI / 部署設定
 ```
