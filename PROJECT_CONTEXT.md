@@ -134,6 +134,7 @@
          ├─ Dashboard.tsx
          ├─ QualityPage.tsx
          ├─ SearchPage.tsx
+         ├─ SemanticSearchPage.tsx
          └─ StatisticsPage.tsx
 ```
 
@@ -232,7 +233,7 @@ frontend/dist/
 - `frontend/src/hooks/useAsyncData.ts`：共用非同步資料載入 hook。
 - `frontend/src/components/CaseDetailView.tsx`：案件詳情、摘要、相似案件區塊。
 - `frontend/src/components/ui.tsx`：PageHeader、PanelHeader、Metric、AsyncBlock、EmptyState。
-- `frontend/src/pages/`：Dashboard、案件管理、全文搜尋、統計分析、分析驗證頁。
+- `frontend/src/pages/`：Dashboard、案件管理、全文搜尋、語意搜尋、統計分析、分析驗證頁。
 - `frontend/src/styles.css`：前端全域樣式與 responsive layout。
 - `frontend/src/vite-env.d.ts`：Vite TypeScript 型別宣告。
 
@@ -249,11 +250,13 @@ FastAPI app
   │  ├─ cases
   │  ├─ quality
   │  ├─ search
+  │  ├─ semantic_search
   │  ├─ similar_cases
   │  ├─ summaries
   │  └─ statistics
   ├─ services
   │  ├─ case_service
+  │  ├─ embedding_service
   │  ├─ quality_service
   │  ├─ search_service
   │  ├─ similar_case_service
@@ -742,6 +745,7 @@ Query parameters：
 - 案件管理頁年度篩選。
 - 案件詳情區。
 - 全文搜尋頁。
+- 語意搜尋頁，展示 query、embedding 模型、候選 chunk 數、命中 chunk、score、section hint 與案件來源。
 - 統計分析頁年度篩選。
 - 分析驗證頁。
 - 案件摘要區塊。
@@ -1161,6 +1165,7 @@ http://127.0.0.1:5173
 - 案件詳情可看到案件摘要。
 - 案件詳情可看到相似案件。
 - 搜尋頁可查「癌症」。
+- 語意搜尋頁可查「癌症保險金」，並顯示 embedding 模型、候選 chunk、score、section hint 與命中段落。
 - 統計頁可看到爭議類型與日期分布。
 - 統計頁可依年度篩選。
 - 分析驗證頁可看到摘要品質、相似度規則、抽樣案件與已知例外。
@@ -1193,19 +1198,20 @@ http://127.0.0.1:5173
 - 已在前端相似案件區塊加入低信心提示，當 Top 5 沒有同爭議類型或最高分偏低時會提示結果僅供參考。
 - 已建立案件文字 chunking pipeline，正式 DB 目前有 17254 段 chunk，且 2992 筆案件皆有 chunk。
 - 已建立本機 chunk embedding pipeline，正式 DB 目前有 17254 筆 `local_hashing_cjk_v1` embedding，且每個 chunk 皆有 embedding。
+- 已新增前端語意搜尋頁，可展示 query、embedding 模型、候選 chunk、命中 chunk、score、section hint 與案件來源。
 
-### 下一步：前端展示語意搜尋分析或擴大跨年度資料
+### 下一步：案件層級語意相似聚合或擴大跨年度資料
 
 優先原因：
 
 - 規則式摘要與相似案件 baseline 已完成。
-- chunking 與本機 embedding 前置資料已完成，可開始展示語意搜尋流程。
+- chunking、本機 embedding 與前端語意搜尋展示已完成。
 - 前端結構已整理，後續可以承接更複雜功能。
 - 跨年度 trial DB 已建立並通過資料品質檢查，正式 DB 也已切換為跨年度資料。
 
 建議工作：
 
-1. 若要強化展示：在前端新增語意搜尋與向量分析細節頁，展示 query、命中 chunk、score、section hint 與案件來源。
+1. 若要強化智慧相似案件：將 chunk 層級語意搜尋結果聚合成案件層級相似案件，並展示命中段落。
 2. 若要強化資料範圍：試跑 ROC 116 小期間。
 
 ### 第 8 階段：跨年度擴充

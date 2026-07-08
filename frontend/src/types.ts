@@ -97,6 +97,25 @@ export type SearchResponse = {
   page_size: number;
 };
 
+export type SemanticSearchResult = {
+  chunk_id: string;
+  case_id: string;
+  case_number: string;
+  decision_date: string | null;
+  dispute_type: string | null;
+  section_hint: string | null;
+  chunk_index: number;
+  score: number;
+  chunk_text: string;
+};
+
+export type SemanticSearchResponse = {
+  query: string;
+  embedding_model: string;
+  items: SemanticSearchResult[];
+  total_candidates: number;
+};
+
 export type QualityReport = {
   report_title: string;
   report_date: string;
@@ -158,4 +177,4 @@ export type QualityReport = {
   next_steps: string[];
 };
 
-export type Route = "dashboard" | "cases" | "search" | "statistics" | "quality";
+export type Route = "dashboard" | "cases" | "search" | "semantic" | "statistics" | "quality";

@@ -26,6 +26,7 @@
 - 分析驗證頁，展示摘要與相似案件品質檢查過程
 - 案件文字 chunking pipeline，作為後續 embedding 與向量搜尋前置資料
 - 本機 chunk embedding MVP 與語意搜尋 API
+- 前端語意搜尋頁，展示 query、embedding 模型、命中 chunk、score、section hint 與案件來源
 - 後端 pytest 測試
 - 前端基本 build 驗證
 - 跨年度匯入前置支援
@@ -443,6 +444,8 @@ cd frontend
 pnpm build
 ```
 
+若目前 shell 找不到 `node`，需先確認 Node.js 已在 PATH，或使用 Codex bundled Node runtime。
+
 若出現 Vite chunk size warning，代表 bundle 偏大，但不等於 build 失敗。
 
 ## Documentation
@@ -476,7 +479,7 @@ pnpm build
 建議後續開發順序：
 
 ```text
-1. 將語意搜尋結果與分析細節接到前端
+1. 將 chunk 層級語意搜尋聚合為案件層級相似案件
 2. 試跑 ROC 116 小期間資料
 3. 導入 Docker / CI / 部署設定
 ```

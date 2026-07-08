@@ -301,6 +301,32 @@ py .\backend\scripts\build_chunk_embeddings.py --db .\backend\data\insurance_cas
 py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks --require-embeddings
 ```
 
+## 第 7.7 階段：前端語意搜尋展示
+
+目標：讓使用者能在網頁上看到語意搜尋的分析過程與結果，不只聽到後端已有 embedding。
+
+完成項目：
+
+- 新增 `frontend/src/pages/SemanticSearchPage.tsx`。
+- `frontend/src/types.ts` 新增 `SemanticSearchResponse` 與 `SemanticSearchResult`。
+- `frontend/src/App.tsx` 新增 `semantic` route 與側邊欄導覽。
+- `frontend/src/styles.css` 新增語意搜尋表單、分析流程與結果卡片樣式。
+- 頁面展示 query、embedding 模型、候選 chunk 數、命中 chunk、score、section hint 與案件來源。
+
+驗證方式：
+
+```powershell
+py -m pytest
+cd frontend
+pnpm build
+```
+
+目前已驗證：
+
+- 後端 pytest：32 passed。
+- 前端 build 成功。
+- Vite chunk size warning 仍存在，但不影響 build。
+
 ## 建議執行順序
 
 1. 完成第 0 階段文件與 Git 狀態處理。
@@ -314,4 +340,5 @@ py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks --
 9. 將資料品質檢查納入固定 pipeline。
 10. 建立 chunking 與本機 embedding pipeline。
 11. 將語意搜尋與向量分析細節接到前端。
-12. 視需求升級為實務級 embedding model 與 ANN 向量索引。
+12. 將 chunk 層級語意結果聚合為案件層級相似案件。
+13. 視需求升級為實務級 embedding model 與 ANN 向量索引。

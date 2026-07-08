@@ -112,9 +112,26 @@ GET /api/semantic-search?q=癌症保險金&limit=3
 - 需要記錄 model version、向量維度、重建時間與資料版本。
 - 需要建立評估集，避免只憑主觀感覺判斷相似度品質。
 
+## 前端展示
+
+目前已新增前端語意搜尋頁：
+
+```text
+?view=semantic
+```
+
+頁面會展示：
+
+- 查詢文字。
+- embedding 模型。
+- 候選 chunk 數。
+- 命中 chunk。
+- cosine similarity score。
+- section hint。
+- 案件來源。
+
 ## 下一步
 
-1. 在前端新增語意搜尋頁或分析驗證區塊。
-2. 展示 query 向量化、命中 chunk、score、section hint 與案件來源。
-3. 將 chunk 層級結果聚合成案件層級相似案件。
-4. 評估是否替換為正式 embedding model。
+1. 將 chunk 層級結果聚合成案件層級相似案件。
+2. 在案件詳情頁展示語意命中段落。
+3. 評估是否替換為正式 embedding model。
