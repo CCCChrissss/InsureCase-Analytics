@@ -1,5 +1,5 @@
 import { API_BASE } from "../api/client";
-import type { CaseDetail, CaseSummaryDetail, SimilarCasesResponse } from "../types";
+import type { CaseDetail, CaseSummaryDetail, SemanticSimilarCasesResponse, SimilarCasesResponse } from "../types";
 
 export function CaseDetailView({
   caseDetail,
@@ -9,6 +9,9 @@ export function CaseDetailView({
   similar,
   similarError,
   similarLoading,
+  semanticSimilar,
+  semanticSimilarError,
+  semanticSimilarLoading,
   onOpenCase
 }: {
   caseDetail: CaseDetail;
@@ -18,6 +21,9 @@ export function CaseDetailView({
   similar: SimilarCasesResponse | null;
   similarError: string | null;
   similarLoading: boolean;
+  semanticSimilar: SemanticSimilarCasesResponse | null;
+  semanticSimilarError: string | null;
+  semanticSimilarLoading: boolean;
   onOpenCase: (caseId: string) => void;
 }) {
   const similarConfidence = getSimilarConfidence(caseDetail, similar);
@@ -80,6 +86,46 @@ export function CaseDetailView({
           </div>
         )}
       </section>
+      <section className="similar-section semantic-similar-section">
+        <div className="summary-header">
+          <h3>語意相似案件</h3>
+          {semanticSimilar && <span>{semanticSimilar.embedding_model} · {semanticSimilar.total_candidates} 候選案件</span>}
+        </div>
+        {semanticSimilarLoading && <div className="state-box compact">語意相似案件載入中</div>}
+        {!semanticSimilarLoading && semanticSimilarError && <div className="state-box error compact">語意相似案件讀取失敗：{semanticSimilarError}</div>}
+        {!semanticSimilarLoading && !semanticSimilarError && semanticSimilar && semanticSimilar.items.length === 0 && (
+          <div className="state-box compact">目前沒有語意相似案件。</div>
+        )}
+        {!semanticSimilarLoading && !semanticSimilarError && semanticSimilar && semanticSimilar.items.length > 0 && (
+          <div className="semantic-case-list">
+            <div className="semantic-method-note">
+              以來源案件 {semanticSimilar.source_chunk_count} 個 chunk 建立案件向量，再比對所有候選案件 chunk；目前模型為本機 MVP，非正式 AI embedding。
+            </div>
+            {semanticSimilar.items.map((item) => (
+              <article className="semantic-case-card" key={item.case_id}>
+                <div className="semantic-case-head">
+                  <button className="link-button" type="button" onClick={() => onOpenCase(item.case_id)}>
+                    {item.case_number}
+                  </button>
+                  <strong>{item.score.toFixed(4)}</strong>
+                </div>
+                <div className="semantic-tags">
+                  <span>{item.decision_date ?? "無日期"}</span>
+                  <span>{item.dispute_type ?? "無爭議類型"}</span>
+                </div>
+                <div className="semantic-match-list">
+                  {item.matched_chunks.map((chunk) => (
+                    <div className="semantic-match" key={chunk.chunk_id}>
+                      <span>{chunk.section_hint ?? "未標示段落"} · chunk {chunk.chunk_index} · {chunk.score.toFixed(4)}</span>
+                      <p>{shortText(chunk.chunk_text)}</p>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
       <div className="text-viewer">
         <pre>{caseDetail.normalized_text}</pre>
       </div>
@@ -113,6 +159,10 @@ function getSimilarConfidence(caseDetail: CaseDetail, similar: SimilarCasesRespo
   }
 
   return { isLowConfidence: false, reason: "" };
+}
+
+function shortText(value: string, maxLength = 220) {
+  return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
 }
 
 function SummaryBlock({ title, text }: { title: string; text: string | null }) {

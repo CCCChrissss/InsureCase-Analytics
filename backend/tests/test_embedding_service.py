@@ -107,3 +107,47 @@ def test_semantic_search_ranks_related_chunk_first(tmp_path: Path, monkeypatch) 
     assert result["total_candidates"] >= 1
     assert result["items"][0]["case_id"] == "case_cancer"
     assert result["items"][0]["score"] > 0
+
+
+def test_semantic_similar_cases_groups_chunks_by_case(tmp_path: Path, monkeypatch) -> None:
+    db_path = tmp_path / "insurance_cases.db"
+    with make_connection(db_path) as connection:
+        connection.executescript((Path(__file__).resolve().parents[1] / "schema.sql").read_text(encoding="utf-8"))
+        insert_case_with_chunks(
+            connection,
+            case_id="source_case",
+            case_number="115年評字第000001號",
+            dispute_type="理賠爭議",
+            chunks=["癌症治療後申請保險金，保險公司拒絕理賠。", "判斷理由檢視癌症保單條款。"],
+        )
+        insert_case_with_chunks(
+            connection,
+            case_id="related_case",
+            case_number="115年評字第000002號",
+            dispute_type="理賠爭議",
+            chunks=["癌症保險金給付與保單條款解釋爭議。", "相對人主張不符合癌症給付條件。"],
+        )
+        insert_case_with_chunks(
+            connection,
+            case_id="unrelated_case",
+            case_number="115年評字第000003號",
+            dispute_type="住院爭議",
+            chunks=["住院日額保險金與住院天數計算爭議。"],
+        )
+    embedding_service.build_chunk_embeddings(db_path)
+
+    monkeypatch.setattr(embedding_service, "connect", lambda: make_connection(db_path))
+
+    result = embedding_service.semantic_similar_cases("source_case", limit=2)
+
+    assert result is not None
+    assert result["case_id"] == "source_case"
+    assert result["source_chunk_count"] == 2
+    assert result["items"][0]["case_id"] == "related_case"
+    assert result["items"][0]["score"] > 0
+    assert result["items"][0]["matched_chunks"]
+    assert result["items"][0]["matched_chunks"][0]["chunk_text"]
+
+
+def test_semantic_similar_cases_returns_none_for_missing_case() -> None:
+    assert embedding_service.semantic_similar_cases("not-a-real-case-id") is None

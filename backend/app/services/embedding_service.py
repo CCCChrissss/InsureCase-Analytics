@@ -241,3 +241,156 @@ def semantic_search(
         "items": scored[:safe_limit],
         "total_candidates": len(scored),
     }
+
+
+def case_exists(case_id: str) -> bool:
+    with connect() as connection:
+        row = connection.execute(
+            """
+            SELECT 1
+            FROM cases
+            WHERE case_id = ?
+            LIMIT 1;
+            """,
+            (case_id,),
+        ).fetchone()
+    return row is not None
+
+
+def normalize_vector(vector: list[float]) -> list[float]:
+    norm = math.sqrt(sum(value * value for value in vector))
+    if norm == 0:
+        return vector
+    return [value / norm for value in vector]
+
+
+def source_case_centroid(
+    connection: sqlite3.Connection,
+    *,
+    case_id: str,
+    model_name: str,
+) -> tuple[list[float] | None, int]:
+    rows = connection.execute(
+        """
+        SELECT chunk_embeddings.embedding, chunk_embeddings.embedding_dims
+        FROM chunk_embeddings
+        JOIN case_chunks ON case_chunks.chunk_id = chunk_embeddings.chunk_id
+        WHERE case_chunks.case_id = ?
+          AND chunk_embeddings.embedding_model = ?
+        ORDER BY case_chunks.chunk_index;
+        """,
+        (case_id, model_name),
+    ).fetchall()
+    if not rows:
+        return None, 0
+
+    dims = rows[0]["embedding_dims"]
+    centroid = [0.0] * dims
+    for row in rows:
+        vector = unpack_vector(row["embedding"], row["embedding_dims"])
+        for index, value in enumerate(vector):
+            centroid[index] += value
+
+    return normalize_vector(centroid), len(rows)
+
+
+def semantic_similar_cases(
+    case_id: str,
+    *,
+    limit: int = 5,
+    model_name: str = MODEL_NAME,
+    min_score: float = 0.0,
+    chunks_per_case: int = 2,
+) -> dict[str, Any] | None:
+    if not case_exists(case_id):
+        return None
+
+    safe_limit = min(max(limit, 1), 20)
+    safe_chunks_per_case = min(max(chunks_per_case, 1), 5)
+    with connect() as connection:
+        source_vector, source_chunk_count = source_case_centroid(
+            connection,
+            case_id=case_id,
+            model_name=model_name,
+        )
+        if source_vector is None:
+            return {
+                "case_id": case_id,
+                "embedding_model": model_name,
+                "source_chunk_count": 0,
+                "items": [],
+                "total_candidates": 0,
+            }
+
+        rows = connection.execute(
+            """
+            SELECT chunk_embeddings.chunk_id, chunk_embeddings.embedding,
+                   chunk_embeddings.embedding_dims,
+                   case_chunks.case_id, case_chunks.chunk_index,
+                   case_chunks.section_hint, case_chunks.chunk_text,
+                   cases.case_number, cases.decision_date, cases.dispute_type
+            FROM chunk_embeddings
+            JOIN case_chunks ON case_chunks.chunk_id = chunk_embeddings.chunk_id
+            JOIN cases ON cases.case_id = case_chunks.case_id
+            WHERE chunk_embeddings.embedding_model = ?
+              AND case_chunks.case_id != ?;
+            """,
+            (model_name, case_id),
+        ).fetchall()
+
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        candidate_vector = unpack_vector(row["embedding"], row["embedding_dims"])
+        score = dot_product(source_vector, candidate_vector)
+        if score <= min_score:
+            continue
+
+        candidate_case = grouped.setdefault(
+            row["case_id"],
+            {
+                "case_id": row["case_id"],
+                "case_number": row["case_number"],
+                "decision_date": row["decision_date"],
+                "dispute_type": row["dispute_type"],
+                "score": 0.0,
+                "matched_chunks": [],
+            },
+        )
+        candidate_case["score"] = max(candidate_case["score"], score)
+        candidate_case["matched_chunks"].append(
+            {
+                "chunk_id": row["chunk_id"],
+                "section_hint": row["section_hint"],
+                "chunk_index": row["chunk_index"],
+                "score": round(score, 4),
+                "chunk_text": row["chunk_text"],
+            }
+        )
+
+    items = list(grouped.values())
+    for item in items:
+        item["matched_chunks"].sort(
+            key=lambda chunk: (
+                chunk["score"],
+                -chunk["chunk_index"],
+            ),
+            reverse=True,
+        )
+        item["matched_chunks"] = item["matched_chunks"][:safe_chunks_per_case]
+        item["score"] = round(item["score"], 4)
+
+    items.sort(
+        key=lambda item: (
+            item["score"],
+            item["decision_date"] or "",
+            item["case_number"] or "",
+        ),
+        reverse=True,
+    )
+    return {
+        "case_id": case_id,
+        "embedding_model": model_name,
+        "source_chunk_count": source_chunk_count,
+        "items": items[:safe_limit],
+        "total_candidates": len(items),
+    }

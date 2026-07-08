@@ -97,6 +97,20 @@ GET /api/semantic-search?q=癌症保險金&limit=3
 - `score`
 - `chunk_text`
 
+案件層級語意相似：
+
+```text
+GET /api/cases/{case_id}/semantic-similar?limit=5
+```
+
+做法：
+
+1. 讀取來源案件所有 chunk embeddings。
+2. 平均並 normalize 成來源案件 centroid。
+3. 比對候選案件的 chunk embeddings。
+4. 依案件分組，取最高分與前幾個命中 chunk。
+5. 回傳相似案件、分數與命中段落。
+
 ## 學校專題版與實務版差異
 
 學校專題版：
@@ -130,8 +144,28 @@ GET /api/semantic-search?q=癌症保險金&limit=3
 - section hint。
 - 案件來源。
 
+案件詳情頁也已新增「語意相似案件」區塊，會展示：
+
+- 案件層級語意相似分數。
+- 候選案件基本資料。
+- 實際命中的 chunk。
+- chunk score、section hint 與段落文字。
+
+## 串接實際 AI 模型的替換點
+
+目前 `local_hashing_cjk_v1` 是本機 MVP。未來若要改成實際 AI embedding model，建議做法：
+
+1. 在 `backend/app/services/embedding_service.py` 新增 provider 介面，例如 `embed_texts(texts) -> list[list[float]]`。
+2. 保留目前 `local_hashing_cjk_v1` 作為 fallback provider。
+3. 新增 AI provider，例如 OpenAI embedding 或其他中文/多語 embedding model。
+4. 重跑 `backend/scripts/build_chunk_embeddings.py`，用新 `embedding_model` 名稱寫入 `chunk_embeddings`。
+5. API query 可增加 `embedding_model` 參數，讓展示時能比較 local model 與 AI model。
+6. 若資料量擴大，再將 SQLite BLOB 改成 PostgreSQL + pgvector 或其他 ANN index。
+
+注意：不要把 API key 寫入程式碼或 commit 到 Git；應使用 `.env` / 環境變數，並只在 `.env.example` 說明變數名稱。
+
 ## 下一步
 
-1. 將 chunk 層級結果聚合成案件層級相似案件。
-2. 在案件詳情頁展示語意命中段落。
-3. 評估是否替換為正式 embedding model。
+1. 抽樣評估目前 local model 的語意相似品質。
+2. 決定要串接哪一個正式 AI embedding model。
+3. 建立 provider 介面與環境變數設定。

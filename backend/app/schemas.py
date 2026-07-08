@@ -103,6 +103,31 @@ class SemanticSearchResponse(BaseModel):
     total_candidates: int
 
 
+class SemanticSimilarChunk(BaseModel):
+    chunk_id: str
+    section_hint: str | None
+    chunk_index: int
+    score: float
+    chunk_text: str
+
+
+class SemanticSimilarCase(BaseModel):
+    case_id: str
+    case_number: str
+    decision_date: str | None
+    dispute_type: str | None
+    score: float
+    matched_chunks: list[SemanticSimilarChunk]
+
+
+class SemanticSimilarCasesResponse(BaseModel):
+    case_id: str
+    embedding_model: str
+    source_chunk_count: int
+    items: list[SemanticSimilarCase]
+    total_candidates: int
+
+
 class OverviewStatistics(BaseModel):
     case_count: int
     dispute_type_count: int

@@ -769,6 +769,71 @@ button {
   text-decoration: underline;
 }
 
+.semantic-similar-section {
+  background: #f8fbfb;
+}
+
+.semantic-case-list {
+  display: grid;
+  gap: 10px;
+}
+
+.semantic-method-note {
+  padding: 10px 12px;
+  border: 1px solid #d8e1df;
+  border-radius: 6px;
+  color: #45524f;
+  background: #ffffff;
+  font-size: 0.88rem;
+}
+
+.semantic-case-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #e1e9e7;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.semantic-case-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.semantic-case-head strong {
+  color: #2f6f73;
+}
+
+.semantic-match-list {
+  display: grid;
+  gap: 8px;
+}
+
+.semantic-match {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid #e9efed;
+  border-radius: 6px;
+  background: #fbfcfc;
+}
+
+.semantic-match span {
+  color: #64736f;
+  font-size: 0.82rem;
+}
+
+.semantic-match p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #33413e;
+  font-size: 0.9rem;
+}
+
 @media (max-width: 1080px) {
   .app-shell {
     grid-template-columns: 1fr;

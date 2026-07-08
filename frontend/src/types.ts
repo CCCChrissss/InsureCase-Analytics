@@ -116,6 +116,31 @@ export type SemanticSearchResponse = {
   total_candidates: number;
 };
 
+export type SemanticSimilarChunk = {
+  chunk_id: string;
+  section_hint: string | null;
+  chunk_index: number;
+  score: number;
+  chunk_text: string;
+};
+
+export type SemanticSimilarCase = {
+  case_id: string;
+  case_number: string;
+  decision_date: string | null;
+  dispute_type: string | null;
+  score: number;
+  matched_chunks: SemanticSimilarChunk[];
+};
+
+export type SemanticSimilarCasesResponse = {
+  case_id: string;
+  embedding_model: string;
+  source_chunk_count: number;
+  items: SemanticSimilarCase[];
+  total_candidates: number;
+};
+
 export type QualityReport = {
   report_title: string;
   report_date: string;

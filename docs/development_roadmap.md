@@ -327,6 +327,32 @@ pnpm build
 - 前端 build 成功。
 - Vite chunk size warning 仍存在，但不影響 build。
 
+## 第 7.8 階段：案件層級語意相似展示
+
+目標：將 chunk 層級語意搜尋結果聚合成案件層級相似案件，並在案件詳情頁展示實際命中段落。
+
+完成項目：
+
+- `backend/app/services/embedding_service.py` 新增 `semantic_similar_cases`。
+- `GET /api/cases/{case_id}/semantic-similar`。
+- `backend/tests/test_embedding_service.py` 新增案件層級聚合測試。
+- `frontend/src/pages/CasesPage.tsx` 讀取語意相似案件。
+- `frontend/src/components/CaseDetailView.tsx` 新增「語意相似案件」區塊。
+- `frontend/src/styles.css` 新增語意相似案件與命中 chunk 樣式。
+
+目前限制：
+
+- 仍使用 `local_hashing_cjk_v1` 本機模型。
+- 分數可用於展示流程，但不代表正式法律語意判斷。
+
+驗證方式：
+
+```powershell
+py -m pytest
+cd frontend
+pnpm build
+```
+
 ## 建議執行順序
 
 1. 完成第 0 階段文件與 Git 狀態處理。
@@ -341,4 +367,5 @@ pnpm build
 10. 建立 chunking 與本機 embedding pipeline。
 11. 將語意搜尋與向量分析細節接到前端。
 12. 將 chunk 層級語意結果聚合為案件層級相似案件。
-13. 視需求升級為實務級 embedding model 與 ANN 向量索引。
+13. 建立 embedding provider 介面並串接實際 AI embedding model。
+14. 視需求升級為 ANN 向量索引。

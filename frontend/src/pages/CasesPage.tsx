@@ -4,7 +4,15 @@ import { apiGet, apiGetOptional, apiPath } from "../api/client";
 import { CaseDetailView } from "../components/CaseDetailView";
 import { AsyncBlock, EmptyState, PageHeader, PanelHeader } from "../components/ui";
 import { useAsyncData } from "../hooks/useAsyncData";
-import type { CaseDetail, CaseSummaryDetail, CountItem, OverviewStatistics, PaginatedCases, SimilarCasesResponse } from "../types";
+import type {
+  CaseDetail,
+  CaseSummaryDetail,
+  CountItem,
+  OverviewStatistics,
+  PaginatedCases,
+  SemanticSimilarCasesResponse,
+  SimilarCasesResponse
+} from "../types";
 
 export function CasesPage({
   selectedCaseId,
@@ -42,6 +50,10 @@ export function CasesPage({
   );
   const similar = useAsyncData(
     () => (selectedCaseId ? apiGet<SimilarCasesResponse>(`/cases/${selectedCaseId}/similar?limit=5`) : Promise.resolve(null)),
+    [selectedCaseId]
+  );
+  const semanticSimilar = useAsyncData(
+    () => (selectedCaseId ? apiGet<SemanticSimilarCasesResponse>(`/cases/${selectedCaseId}/semantic-similar?limit=5&chunks_per_case=2`) : Promise.resolve(null)),
     [selectedCaseId]
   );
 
@@ -115,6 +127,9 @@ export function CasesPage({
                   similar={similar.data}
                   similarError={similar.error}
                   similarLoading={similar.loading}
+                  semanticSimilar={semanticSimilar.data}
+                  semanticSimilarError={semanticSimilar.error}
+                  semanticSimilarLoading={semanticSimilar.loading}
                   onOpenCase={onSelectCase}
                 />
               )}

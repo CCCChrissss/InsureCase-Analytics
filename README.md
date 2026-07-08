@@ -27,6 +27,7 @@
 - 案件文字 chunking pipeline，作為後續 embedding 與向量搜尋前置資料
 - 本機 chunk embedding MVP 與語意搜尋 API
 - 前端語意搜尋頁，展示 query、embedding 模型、命中 chunk、score、section hint 與案件來源
+- 案件詳情頁語意相似案件區塊，展示案件層級語意相似與命中段落
 - 後端 pytest 測試
 - 前端基本 build 驗證
 - 跨年度匯入前置支援
@@ -244,6 +245,16 @@ local_hashing_cjk_v1
 ```
 
 這是純 Python 的 CJK n-gram hashing vector，優點是可離線、可重跑、無需 API key；限制是語意品質不等同於 OpenAI embedding、BGE 或其他正式語意模型。
+
+案件層級語意相似 API：
+
+```text
+GET /api/cases/{case_id}/semantic-similar?limit=5
+```
+
+目前做法是將來源案件的 chunk embeddings 聚合成案件向量，再與候選案件 chunk 比對，回傳相似案件與命中段落。
+
+未來若要串接實際 AI 語意分析模型，主要替換 `backend/app/services/embedding_service.py` 的向量產生流程與 `chunk_embeddings` 重建腳本，API 與前端展示可以大致沿用。
 
 ### Quality Report
 
@@ -479,7 +490,7 @@ pnpm build
 建議後續開發順序：
 
 ```text
-1. 將 chunk 層級語意搜尋聚合為案件層級相似案件
+1. 串接實務級 AI embedding model，替換目前 local_hashing_cjk_v1
 2. 試跑 ROC 116 小期間資料
 3. 導入 Docker / CI / 部署設定
 ```
