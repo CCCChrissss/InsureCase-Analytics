@@ -9,6 +9,7 @@ from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_EXPECTED_COUNT = 2992
+DEFAULT_EMBEDDING_MODEL = "local_hashing_cjk_v1"
 
 
 def resolve_project_path(value: str | Path) -> Path:
@@ -95,6 +96,69 @@ def verify_chunks(connection: sqlite3.Connection, require_chunks: bool) -> tuple
     return checks, errors
 
 
+def verify_embeddings(
+    connection: sqlite3.Connection,
+    *,
+    require_embeddings: bool,
+    embedding_model: str,
+) -> tuple[dict[str, Any], list[str]]:
+    checks: dict[str, Any] = {
+        "required": require_embeddings,
+        "embedding_model": embedding_model,
+        "table_exists": table_exists(connection, "chunk_embeddings"),
+        "embedding_count": 0,
+        "chunks_without_embeddings": None,
+        "embedding_dims": None,
+    }
+    errors: list[str] = []
+
+    if not checks["table_exists"]:
+        if require_embeddings:
+            errors.append("chunk_embeddings table does not exist")
+        return checks, errors
+
+    aggregate = connection.execute(
+        """
+        SELECT COUNT(*) AS embedding_count,
+               MIN(embedding_dims) AS min_dims,
+               MAX(embedding_dims) AS max_dims
+        FROM chunk_embeddings
+        WHERE embedding_model = ?;
+        """,
+        (embedding_model,),
+    ).fetchone()
+    checks["embedding_count"] = int(aggregate["embedding_count"])
+    if aggregate["min_dims"] is not None and aggregate["min_dims"] == aggregate["max_dims"]:
+        checks["embedding_dims"] = int(aggregate["min_dims"])
+    else:
+        checks["embedding_dims"] = {
+            "min": aggregate["min_dims"],
+            "max": aggregate["max_dims"],
+        }
+
+    if table_exists(connection, "case_chunks"):
+        missing = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM case_chunks
+            LEFT JOIN chunk_embeddings
+              ON chunk_embeddings.chunk_id = case_chunks.chunk_id
+             AND chunk_embeddings.embedding_model = ?
+            WHERE chunk_embeddings.chunk_id IS NULL;
+            """,
+            (embedding_model,),
+        ).fetchone()[0]
+        checks["chunks_without_embeddings"] = int(missing)
+
+    if require_embeddings:
+        if checks["embedding_count"] <= 0:
+            errors.append("chunk_embeddings table has no rows")
+        if checks["chunks_without_embeddings"] != 0:
+            errors.append(f"{checks['chunks_without_embeddings']} chunks have no embeddings")
+
+    return checks, errors
+
+
 def like_count(connection: sqlite3.Connection, keyword: str) -> int:
     row = connection.execute(
         """
@@ -143,7 +207,13 @@ def verify_paths(connection: sqlite3.Connection, limit: int = 20) -> list[str]:
     return errors
 
 
-def verify_database(db_path: Path, expected_count: int, require_chunks: bool = False) -> dict[str, Any]:
+def verify_database(
+    db_path: Path,
+    expected_count: int,
+    require_chunks: bool = False,
+    require_embeddings: bool = False,
+    embedding_model: str = DEFAULT_EMBEDDING_MODEL,
+) -> dict[str, Any]:
     with connect(db_path) as connection:
         counts = {
             "cases": count_table(connection, "cases"),
@@ -151,6 +221,9 @@ def verify_database(db_path: Path, expected_count: int, require_chunks: bool = F
             "case_search": count_table(connection, "case_search"),
             "case_summaries": count_table(connection, "case_summaries"),
             "case_chunks": count_table(connection, "case_chunks") if table_exists(connection, "case_chunks") else 0,
+            "chunk_embeddings": count_table(connection, "chunk_embeddings")
+            if table_exists(connection, "chunk_embeddings")
+            else 0,
         }
         sample = connection.execute(
             """
@@ -171,6 +244,11 @@ def verify_database(db_path: Path, expected_count: int, require_chunks: bool = F
         }
         path_errors = verify_paths(connection)
         chunk_checks, chunk_errors = verify_chunks(connection, require_chunks)
+        embedding_checks, embedding_errors = verify_embeddings(
+            connection,
+            require_embeddings=require_embeddings,
+            embedding_model=embedding_model,
+        )
 
     errors: list[str] = []
     for table_name in ("cases", "case_texts", "case_search"):
@@ -181,6 +259,7 @@ def verify_database(db_path: Path, expected_count: int, require_chunks: bool = F
             errors.append(f"LIKE search returned no results for {keyword!r}")
     errors.extend(path_errors)
     errors.extend(chunk_errors)
+    errors.extend(embedding_errors)
 
     return {
         "database": str(db_path),
@@ -188,6 +267,7 @@ def verify_database(db_path: Path, expected_count: int, require_chunks: bool = F
         "counts": counts,
         "keyword_checks": keyword_checks,
         "chunk_checks": chunk_checks,
+        "embedding_checks": embedding_checks,
         "sample_case": dict(sample) if sample else None,
         "path_error_count": len(path_errors),
         "path_errors": path_errors,
@@ -201,12 +281,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--db", type=Path, default=DEFAULT_DB_PATH)
     parser.add_argument("--expected-count", type=int, default=DEFAULT_EXPECTED_COUNT)
     parser.add_argument("--require-chunks", action="store_true", help="Require every imported case to have chunks.")
+    parser.add_argument(
+        "--require-embeddings",
+        action="store_true",
+        help="Require every chunk to have a matching embedding.",
+    )
+    parser.add_argument("--embedding-model", default=DEFAULT_EMBEDDING_MODEL)
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    report = verify_database(args.db, args.expected_count, require_chunks=args.require_chunks)
+    report = verify_database(
+        args.db,
+        args.expected_count,
+        require_chunks=args.require_chunks,
+        require_embeddings=args.require_embeddings,
+        embedding_model=args.embedding_model,
+    )
     print(json.dumps(report, ensure_ascii=False, indent=2))
     if not report["passed"]:
         raise SystemExit(1)

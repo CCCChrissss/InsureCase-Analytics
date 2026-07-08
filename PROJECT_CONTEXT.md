@@ -64,7 +64,8 @@
 │  ├─ cross_year_readiness.md
 │  ├─ cross_year_trial_run_roc114_january.md
 │  ├─ cross_year_trial_run_roc114_full_year.md
-│  └─ roc114_summary_similarity_quality_check.md
+│  ├─ roc114_summary_similarity_quality_check.md
+│  └─ embedding_pipeline.md
 ├─ backend/
 │  ├─ schema.sql
 │  ├─ app/
@@ -79,18 +80,21 @@
 │  │  │  ├─ cases.py
 │  │  │  ├─ quality.py
 │  │  │  ├─ search.py
+│  │  │  ├─ semantic_search.py
 │  │  │  ├─ similar_cases.py
 │  │  │  ├─ statistics.py
 │  │  │  └─ summaries.py
 │  │  └─ services/
 │  │     ├─ __init__.py
 │  │     ├─ case_service.py
+│  │     ├─ embedding_service.py
 │  │     ├─ quality_service.py
 │  │     ├─ search_service.py
 │  │     ├─ similar_case_service.py
 │  │     ├─ statistics_service.py
 │  │     └─ summary_service.py
 │  ├─ scripts/
+│  │  ├─ build_chunk_embeddings.py
 │  │  ├─ build_case_chunks.py
 │  │  ├─ extract_case_summaries.py
 │  │  ├─ import_cases_to_db.py
@@ -98,6 +102,7 @@
 │  └─ tests/
 │     ├─ test_api.py
 │     ├─ test_build_case_chunks.py
+│     ├─ test_embedding_service.py
 │     ├─ test_import_cases_to_db.py
 │     ├─ test_search_service.py
 │     ├─ test_similar_case_service.py
@@ -170,10 +175,11 @@ frontend/dist/
 - `docs/cross_year_trial_run_roc114_january.md`：ROC 114 一月小期間跨年度試跑報告，記錄 112 筆 metadata、PDF/text 與案件整理成功結果。
 - `docs/cross_year_trial_run_roc114_full_year.md`：ROC 114 全年度跨年度試跑報告，記錄 2500 筆 metadata、PDF/text、案件整理與 trial DB 驗證結果。
 - `docs/roc114_summary_similarity_quality_check.md`：ROC 114 摘要與相似案件抽樣品質檢查，記錄摘要覆蓋率、截段污染檢查、相似案件 top 5 檢查與已知例外。
+- `docs/embedding_pipeline.md`：本機 chunk embedding MVP、語意搜尋 API 與後續升級路線。
 
 ### backend
 
-- `backend/schema.sql`：SQLite schema，定義 `cases`、`case_texts`、`case_summaries`、`case_chunks`、`case_search` 與索引。
+- `backend/schema.sql`：SQLite schema，定義 `cases`、`case_texts`、`case_summaries`、`case_chunks`、`chunk_embeddings`、`case_search` 與索引。
 - `backend/app/config.py`：後端集中設定，支援由環境變數覆蓋 DB path 與 CORS origins。
 - `backend/app/main.py`：FastAPI app 入口，設定 CORS 與註冊 routers。
 - `backend/app/database.py`：SQLite 連線、預設 DB 路徑與 schema 初始化。
@@ -182,10 +188,12 @@ frontend/dist/
 - `backend/app/routers/cases.py`：案件列表、案件詳情、爭議類型、PDF 讀取 API。
 - `backend/app/routers/quality.py`：分析驗證 API，回傳 ROC 114 摘要與相似案件品質檢查結果。
 - `backend/app/routers/search.py`：全文搜尋 API。
+- `backend/app/routers/semantic_search.py`：chunk embedding 語意搜尋 API。
 - `backend/app/routers/similar_cases.py`：相似案件 API。
 - `backend/app/routers/statistics.py`：統計 API，支援可選 `roc_year` 篩選。
 - `backend/app/routers/summaries.py`：案件摘要 API。
 - `backend/app/services/case_service.py`：案件查詢、篩選、分頁、PDF path resolver。
+- `backend/app/services/embedding_service.py`：本機 CJK hashing vector、chunk embedding 建置與語意搜尋。
 - `backend/app/services/quality_service.py`：ROC 114 分析驗證報告資料。
 - `backend/app/services/search_service.py`：FTS5 搜尋、LIKE fallback、snippet 產生；FTS5 報錯或 0 筆時會進 LIKE fallback。
 - `backend/app/services/similar_case_service.py`：規則式相似案件計分。
@@ -193,13 +201,15 @@ frontend/dist/
 - `backend/app/services/summary_service.py`：案件摘要查詢。
 - `backend/scripts/extract_case_summaries.py`：從 normalized text 產生規則式摘要並寫入 `case_summaries`；已支援「二、申請人主張」與非固定序號的「判斷理由」標題。
 - `backend/scripts/build_case_chunks.py`：將 `case_texts.normalized_text` 切成可重跑的 `case_chunks`，保留 section hint、字元起訖位置與 chunk 長度，作為後續 embedding 前置資料。
+- `backend/scripts/build_chunk_embeddings.py`：為 `case_chunks` 建立本機 `local_hashing_cjk_v1` embedding，寫入 `chunk_embeddings`。
 - `backend/scripts/import_cases_to_db.py`：讀取單一或多個 metadata 與文字檔，匯入 SQLite。
-- `backend/scripts/verify_case_db.py`：驗證 SQLite 筆數、搜尋、路徑與 sample case；可用 `--require-chunks` 檢查每案是否已有 chunk。
+- `backend/scripts/verify_case_db.py`：驗證 SQLite 筆數、搜尋、路徑與 sample case；可用 `--require-chunks` 與 `--require-embeddings` 檢查 chunk 與 embedding 完整性。
 - `backend/scripts/check_data_quality.py`：檢查 metadata 與 SQLite DB 是否含 mojibake 類異常字元。
 - `backend/tests/test_api.py`：API smoke tests。
 - `backend/tests/test_build_case_chunks.py`：chunking 邏輯、section hint 與 SQLite 寫入測試。
 - `backend/tests/test_cross_year_pipeline_defaults.py`：跨年度 pipeline 預設輸出路徑測試。
 - `backend/tests/test_data_quality.py`：資料品質檢查測試。
+- `backend/tests/test_embedding_service.py`：本機 embedding、embedding 寫入與語意搜尋排序測試。
 - `backend/tests/test_import_cases_to_db.py`：SQLite 匯入腳本測試，包含多 metadata 匯入與 metadata 目錄解析。
 - `backend/tests/test_search_service.py`：搜尋 fallback 單元測試。
 - `backend/tests/test_similar_case_service.py`：相似案件 service 單元測試。
@@ -447,6 +457,29 @@ UNIQUE(case_id, chunk_index)
 idx_case_chunks_case_id
 ```
 
+### `chunk_embeddings`
+
+chunk embedding 表，目前由 `backend/scripts/build_chunk_embeddings.py` 寫入；正式 DB 已產生 17254 筆，與 `case_chunks` 數量一致。
+
+```sql
+chunk_id TEXT NOT NULL
+embedding_model TEXT NOT NULL
+embedding_dims INTEGER NOT NULL
+embedding BLOB NOT NULL
+embedding_norm REAL NOT NULL
+created_at TEXT NOT NULL
+FOREIGN KEY(chunk_id) REFERENCES case_chunks(chunk_id) ON DELETE CASCADE
+PRIMARY KEY(chunk_id, embedding_model)
+```
+
+目前模型：
+
+```text
+local_hashing_cjk_v1
+```
+
+注意：這是學校專題版的本機 hashing vector MVP，不等同於正式語意 embedding model。
+
 ### `case_search`
 
 SQLite FTS5 full-text search virtual table。
@@ -539,6 +572,26 @@ Query parameters：
 - 若 FTS5 query 產生 `sqlite3.OperationalError`，fallback 到 `LIKE`。
 - 若 FTS5 沒報錯但回傳 0 筆，也會 fallback 到 `LIKE`。
 - 回傳 snippet 與 `match_source`。
+
+### Semantic Search
+
+```text
+GET /api/semantic-search
+```
+
+用途：使用 `chunk_embeddings` 做 chunk 層級語意搜尋。
+
+Query parameters：
+
+- `q`：必填，最小長度 1。
+- `limit`：預設 10，最大 50。
+- `min_score`：最低分數，預設 0。
+
+目前方法：
+
+- 使用 `local_hashing_cjk_v1`。
+- 回傳命中的 `chunk_text`、`section_hint`、`score` 與案件基本資料。
+- 這是本機 MVP，尚不是正式語意模型。
 
 ### Summaries
 
@@ -649,6 +702,7 @@ Query parameters：
 - 建立 `case_texts`。
 - 建立 `case_summaries`。
 - 建立 `case_chunks`。
+- 建立 `chunk_embeddings`。
 - 建立 `case_search` FTS5 virtual table。
 - 匯入 2992 筆案件。
 - 匯入 2992 筆文字。
@@ -656,6 +710,7 @@ Query parameters：
 - 建立全文搜尋索引。
 - 已寫入 2992 筆規則式摘要。
 - 已建立 17254 段案件文字 chunk，2992 筆案件皆有 chunk。
+- 已建立 17254 筆 chunk embedding，模型為 `local_hashing_cjk_v1`，維度 384。
 - 提供資料庫驗證腳本。
 - 已建立跨年度 trial DB：`backend/data/insurance_cases_cross_year_trial.db`，匯入 ROC 114 全年度 2500 筆與 ROC 115 492 筆，共 2992 筆。
 - trial DB 已重建規則式摘要，共 2992 筆；`holding`、`applicant_claim`、`reasoning` 均為 2992 筆。
@@ -672,6 +727,7 @@ Query parameters：
 - 爭議類型 API。
 - PDF 回傳 API。
 - 全文搜尋 API。
+- 語意搜尋 API。
 - 摘要 API。
 - 規則式相似案件 API。
 - 分析驗證 API。
@@ -706,11 +762,12 @@ Query parameters：
   - 搜尋 fallback 與後端測試。
   - 規則式摘要。
   - chunking pipeline。
+  - 本機 embedding pipeline 與語意搜尋 API。
 
 ## 9. 尚未完成項目
 
-- embedding 建立。
-- 向量索引。
+- 實務級 embedding model。
+- ANN 向量索引。
 - OCR fallback。
 - ROC 116 或更多年度資料蒐集。
 - 後台管理 API，例如重新匯入、重建索引。
@@ -915,7 +972,9 @@ py .\backend\scripts\verify_case_db.py
 - `case_search` = 2992
 - `case_summaries` = 2992
 - `case_chunks` = 17254
+- `chunk_embeddings` = 17254
 - `cases_without_chunks` = 0
+- `chunks_without_embeddings` = 0
 - path errors = 0
 - 關鍵字查詢有結果
 
@@ -946,6 +1005,21 @@ py .\backend\scripts\build_case_chunks.py --db .\backend\data\insurance_cases.db
 - `empty_case_count` = 0
 - `min_chunks_per_case` = 3
 - `max_chunks_per_case` = 30
+
+### 建立 chunk embeddings
+
+```powershell
+py .\backend\scripts\build_chunk_embeddings.py --db .\backend\data\insurance_cases.db
+```
+
+目前正式 DB 驗證結果：
+
+- `processed_chunks` = 17254
+- `embedded_chunks` = 17254
+- `total_embeddings_in_table` = 17254
+- `empty_chunk_count` = 0
+- `embedding_model` = `local_hashing_cjk_v1`
+- `embedding_dims` = 384
 
 ### 啟動後端 API
 
@@ -1002,6 +1076,7 @@ py -m py_compile .\foi_ods_pdf_text_pipeline.py
 py -m py_compile .\foi_ods_case_organizer.py
 py -m py_compile .\backend\scripts\import_cases_to_db.py
 py -m py_compile .\backend\scripts\build_case_chunks.py
+py -m py_compile .\backend\scripts\build_chunk_embeddings.py
 py -m py_compile .\backend\scripts\verify_case_db.py
 py -m py_compile .\backend\scripts\extract_case_summaries.py
 ```
@@ -1019,6 +1094,7 @@ py -m pytest
 - 統計 API 年度篩選 tests。
 - 搜尋 fallback service test。
 - chunking pipeline tests。
+- embedding service tests。
 - 摘要擷取與 summary service tests，包含「申請人主張」標題缺少「之」與「判斷理由」非第六段的 regression tests。
 - 相似案件 service tests。
 - 匯入腳本多 metadata tests。
@@ -1026,7 +1102,7 @@ py -m pytest
 ### SQLite 匯入驗證
 
 ```powershell
-py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks
+py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks --require-embeddings
 ```
 
 ### API smoke test
@@ -1116,19 +1192,20 @@ http://127.0.0.1:5173
 - 已完成 ROC 114 摘要與相似案件品質檢查：摘要三欄覆蓋率 2500/2500，Top 1 同爭議類型率 99.92%，已知 2 筆稀有爭議類型因無同類候選而只能回傳低信心相似案件。
 - 已在前端相似案件區塊加入低信心提示，當 Top 5 沒有同爭議類型或最高分偏低時會提示結果僅供參考。
 - 已建立案件文字 chunking pipeline，正式 DB 目前有 17254 段 chunk，且 2992 筆案件皆有 chunk。
+- 已建立本機 chunk embedding pipeline，正式 DB 目前有 17254 筆 `local_hashing_cjk_v1` embedding，且每個 chunk 皆有 embedding。
 
-### 下一步：導入 embedding 或擴大跨年度資料
+### 下一步：前端展示語意搜尋分析或擴大跨年度資料
 
 優先原因：
 
 - 規則式摘要與相似案件 baseline 已完成。
-- chunking 前置資料已完成，可直接進入 embedding 產生與向量索引設計。
+- chunking 與本機 embedding 前置資料已完成，可開始展示語意搜尋流程。
 - 前端結構已整理，後續可以承接更複雜功能。
 - 跨年度 trial DB 已建立並通過資料品質檢查，正式 DB 也已切換為跨年度資料。
 
 建議工作：
 
-1. 若要強化智慧搜尋：產生 chunk embedding，建立向量索引與語意相似案件 API。
+1. 若要強化展示：在前端新增語意搜尋與向量分析細節頁，展示 query、命中 chunk、score、section hint 與案件來源。
 2. 若要強化資料範圍：試跑 ROC 116 小期間。
 
 ### 第 8 階段：跨年度擴充

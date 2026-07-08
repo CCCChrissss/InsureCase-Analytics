@@ -80,9 +80,14 @@ py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks
 
 ## 後續工作
 
-下一步可以在 `case_chunks` 基礎上建立 embedding：
+目前已在 `case_chunks` 基礎上建立本機 embedding：
 
-1. 新增 `chunk_embeddings` 或外部向量索引。
-2. 對每個 `chunk_text` 產生 embedding。
-3. 查詢時先比對 chunk，再聚合回案件層級。
-4. 在前端案件詳情頁展示命中的相似段落與分數依據。
+1. 已新增 `chunk_embeddings`。
+2. 已對每個 `chunk_text` 產生 `local_hashing_cjk_v1` embedding。
+3. 已新增 `GET /api/semantic-search` 先比對 chunk。
+
+後續工作：
+
+1. 將 chunk 層級結果聚合回案件層級。
+2. 在前端展示命中的相似段落與分數依據。
+3. 視需求替換為正式 embedding model 與 ANN 向量索引。

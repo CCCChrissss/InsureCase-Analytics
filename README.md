@@ -25,6 +25,7 @@
 - 規則式相似案件推薦
 - 分析驗證頁，展示摘要與相似案件品質檢查過程
 - 案件文字 chunking pipeline，作為後續 embedding 與向量搜尋前置資料
+- 本機 chunk embedding MVP 與語意搜尋 API
 - 後端 pytest 測試
 - 前端基本 build 驗證
 - 跨年度匯入前置支援
@@ -49,6 +50,7 @@
 - normalized text：2992 份
 - 單案 metadata：2992 份
 - case chunks：17254 段
+- chunk embeddings：17254 筆，模型為 `local_hashing_cjk_v1`
 - 爭議類型：41 種
 - 正式 DB：`backend/data/insurance_cases.db`
 - 正式 DB 年度分布：ROC 114 = 2500，ROC 115 = 492
@@ -162,6 +164,10 @@ backend/scripts/build_case_chunks.py
   ↓
 case_chunks
   ↓
+backend/scripts/build_chunk_embeddings.py
+  ↓
+chunk_embeddings
+  ↓
 FastAPI
   ↓
 React frontend
@@ -178,6 +184,7 @@ GET /api/cases/{case_id}
 GET /api/dispute-types
 GET /api/files/{case_id}/pdf
 GET /api/search
+GET /api/semantic-search
 GET /api/cases/{case_id}/summary
 GET /api/cases/{case_id}/similar
 GET /api/quality/roc114-summary-similarity
@@ -220,6 +227,22 @@ created_at
 ```
 
 此方法具可解釋性，但尚不等同於語意相似度或法律判斷。後續可升級為 embedding / pgvector。
+
+### Semantic Search
+
+目前提供本機 embedding MVP：
+
+```text
+GET /api/semantic-search?q=癌症保險金&limit=10
+```
+
+目前模型：
+
+```text
+local_hashing_cjk_v1
+```
+
+這是純 Python 的 CJK n-gram hashing vector，優點是可離線、可重跑、無需 API key；限制是語意品質不等同於 OpenAI embedding、BGE 或其他正式語意模型。
 
 ### Quality Report
 
@@ -315,13 +338,26 @@ py .\backend\scripts\build_case_chunks.py --db .\backend\data\insurance_cases.db
 - `total_chunks_in_table` = 17254
 - `empty_case_count` = 0
 
-### 6. Verify database
+### 6. Build chunk embeddings
 
 ```powershell
-py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks
+py .\backend\scripts\build_chunk_embeddings.py --db .\backend\data\insurance_cases.db
 ```
 
-### 7. Start backend
+目前正式 DB 驗證結果：
+
+- `processed_chunks` = 17254
+- `embedded_chunks` = 17254
+- `total_embeddings_in_table` = 17254
+- `empty_chunk_count` = 0
+
+### 7. Verify database
+
+```powershell
+py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks --require-embeddings
+```
+
+### 8. Start backend
 
 ```powershell
 py -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
@@ -333,7 +369,7 @@ Open:
 http://127.0.0.1:8000/docs
 ```
 
-### 8. Start frontend
+### 9. Start frontend
 
 ```powershell
 cd frontend
@@ -375,6 +411,7 @@ py -m py_compile .\foi_ods_pdf_text_pipeline.py
 py -m py_compile .\foi_ods_case_organizer.py
 py -m py_compile .\backend\scripts\import_cases_to_db.py
 py -m py_compile .\backend\scripts\build_case_chunks.py
+py -m py_compile .\backend\scripts\build_chunk_embeddings.py
 py -m py_compile .\backend\scripts\verify_case_db.py
 py -m py_compile .\backend\scripts\extract_case_summaries.py
 ```
@@ -392,6 +429,7 @@ py -m pytest
 - 統計 API 年度篩選
 - 搜尋 fallback
 - 案件文字 chunking pipeline
+- 本機 embedding service 與語意搜尋
 - 摘要擷取與 summary service
 - 相似案件 service
 - SQLite 匯入腳本
@@ -418,13 +456,14 @@ pnpm build
 - `docs/cross_year_trial_run_roc114_full_year.md`：ROC 114 全年度試跑報告
 - `docs/roc114_summary_similarity_quality_check.md`：ROC 114 摘要與相似案件抽樣品質檢查
 - `docs/chunking_pipeline.md`：案件文字 chunking 設計、欄位與正式 DB 驗證結果
+- `docs/embedding_pipeline.md`：本機 embedding MVP、語意搜尋 API 與後續升級路線
 
 ## Current Limitations
 
 目前尚未完成：
 
-- embedding 產生
-- 向量索引
+- 實務級 embedding 模型
+- ANN 向量索引
 - OCR fallback
 - Docker
 - CI
@@ -437,7 +476,7 @@ pnpm build
 建議後續開發順序：
 
 ```text
-1. 實作 embedding 產生與向量索引
+1. 將語意搜尋結果與分析細節接到前端
 2. 試跑 ROC 116 小期間資料
 3. 導入 Docker / CI / 部署設定
 ```

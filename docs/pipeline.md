@@ -314,21 +314,40 @@ backend/scripts/build_case_chunks.py
 - `processed_cases` = 2992
 - `empty_case_count` = 0
 
-後續預計新增：
+已新增：
 
 ```text
-backend/scripts/build_embeddings.py
+backend/scripts/build_chunk_embeddings.py
 ```
 
 功能：
 
 - 產生 embedding。
-- 建立相似案件搜尋資料。
+- 建立 chunk 層級語意搜尋資料。
+
+目前正式 DB 結果：
+
+- `chunk_embeddings` = 17254
+- `embedding_model` = `local_hashing_cjk_v1`
+- `embedding_dims` = 384
+- `chunks_without_embeddings` = 0
+
+目前 API：
+
+```text
+GET /api/semantic-search
+```
+
+後續再升級：
+
+- 實務級 embedding model。
+- ANN 向量索引。
+- chunk 層級結果聚合為案件層級相似案件。
 
 驗證：
 
-- 任一案件可查 top 5 相似案件。
-- 回傳結果附相似段落。
+- 任一查詢文字可回傳 top N 相似 chunk。
+- 回傳結果附案件來源、section hint、分數與相似段落。
 
 ## Pipeline 注意事項
 

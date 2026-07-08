@@ -84,6 +84,25 @@ class SearchResponse(BaseModel):
     page_size: int
 
 
+class SemanticSearchResult(BaseModel):
+    chunk_id: str
+    case_id: str
+    case_number: str
+    decision_date: str | None
+    dispute_type: str | None
+    section_hint: str | None
+    chunk_index: int
+    score: float
+    chunk_text: str
+
+
+class SemanticSearchResponse(BaseModel):
+    query: str
+    embedding_model: str
+    items: list[SemanticSearchResult]
+    total_candidates: int
+
+
 class OverviewStatistics(BaseModel):
     case_count: int
     dispute_type_count: int

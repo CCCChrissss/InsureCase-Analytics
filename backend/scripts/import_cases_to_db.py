@@ -116,6 +116,7 @@ def reset_tables(connection: sqlite3.Connection) -> None:
     connection.executescript(
         """
         DELETE FROM case_search;
+        DELETE FROM chunk_embeddings;
         DELETE FROM case_chunks;
         DELETE FROM case_summaries;
         DELETE FROM case_texts;

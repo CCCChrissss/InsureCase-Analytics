@@ -177,8 +177,8 @@ py .\backend\scripts\verify_case_db.py
 
 後續再做：
 
-- embedding 建立。
-- 向量搜尋。
+- 實務級 embedding model。
+- ANN 向量索引。
 
 驗證方式：
 
@@ -270,6 +270,37 @@ py .\backend\scripts\build_case_chunks.py --db .\backend\data\insurance_cases.db
 py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks
 ```
 
+## 第 7.6 階段：本機 chunk embedding MVP
+
+目標：先建立可離線、可重跑的 chunk embedding 資料流，讓後續前端可以展示語意搜尋與向量比對過程。
+
+完成項目：
+
+- 新增 `chunk_embeddings` SQLite table。
+- 新增 `backend/app/services/embedding_service.py`。
+- 新增 `backend/scripts/build_chunk_embeddings.py`。
+- 新增 `backend/app/routers/semantic_search.py`。
+- 新增 `GET /api/semantic-search`。
+- 新增 `backend/tests/test_embedding_service.py`。
+- `verify_case_db.py` 新增 `--require-embeddings`。
+- 正式 DB 已產生 17254 筆 embedding，與 `case_chunks` 數量一致。
+
+目前方法：
+
+- 模型名稱：`local_hashing_cjk_v1`。
+- 維度：384。
+- 方法：CJK 2-gram / 3-gram + hashing vector + cosine similarity。
+- 定位：學校專題版 MVP，不等同於 OpenAI embedding、BGE 或其他正式語意模型。
+
+驗證方式：
+
+```powershell
+py -m py_compile .\backend\app\services\embedding_service.py .\backend\scripts\build_chunk_embeddings.py .\backend\scripts\verify_case_db.py .\backend\app\routers\semantic_search.py .\backend\app\main.py
+py -m pytest
+py .\backend\scripts\build_chunk_embeddings.py --db .\backend\data\insurance_cases.db
+py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks --require-embeddings
+```
+
 ## 建議執行順序
 
 1. 完成第 0 階段文件與 Git 狀態處理。
@@ -281,4 +312,6 @@ py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks
 7. 整理前端結構。
 8. 擴充跨年度資料。
 9. 將資料品質檢查納入固定 pipeline。
-10. 導入 embedding 產生、向量索引與語意相似案件搜尋。
+10. 建立 chunking 與本機 embedding pipeline。
+11. 將語意搜尋與向量分析細節接到前端。
+12. 視需求升級為實務級 embedding model 與 ANN 向量索引。

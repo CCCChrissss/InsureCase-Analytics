@@ -55,6 +55,17 @@ CREATE TABLE IF NOT EXISTS case_chunks (
   UNIQUE(case_id, chunk_index)
 );
 
+CREATE TABLE IF NOT EXISTS chunk_embeddings (
+  chunk_id TEXT NOT NULL,
+  embedding_model TEXT NOT NULL,
+  embedding_dims INTEGER NOT NULL,
+  embedding BLOB NOT NULL,
+  embedding_norm REAL NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(chunk_id) REFERENCES case_chunks(chunk_id) ON DELETE CASCADE,
+  PRIMARY KEY(chunk_id, embedding_model)
+);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS case_search USING fts5(
   case_id UNINDEXED,
   case_number,
@@ -67,3 +78,4 @@ CREATE INDEX IF NOT EXISTS idx_cases_decision_date ON cases(decision_date);
 CREATE INDEX IF NOT EXISTS idx_cases_dispute_type ON cases(dispute_type);
 CREATE INDEX IF NOT EXISTS idx_cases_case_number ON cases(case_number);
 CREATE INDEX IF NOT EXISTS idx_case_chunks_case_id ON case_chunks(case_id);
+CREATE INDEX IF NOT EXISTS idx_chunk_embeddings_model ON chunk_embeddings(embedding_model);
