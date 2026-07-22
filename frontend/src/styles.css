@@ -244,6 +244,69 @@ button {
   padding: 16px;
 }
 
+.workflow-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px;
+}
+
+.workflow-card {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #e1e9e7;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.workflow-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid #d8e1df;
+  border-radius: 6px;
+  color: #2f6f73;
+  background: #f5f8f7;
+}
+
+.workflow-card h3 {
+  margin: 0;
+  color: #18393b;
+  font-size: 1rem;
+}
+
+.workflow-card p {
+  margin: 6px 0 0;
+  color: #53645f;
+  font-size: 0.92rem;
+}
+
+.data-state-list {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+}
+
+.data-state-list div {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid #e1e9e7;
+  border-radius: 6px;
+  background: #fbfcfc;
+}
+
+.data-state-list svg {
+  flex: 0 0 auto;
+  color: #4f9b68;
+}
+
 .filters,
 .search-form,
 .semantic-search-form {
@@ -856,6 +919,7 @@ button {
 
   .metric-grid,
   .semantic-metrics,
+  .workflow-grid,
   .two-columns,
   .case-layout,
   .detail-grid,

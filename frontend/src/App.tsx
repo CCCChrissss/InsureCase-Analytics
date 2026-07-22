@@ -1,5 +1,5 @@
 import React from "react";
-import { Activity, BarChart3, BrainCircuit, FileSearch, LayoutDashboard, ListChecks, ListFilter } from "lucide-react";
+import { Activity, BrainCircuit, FileSearch, LayoutDashboard, ListChecks, ListFilter } from "lucide-react";
 
 import { apiGet } from "./api/client";
 import { useAsyncData } from "./hooks/useAsyncData";
@@ -73,11 +73,10 @@ export function App() {
   }, []);
 
   const navItems: Array<{ route: Route; label: string; icon: React.ReactNode }> = [
-    { route: "dashboard", label: "總覽", icon: <LayoutDashboard size={18} /> },
-    { route: "cases", label: "案件", icon: <ListFilter size={18} /> },
-    { route: "search", label: "搜尋", icon: <FileSearch size={18} /> },
+    { route: "dashboard", label: "查找首頁", icon: <LayoutDashboard size={18} /> },
+    { route: "cases", label: "案件查找", icon: <ListFilter size={18} /> },
+    { route: "search", label: "全文搜尋", icon: <FileSearch size={18} /> },
     { route: "semantic", label: "語意搜尋", icon: <BrainCircuit size={18} /> },
-    { route: "statistics", label: "統計", icon: <BarChart3 size={18} /> },
     { route: "quality", label: "分析驗證", icon: <ListChecks size={18} /> }
   ];
 
@@ -111,7 +110,14 @@ export function App() {
       </aside>
 
       <main className="main-content">
-        {route === "dashboard" && <Dashboard onOpenCases={() => navigate("cases")} />}
+        {route === "dashboard" && (
+          <Dashboard
+            onOpenCases={() => navigate("cases")}
+            onOpenSearch={() => navigate("search")}
+            onOpenSemanticSearch={() => navigate("semantic")}
+            onOpenQuality={() => navigate("quality")}
+          />
+        )}
         {route === "cases" && (
           <CasesPage
             selectedCaseId={selectedCaseId}

@@ -1,8 +1,8 @@
 # InsureCase Analytics
 
-**InsureCase Analytics** 是一套保險評議案件搜尋與分析系統，目標是將金融消費評議中心 FOI ODS 的人壽保險評議決定書整理成可查詢、可統計、可閱讀，並可進一步進行規則式摘要與相似案件推薦的分析平台。
+**InsureCase Analytics** 是一套保險評議案件搜尋與查找系統，目標是將金融消費評議中心 FOI ODS 的人壽保險評議決定書整理成可依案號、年度、爭議類型、全文關鍵字與語意相似度查找的案件資料庫。
 
-本專案目前定位為學校專題版 MVP，以本機 SQLite、FastAPI、React + Vite 建立可展示系統；後續可延伸至跨年度資料整合、embedding 相似案件、OCR fallback、Docker、CI 與 PostgreSQL / pgvector 架構。
+本專案目前定位為學校專題版 MVP，以本機 SQLite、FastAPI、React + Vite 建立可展示的搜尋與案件閱讀系統；後續可延伸至正式 AI embedding、OCR fallback、Docker、CI 與 PostgreSQL / pgvector 架構。
 
 ## Features
 
@@ -16,10 +16,9 @@
 - SQLite FTS5 全文搜尋
 - 中文搜尋 LIKE fallback
 - FastAPI 後端 API
-- React + Vite 前端 Dashboard
+- React + Vite 前端案件查找工作台
 - 案件列表、案件詳情、PDF 連結
 - 全文搜尋頁
-- 統計分析頁
 - 年度篩選
 - 規則式案件摘要
 - 規則式相似案件推薦
@@ -189,11 +188,14 @@ GET /api/search
 GET /api/semantic-search
 GET /api/cases/{case_id}/summary
 GET /api/cases/{case_id}/similar
+GET /api/cases/{case_id}/semantic-similar
 GET /api/quality/roc114-summary-similarity
 GET /api/statistics/overview
 GET /api/statistics/dispute-types
 GET /api/statistics/decision-dates
 ```
+
+目前前端主軸是案件查找、全文搜尋、語意搜尋與案件詳情。統計 API 保留作為資料狀態與內部檢查輔助，不是目前展示主功能。
 
 ### Search
 
@@ -509,8 +511,8 @@ pnpm build
 
 本專案目前可定位為：
 
-> A local MVP for insurance dispute case search, summarization, and analysis.
+> A local MVP for insurance dispute case search, case lookup, summarization, and similarity exploration.
 
 中文定位：
 
-> 一套以金融消費評議中心人壽保險評議決定書為資料來源的保險評議案件搜尋與分析系統，提供全文搜尋、統計儀表板、規則式摘要與相似案件推薦功能。
+> 一套以金融消費評議中心人壽保險評議決定書為資料來源的保險評議案件搜尋與查找系統，提供案件查找、全文搜尋、語意搜尋、規則式摘要與相似案件推薦功能。
