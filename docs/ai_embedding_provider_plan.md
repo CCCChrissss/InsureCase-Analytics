@@ -25,6 +25,13 @@
   - `--model`
   - `--dims`
   - `--limit`
+- provider 輸出已加入防呆檢查：
+  - 回傳筆數必須等於輸入文字筆數。
+  - 向量維度必須等於 provider dims。
+  - `token_count` 不可為負數。
+  - `norm` 必須是有限且非負數。
+  - vector 不可包含 NaN 或 Infinity。
+- `backend/tests/test_embedding_service.py` 已加入 fake provider 測試，不需要呼叫外部 API 即可驗證寫入與異常輸出。
 - `chunk_embeddings` 已用 `(chunk_id, embedding_model)` 作為主鍵，可同時保留不同模型的 embeddings。
 - 語意搜尋 API 與案件層級語意相似 API 目前會依 `embedding_model` 查詢向量。
 
@@ -109,6 +116,8 @@ EMBEDDING_TIMEOUT_SECONDS=60
 - `.env` 不可提交 Git。
 - provider 讀不到必要 API key 時，應明確報錯。
 - 不要在程式碼、README、測試或 commit history 中硬編碼 key。
+
+目前 `.env.example` 已先列出上述外部 provider 變數名稱作為未來接入提示，但正式 provider 尚未實作。
 
 ## 6. Model 選擇原則
 
@@ -254,11 +263,12 @@ embedding_model=<model-name>
 
 - `local` provider 正常。
 - `openai` provider 在缺 API key 時明確報錯。
-- fake provider 可模擬固定向量回傳。
+- fake provider 可模擬固定向量回傳。此項目前已完成。
 - batch 寫入不會破壞既有 embeddings。
 - 同一 chunk 可保留不同 `embedding_model`。
-- `dims <= 0` 會報錯。
-- provider 回傳數量與輸入數量不一致時會報錯。
+- `dims <= 0` 會報錯。此項目前已完成。
+- provider 回傳數量與輸入數量不一致時會報錯。此項目前已完成。
+- provider 回傳維度錯誤或非有限數值時會報錯。此項目前已完成。
 - API 查詢指定不存在的 `embedding_model` 時應回傳空結果或明確錯誤。
 
 ## 13. 驗證流程
@@ -304,10 +314,9 @@ py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks --
 1. 決定正式 provider 與 model。
 2. 補 `.env.example` 的 API key 變數名稱。
 3. 在 `embedding_service.py` 實作 provider。
-4. 用 fake provider 補單元測試。
-5. 用 `--limit 20` 小批量試跑。
-6. 用 `--limit 100` 檢查品質與費用。
-7. 全量重建 embeddings。
-8. 增加 API 的 `embedding_model` 可選參數。
-9. 在前端展示目前使用的 model。
-10. 抽樣比較 local MVP 與正式 AI model 結果。
+4. 用 `--limit 20` 小批量試跑。
+5. 用 `--limit 100` 檢查品質與費用。
+6. 全量重建 embeddings。
+7. 增加 API 的 `embedding_model` 可選參數。
+8. 在前端展示目前使用的 model。
+9. 抽樣比較 local MVP 與正式 AI model 結果。

@@ -50,6 +50,32 @@ def make_connection(db_path: Path) -> sqlite3.Connection:
     return connection
 
 
+class FakeEmbeddingProvider:
+    provider_name = "fake"
+    model_name = "fake_model_v1"
+    dims = 3
+
+    def __init__(self, embeddings: list[embedding_service.EmbeddedText]) -> None:
+        self.embeddings = embeddings
+
+    def embed_texts(self, texts: list[str]) -> list[embedding_service.EmbeddedText]:
+        return self.embeddings
+
+
+def make_embedding(vector: list[float], *, norm: float = 1.0, token_count: int = 1) -> embedding_service.EmbeddedText:
+    return embedding_service.EmbeddedText(vector=vector, norm=norm, token_count=token_count)
+
+
+def select_chunk_rows(connection: sqlite3.Connection) -> list[sqlite3.Row]:
+    return connection.execute(
+        """
+        SELECT chunk_id, chunk_text
+        FROM case_chunks
+        ORDER BY case_id, chunk_index;
+        """
+    ).fetchall()
+
+
 def test_vectorize_text_is_deterministic() -> None:
     first, first_norm, first_token_count = embedding_service.vectorize_text("癌症 理賠 保險金", dims=32)
     second, second_norm, second_token_count = embedding_service.vectorize_text("癌症 理賠 保險金", dims=32)
@@ -138,6 +164,116 @@ def test_build_chunk_embeddings_writes_one_embedding_per_chunk(tmp_path: Path) -
     assert report["embedding_dims"] == 64
     assert report["total_embeddings_in_table"] == 2
     assert report["empty_chunk_count"] == 0
+
+
+def test_replace_chunk_embeddings_accepts_fake_provider_output(tmp_path: Path, monkeypatch) -> None:
+    db_path = tmp_path / "insurance_cases.db"
+    with make_connection(db_path) as connection:
+        connection.executescript((Path(__file__).resolve().parents[1] / "schema.sql").read_text(encoding="utf-8"))
+        insert_case_with_chunks(
+            connection,
+            case_id="case_fake",
+            case_number="115年評字第000010號",
+            dispute_type="理賠爭議",
+            chunks=["癌症保險金爭議。", "保單條款解釋。"],
+        )
+        fake_provider = FakeEmbeddingProvider(
+            [
+                make_embedding([1.0, 0.0, 0.0]),
+                make_embedding([0.0, 1.0, 0.0]),
+            ]
+        )
+        monkeypatch.setattr(embedding_service, "create_embedding_provider", lambda **_: fake_provider)
+
+        report = embedding_service.replace_chunk_embeddings(connection, select_chunk_rows(connection))
+        row = connection.execute(
+            """
+            SELECT COUNT(*) AS count, MIN(embedding_dims) AS dims
+            FROM chunk_embeddings
+            WHERE embedding_model = ?;
+            """,
+            (fake_provider.model_name,),
+        ).fetchone()
+
+    assert report["processed_chunks"] == 2
+    assert report["embedded_chunks"] == 2
+    assert report["empty_chunk_count"] == 0
+    assert row["count"] == 2
+    assert row["dims"] == fake_provider.dims
+
+
+def test_replace_chunk_embeddings_skips_empty_fake_provider_output(tmp_path: Path, monkeypatch) -> None:
+    db_path = tmp_path / "insurance_cases.db"
+    with make_connection(db_path) as connection:
+        connection.executescript((Path(__file__).resolve().parents[1] / "schema.sql").read_text(encoding="utf-8"))
+        insert_case_with_chunks(
+            connection,
+            case_id="case_empty",
+            case_number="115年評字第000011號",
+            dispute_type="理賠爭議",
+            chunks=["   "],
+        )
+        fake_provider = FakeEmbeddingProvider([make_embedding([0.0, 0.0, 0.0], norm=0.0, token_count=0)])
+        monkeypatch.setattr(embedding_service, "create_embedding_provider", lambda **_: fake_provider)
+
+        report = embedding_service.replace_chunk_embeddings(connection, select_chunk_rows(connection))
+        count = connection.execute("SELECT COUNT(*) FROM chunk_embeddings;").fetchone()[0]
+
+    assert report["processed_chunks"] == 1
+    assert report["embedded_chunks"] == 0
+    assert report["empty_chunk_count"] == 1
+    assert report["empty_chunk_ids"] == ["case_empty_chunk_0"]
+    assert count == 0
+
+
+def test_validate_provider_embeddings_rejects_count_mismatch() -> None:
+    provider = FakeEmbeddingProvider([make_embedding([1.0, 0.0, 0.0])])
+
+    try:
+        embedding_service.validate_provider_embeddings(
+            provider,
+            provider.embeddings,
+            expected_count=2,
+            context_ids=["chunk_1", "chunk_2"],
+        )
+    except embedding_service.EmbeddingProviderError as error:
+        assert "returned 1 embeddings for 2 input texts" in str(error)
+    else:
+        raise AssertionError("Expected EmbeddingProviderError")
+
+
+def test_validate_provider_embeddings_rejects_dimension_mismatch() -> None:
+    provider = FakeEmbeddingProvider([make_embedding([1.0, 0.0])])
+
+    try:
+        embedding_service.validate_provider_embeddings(
+            provider,
+            provider.embeddings,
+            expected_count=1,
+            context_ids=["chunk_bad_dims"],
+        )
+    except embedding_service.EmbeddingProviderError as error:
+        assert "chunk_bad_dims" in str(error)
+        assert "expected 3" in str(error)
+    else:
+        raise AssertionError("Expected EmbeddingProviderError")
+
+
+def test_validate_provider_embeddings_rejects_non_finite_values() -> None:
+    provider = FakeEmbeddingProvider([make_embedding([1.0, float("nan"), 0.0])])
+
+    try:
+        embedding_service.validate_provider_embeddings(
+            provider,
+            provider.embeddings,
+            expected_count=1,
+            context_ids=["chunk_nan"],
+        )
+    except embedding_service.EmbeddingProviderError as error:
+        assert "chunk_nan" in str(error)
+        assert "non-finite" in str(error)
+    else:
+        raise AssertionError("Expected EmbeddingProviderError")
 
 
 def test_semantic_search_ranks_related_chunk_first(tmp_path: Path, monkeypatch) -> None:

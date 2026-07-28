@@ -198,7 +198,7 @@ frontend/dist/
 - `backend/app/routers/statistics.py`：統計 API，支援可選 `roc_year` 篩選。
 - `backend/app/routers/summaries.py`：案件摘要 API。
 - `backend/app/services/case_service.py`：案件查詢、篩選、分頁、PDF path resolver。
-- `backend/app/services/embedding_service.py`：embedding provider 介面、本機 CJK hashing vector、chunk embedding 建置、chunk 語意搜尋與案件層級語意相似；目前 `local` 可用，`openai` / `ai` 會明確回報尚未實作。
+- `backend/app/services/embedding_service.py`：embedding provider 介面、本機 CJK hashing vector、chunk embedding 建置、chunk 語意搜尋與案件層級語意相似；目前 `local` 可用，`openai` / `ai` 會明確回報尚未實作，並會驗證 provider 輸出筆數、維度、token_count、norm 與非有限數值。
 - `backend/app/services/quality_service.py`：ROC 114 分析驗證報告資料。
 - `backend/app/services/search_service.py`：FTS5 搜尋、LIKE fallback、snippet 產生；FTS5 報錯或 0 筆時會進 LIKE fallback，且 fallback 會查案號、爭議類型與 normalized text。
 - `backend/app/services/similar_case_service.py`：規則式相似案件計分。
@@ -214,7 +214,7 @@ frontend/dist/
 - `backend/tests/test_build_case_chunks.py`：chunking 邏輯、section hint 與 SQLite 寫入測試。
 - `backend/tests/test_cross_year_pipeline_defaults.py`：跨年度 pipeline 預設輸出路徑測試。
 - `backend/tests/test_data_quality.py`：資料品質檢查測試。
-- `backend/tests/test_embedding_service.py`：本機 embedding、provider factory、預留 AI provider 錯誤、非法維度、embedding 寫入、語意搜尋排序與案件層級語意相似測試。
+- `backend/tests/test_embedding_service.py`：本機 embedding、provider factory、預留 AI provider 錯誤、非法維度、fake provider、provider 輸出驗證、embedding 寫入、語意搜尋排序與案件層級語意相似測試。
 - `backend/tests/test_import_cases_to_db.py`：SQLite 匯入腳本測試，包含多 metadata 匯入與 metadata 目錄解析。
 - `backend/tests/test_search_service.py`：搜尋 fallback 單元測試，覆蓋 normalized text、案號與爭議類型 fallback。
 - `backend/tests/test_similar_case_service.py`：相似案件 service 單元測試。
@@ -1209,7 +1209,7 @@ http://127.0.0.1:5173
 
 2026-07-28 已完成以下檢查：
 
-- `py -m pytest`：47 passed。
+- `py -m pytest`：52 passed。
 - `py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks --require-embeddings`：passed，`cases = 2992`、`case_chunks = 17254`、`chunk_embeddings = 17254`。
 - `py -m py_compile .\backend\app\services\embedding_service.py .\backend\scripts\build_chunk_embeddings.py`：通過。
 - `py .\backend\scripts\build_chunk_embeddings.py --help`：可正常顯示 provider、model、dims 與 limit 參數。
@@ -1247,6 +1247,7 @@ http://127.0.0.1:5173
 - 已新增案件層級語意相似 API 與案件詳情頁區塊，可展示相似案件、分數與實際命中 chunk。
 - 已建立 embedding provider 介面，目前可用 provider 為 `local`，`openai` / `ai` 會明確提示尚未實作。
 - 已新增 `docs/ai_embedding_provider_plan.md`，規劃正式 AI embedding provider 的環境變數、API key 管理、batch、retry、費用控制、DB model version、測試與 embeddings 重建流程。
+- 已補上正式 AI provider 實作前測試保護，包含 fake provider、provider 回傳筆數檢查、向量維度檢查、`token_count` / `norm` 檢查與非有限數值檢查。
 
 ### 下一步：串接實際 AI embedding model 或擴大跨年度資料
 

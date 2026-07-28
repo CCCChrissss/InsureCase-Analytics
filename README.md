@@ -29,6 +29,7 @@
 - 案件詳情頁語意相似案件區塊，展示案件層級語意相似與命中段落
 - 後端 pytest 測試
 - 案件詳情、PDF、摘要、相似案件與語意相似案件 API 測試
+- 正式 AI provider 實作前測試保護，包含 fake provider、輸出筆數、維度與非有限數值檢查
 - 前端基本 build 驗證
 - 跨年度匯入前置支援
 - ROC 114 一月小期間跨年度試跑文件
@@ -291,6 +292,8 @@ EMBEDDING_DIMS=384
 
 正式 AI provider 接入前的工程規格已整理在 `docs/ai_embedding_provider_plan.md`。
 
+目前也已補上實作前測試保護：provider 回傳 embeddings 時會檢查筆數、向量維度、`token_count`、`norm` 與非有限數值；測試使用 fake provider，不會呼叫外部 API。
+
 若設定 `EMBEDDING_PROVIDER=openai` 或 `EMBEDDING_PROVIDER=ai`，目前後端會明確拋出 `EmbeddingProviderError`，避免誤以為已經串接正式 AI。未來要替換成正式 AI embedding model 時，建議流程是：
 
 ```text
@@ -543,8 +546,9 @@ pnpm build
 ```text
 1. 依 docs/ai_embedding_provider_plan.md 決定正式 provider 與 model
 2. 實作 OpenAI 或其他正式 AI embedding provider
-3. 試跑 ROC 116 小期間資料
-4. 導入 Docker / CI / 部署設定
+3. 用 --limit 20 / --limit 100 小批量試跑 embeddings
+4. 試跑 ROC 116 小期間資料
+5. 導入 Docker / CI / 部署設定
 ```
 
 ## Project Positioning

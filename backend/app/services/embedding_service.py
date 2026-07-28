@@ -9,7 +9,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Protocol
+from typing import Any, Iterable, Protocol, Sequence
 
 from backend.app.config import EMBEDDING_DIMS
 from backend.app.config import EMBEDDING_MODEL
@@ -139,6 +139,34 @@ def dot_product(left: Iterable[float], right: Iterable[float]) -> float:
     return sum(a * b for a, b in zip(left, right))
 
 
+def validate_provider_embeddings(
+    provider: EmbeddingProvider,
+    embeddings: Sequence[EmbeddedText],
+    *,
+    expected_count: int,
+    context_ids: Sequence[str],
+) -> None:
+    if len(embeddings) != expected_count:
+        raise EmbeddingProviderError(
+            f"Embedding provider '{provider.provider_name}' returned {len(embeddings)} embeddings "
+            f"for {expected_count} input texts."
+        )
+
+    for index, embedded in enumerate(embeddings):
+        context_id = context_ids[index] if index < len(context_ids) else str(index)
+        if len(embedded.vector) != provider.dims:
+            raise EmbeddingProviderError(
+                f"Embedding vector for {context_id} has {len(embedded.vector)} dimensions, "
+                f"expected {provider.dims}."
+            )
+        if embedded.token_count < 0:
+            raise EmbeddingProviderError(f"Embedding token_count for {context_id} must not be negative.")
+        if not math.isfinite(embedded.norm) or embedded.norm < 0:
+            raise EmbeddingProviderError(f"Embedding norm for {context_id} must be a finite non-negative number.")
+        if any(not math.isfinite(value) for value in embedded.vector):
+            raise EmbeddingProviderError(f"Embedding vector for {context_id} contains non-finite values.")
+
+
 def initialize_schema(connection: sqlite3.Connection) -> None:
     schema_path = Path(__file__).resolve().parents[2] / "schema.sql"
     connection.executescript(schema_path.read_text(encoding="utf-8"))
@@ -160,6 +188,12 @@ def replace_chunk_embeddings(
 
     texts = [row["chunk_text"] or "" for row in rows]
     embeddings = provider.embed_texts(texts)
+    validate_provider_embeddings(
+        provider,
+        embeddings,
+        expected_count=len(texts),
+        context_ids=[row["chunk_id"] for row in rows],
+    )
     for row, embedded in zip(rows, embeddings):
         if embedded.token_count == 0 or embedded.norm == 0:
             empty_chunk_ids.append(row["chunk_id"])
@@ -261,7 +295,14 @@ def semantic_search(
     min_score: float = 0.0,
 ) -> dict[str, Any]:
     provider = create_embedding_provider(provider_name=provider_name, model_name=model_name)
-    embedded_query = provider.embed_texts([query])[0]
+    query_embeddings = provider.embed_texts([query])
+    validate_provider_embeddings(
+        provider,
+        query_embeddings,
+        expected_count=1,
+        context_ids=["query"],
+    )
+    embedded_query = query_embeddings[0]
     safe_limit = min(max(limit, 1), 50)
     if embedded_query.token_count == 0 or embedded_query.norm == 0:
         return {
