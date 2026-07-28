@@ -8,6 +8,12 @@ from backend.app.main import app
 client = TestClient(app)
 
 
+def first_case_id() -> str:
+    response = client.get("/api/cases", params={"page_size": 1})
+    assert response.status_code == 200
+    return response.json()["items"][0]["case_id"]
+
+
 def test_health() -> None:
     response = client.get("/api/health")
 
@@ -56,6 +62,46 @@ def test_cases() -> None:
     assert data["items"][0]["case_number"]
 
 
+def test_case_detail_includes_metadata_and_text() -> None:
+    case_id = first_case_id()
+
+    response = client.get(f"/api/cases/{case_id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["case_id"] == case_id
+    assert data["case_number"]
+    assert data["roc_year"] in {114, 115}
+    assert data["dispute_type"]
+    assert data["pdf_path"]
+    assert data["metadata_path"]
+    assert data["normalized_text"]
+    assert data["normalized_text_chars"] == len(data["normalized_text"])
+    assert data["raw_text_chars"] >= data["normalized_text_chars"]
+
+
+def test_case_detail_not_found() -> None:
+    response = client.get("/api/cases/not-a-real-case-id")
+
+    assert response.status_code == 404
+
+
+def test_case_pdf() -> None:
+    case_id = first_case_id()
+
+    response = client.get(f"/api/files/{case_id}/pdf")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.content.startswith(b"%PDF")
+
+
+def test_case_pdf_not_found() -> None:
+    response = client.get("/api/files/not-a-real-case-id/pdf")
+
+    assert response.status_code == 404
+
+
 def test_search_cancer() -> None:
     response = client.get("/api/search", params={"q": "癌症", "page_size": 5})
 
@@ -78,8 +124,7 @@ def test_case_summary_not_found() -> None:
 
 
 def test_case_summary() -> None:
-    cases_response = client.get("/api/cases", params={"page_size": 1})
-    case_id = cases_response.json()["items"][0]["case_id"]
+    case_id = first_case_id()
 
     response = client.get(f"/api/cases/{case_id}/summary")
 
@@ -92,8 +137,7 @@ def test_case_summary() -> None:
 
 
 def test_similar_cases() -> None:
-    cases_response = client.get("/api/cases", params={"page_size": 1})
-    case_id = cases_response.json()["items"][0]["case_id"]
+    case_id = first_case_id()
 
     response = client.get(f"/api/cases/{case_id}/similar", params={"limit": 5})
 
@@ -109,6 +153,33 @@ def test_similar_cases() -> None:
 
 def test_similar_cases_not_found() -> None:
     response = client.get("/api/cases/not-a-real-case-id/similar")
+
+    assert response.status_code == 404
+
+
+def test_semantic_similar_cases() -> None:
+    case_id = first_case_id()
+
+    response = client.get(
+        f"/api/cases/{case_id}/semantic-similar",
+        params={"limit": 2, "chunks_per_case": 1},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["case_id"] == case_id
+    assert data["embedding_model"] == "local_hashing_cjk_v1"
+    assert data["source_chunk_count"] >= 1
+    assert data["total_candidates"] >= 1
+    assert 1 <= len(data["items"]) <= 2
+    assert all(item["case_id"] != case_id for item in data["items"])
+    assert data["items"][0]["score"] > 0
+    assert len(data["items"][0]["matched_chunks"]) == 1
+    assert data["items"][0]["matched_chunks"][0]["chunk_text"]
+
+
+def test_semantic_similar_cases_not_found() -> None:
+    response = client.get("/api/cases/not-a-real-case-id/semantic-similar")
 
     assert response.status_code == 404
 

@@ -208,7 +208,7 @@ frontend/dist/
 - `backend/scripts/import_cases_to_db.py`：讀取單一或多個 metadata 與文字檔，匯入 SQLite。
 - `backend/scripts/verify_case_db.py`：驗證 SQLite 筆數、搜尋、路徑與 sample case；可用 `--require-chunks` 與 `--require-embeddings` 檢查 chunk 與 embedding 完整性。
 - `backend/scripts/check_data_quality.py`：檢查 metadata 與 SQLite DB 是否含 mojibake 類異常字元。
-- `backend/tests/test_api.py`：API smoke tests。
+- `backend/tests/test_api.py`：API smoke tests，覆蓋 health、statistics、cases、case detail、PDF、search、summary、similar、semantic-similar 與 quality。
 - `backend/tests/test_build_case_chunks.py`：chunking 邏輯、section hint 與 SQLite 寫入測試。
 - `backend/tests/test_cross_year_pipeline_defaults.py`：跨年度 pipeline 預設輸出路徑測試。
 - `backend/tests/test_data_quality.py`：資料品質檢查測試。
@@ -545,7 +545,7 @@ Query parameters：
 GET /api/cases/{case_id}
 ```
 
-用途：取得單一案件詳情，包含 metadata、raw text、normalized text 與文字統計。
+用途：取得單一案件詳情，包含 metadata、raw text、normalized text、文字統計與本地資料路徑。
 
 ```text
 GET /api/dispute-types
@@ -557,7 +557,7 @@ GET /api/dispute-types
 GET /api/files/{case_id}/pdf
 ```
 
-用途：依案件 ID 回傳 PDF 檔案。
+用途：依案件 ID 回傳 PDF 檔案；後端測試會確認存在案件可回傳 `application/pdf`。
 
 ### Search
 
@@ -742,6 +742,7 @@ Query parameters：
 - 分析驗證 API。
 - 統計 API，支援年度篩選。
 - 後端 pytest 測試。
+- 案件詳情展示鏈 API 測試，覆蓋詳情、PDF、摘要、規則式相似案件與語意相似案件。
 - OpenAPI docs 可由 FastAPI 自動產生。
 
 ### 前端
