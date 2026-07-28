@@ -18,6 +18,7 @@ from backend.app.database import connect
 
 LOCAL_PROVIDER_NAME = "local"
 LOCAL_MODEL_NAME = "local_hashing_cjk_v1"
+RESERVED_AI_PROVIDER_NAMES = {"openai", "ai"}
 MODEL_NAME = EMBEDDING_MODEL
 DEFAULT_DIMS = EMBEDDING_DIMS
 TOKEN_RE = re.compile(r"[A-Za-z0-9_]{2,}")
@@ -62,7 +63,10 @@ def create_embedding_provider(
 ) -> EmbeddingProvider:
     resolved_provider = (provider_name or EMBEDDING_PROVIDER).strip().lower()
     resolved_model = (model_name or EMBEDDING_MODEL).strip()
-    resolved_dims = dims or EMBEDDING_DIMS
+    resolved_dims = EMBEDDING_DIMS if dims is None else dims
+
+    if resolved_dims <= 0:
+        raise EmbeddingProviderError("Embedding dimensions must be greater than 0.")
 
     if resolved_provider in {LOCAL_PROVIDER_NAME, "local_hashing"}:
         return LocalHashingEmbeddingProvider(
@@ -70,13 +74,15 @@ def create_embedding_provider(
             dims=resolved_dims,
         )
 
-    if resolved_provider in {"openai", "ai"}:
+    if resolved_provider in RESERVED_AI_PROVIDER_NAMES:
         raise EmbeddingProviderError(
-            "OpenAI embedding provider is configured but not implemented in this code path yet. "
-            "Use EMBEDDING_PROVIDER=local for the current MVP, or add an OpenAI provider implementation before rebuilding embeddings."
+            f"Embedding provider '{resolved_provider}' is reserved for a future external AI integration "
+            "but is not implemented in this code path yet. Use EMBEDDING_PROVIDER=local for the current MVP, "
+            "or implement the provider in backend/app/services/embedding_service.py before rebuilding embeddings."
         )
 
-    raise EmbeddingProviderError(f"Unsupported embedding provider: {resolved_provider}")
+    supported = ", ".join(sorted({LOCAL_PROVIDER_NAME, "local_hashing", *RESERVED_AI_PROVIDER_NAMES}))
+    raise EmbeddingProviderError(f"Unsupported embedding provider: {resolved_provider}. Known providers: {supported}.")
 
 
 def now_iso() -> str:

@@ -25,12 +25,16 @@ DEFAULT_DB_PATH = resolve_project_path(os.environ.get("INSURANCE_CASES_DB_PATH",
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Build local embeddings for case chunks.")
-    parser.add_argument("--db", type=Path, default=DEFAULT_DB_PATH)
-    parser.add_argument("--provider", default=EMBEDDING_PROVIDER)
-    parser.add_argument("--model", default=MODEL_NAME)
-    parser.add_argument("--dims", type=int, default=DEFAULT_DIMS)
-    parser.add_argument("--limit", type=int, default=None)
+    parser = argparse.ArgumentParser(description="Build embeddings for case chunks.")
+    parser.add_argument("--db", type=Path, default=DEFAULT_DB_PATH, help="SQLite database path.")
+    parser.add_argument(
+        "--provider",
+        default=EMBEDDING_PROVIDER,
+        help="Embedding provider name. Current implemented provider: local.",
+    )
+    parser.add_argument("--model", default=MODEL_NAME, help="Embedding model name stored in chunk_embeddings.")
+    parser.add_argument("--dims", type=int, default=DEFAULT_DIMS, help="Embedding vector dimensions.")
+    parser.add_argument("--limit", type=int, default=None, help="Optional chunk limit for trial runs.")
     return parser.parse_args()
 
 

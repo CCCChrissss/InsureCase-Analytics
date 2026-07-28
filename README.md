@@ -289,6 +289,21 @@ EMBEDDING_DIMS=384
 
 `local` 是目前可用 provider；`openai` / AI provider 介面已預留，但尚未實作外部 API 呼叫。
 
+若設定 `EMBEDDING_PROVIDER=openai` 或 `EMBEDDING_PROVIDER=ai`，目前後端會明確拋出 `EmbeddingProviderError`，避免誤以為已經串接正式 AI。未來要替換成正式 AI embedding model 時，建議流程是：
+
+```text
+1. 在 backend/app/services/embedding_service.py 實作新的 provider。
+2. 在 .env 或部署平台 secret 設定 API key，不要提交到 Git。
+3. 使用新的 EMBEDDING_PROVIDER / EMBEDDING_MODEL 重建 chunk_embeddings。
+4. 執行 pytest 與 verify_case_db，確認 API 與資料完整性。
+```
+
+重建 embeddings 範例：
+
+```powershell
+py .\backend\scripts\build_chunk_embeddings.py --provider local --model local_hashing_cjk_v1 --dims 384
+```
+
 ### Quality Report
 
 分析驗證 API 回傳 ROC 114 摘要與相似案件品質檢查結果：

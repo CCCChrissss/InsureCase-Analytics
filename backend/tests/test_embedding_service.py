@@ -81,6 +81,38 @@ def test_openai_embedding_provider_is_explicitly_not_implemented() -> None:
         embedding_service.create_embedding_provider(provider_name="openai")
     except embedding_service.EmbeddingProviderError as error:
         assert "not implemented" in str(error)
+        assert "EMBEDDING_PROVIDER=local" in str(error)
+    else:
+        raise AssertionError("Expected EmbeddingProviderError")
+
+
+def test_ai_embedding_provider_is_explicitly_reserved() -> None:
+    try:
+        embedding_service.create_embedding_provider(provider_name="ai")
+    except embedding_service.EmbeddingProviderError as error:
+        assert "reserved for a future external AI integration" in str(error)
+        assert "embedding_service.py" in str(error)
+    else:
+        raise AssertionError("Expected EmbeddingProviderError")
+
+
+def test_unsupported_embedding_provider_lists_known_options() -> None:
+    try:
+        embedding_service.create_embedding_provider(provider_name="unknown")
+    except embedding_service.EmbeddingProviderError as error:
+        message = str(error)
+        assert "Unsupported embedding provider: unknown" in message
+        assert "local" in message
+        assert "openai" in message
+    else:
+        raise AssertionError("Expected EmbeddingProviderError")
+
+
+def test_embedding_provider_rejects_invalid_dimensions() -> None:
+    try:
+        embedding_service.create_embedding_provider(provider_name="local", dims=0)
+    except embedding_service.EmbeddingProviderError as error:
+        assert "dimensions must be greater than 0" in str(error)
     else:
         raise AssertionError("Expected EmbeddingProviderError")
 
@@ -101,6 +133,9 @@ def test_build_chunk_embeddings_writes_one_embedding_per_chunk(tmp_path: Path) -
 
     assert report["processed_chunks"] == 2
     assert report["embedded_chunks"] == 2
+    assert report["embedding_provider"] == "local"
+    assert report["embedding_model"] == "local_hashing_cjk_v1"
+    assert report["embedding_dims"] == 64
     assert report["total_embeddings_in_table"] == 2
     assert report["empty_chunk_count"] == 0
 

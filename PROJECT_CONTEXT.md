@@ -161,7 +161,7 @@ frontend/dist/
 ### 根目錄
 
 - `.gitignore`：忽略 Python cache、虛擬環境、`.env`、資料產物、SQLite DB、前端 dependencies、前端 build 產物與本機工具狀態。
-- `.env.example`：根目錄環境變數範例，包含後端 DB path、CORS origins、embedding provider 設定與前端 API base URL。
+- `.env.example`：根目錄環境變數範例，包含後端 DB path、CORS origins、embedding provider 設定與前端 API base URL；目前標示 `local` 為唯一已實作 provider，`openai` / `ai` 為預留名稱。
 - `README.md`：專案介紹、目前資料狀態、pipeline、後端與前端啟動方式。
 - `requirements.txt`：Python 相依套件，包含 `beautifulsoup4`、`fastapi`、`httpx`、`pdfplumber`、`pypdf`、`pytest`、`requests`、`uvicorn`。
 - `foi_ods_life_mvp_crawler.py`：FOI ODS metadata 與 PDF URL 爬蟲。
@@ -178,7 +178,7 @@ frontend/dist/
 - `docs/cross_year_trial_run_roc114_january.md`：ROC 114 一月小期間跨年度試跑報告，記錄 112 筆 metadata、PDF/text 與案件整理成功結果。
 - `docs/cross_year_trial_run_roc114_full_year.md`：ROC 114 全年度跨年度試跑報告，記錄 2500 筆 metadata、PDF/text、案件整理與 trial DB 驗證結果。
 - `docs/roc114_summary_similarity_quality_check.md`：ROC 114 摘要與相似案件抽樣品質檢查，記錄摘要覆蓋率、截段污染檢查、相似案件 top 5 檢查與已知例外。
-- `docs/embedding_pipeline.md`：本機 chunk embedding MVP、語意搜尋 API 與後續升級路線。
+- `docs/embedding_pipeline.md`：本機 chunk embedding MVP、語意搜尋 API、provider 狀態與後續正式 AI provider 升級路線。
 
 ### backend
 
@@ -196,7 +196,7 @@ frontend/dist/
 - `backend/app/routers/statistics.py`：統計 API，支援可選 `roc_year` 篩選。
 - `backend/app/routers/summaries.py`：案件摘要 API。
 - `backend/app/services/case_service.py`：案件查詢、篩選、分頁、PDF path resolver。
-- `backend/app/services/embedding_service.py`：embedding provider 介面、本機 CJK hashing vector、chunk embedding 建置、chunk 語意搜尋與案件層級語意相似。
+- `backend/app/services/embedding_service.py`：embedding provider 介面、本機 CJK hashing vector、chunk embedding 建置、chunk 語意搜尋與案件層級語意相似；目前 `local` 可用，`openai` / `ai` 會明確回報尚未實作。
 - `backend/app/services/quality_service.py`：ROC 114 分析驗證報告資料。
 - `backend/app/services/search_service.py`：FTS5 搜尋、LIKE fallback、snippet 產生；FTS5 報錯或 0 筆時會進 LIKE fallback，且 fallback 會查案號、爭議類型與 normalized text。
 - `backend/app/services/similar_case_service.py`：規則式相似案件計分。
@@ -204,7 +204,7 @@ frontend/dist/
 - `backend/app/services/summary_service.py`：案件摘要查詢。
 - `backend/scripts/extract_case_summaries.py`：從 normalized text 產生規則式摘要並寫入 `case_summaries`；已支援「二、申請人主張」與非固定序號的「判斷理由」標題。
 - `backend/scripts/build_case_chunks.py`：將 `case_texts.normalized_text` 切成可重跑的 `case_chunks`，保留 section hint、字元起訖位置與 chunk 長度，作為後續 embedding 前置資料。
-- `backend/scripts/build_chunk_embeddings.py`：為 `case_chunks` 建立 embedding，支援 `--provider`，目前可用 provider 為 `local`。
+- `backend/scripts/build_chunk_embeddings.py`：為 `case_chunks` 建立 embedding，支援 `--provider`、`--model`、`--dims` 與 `--limit`，目前可用 provider 為 `local`。
 - `backend/scripts/import_cases_to_db.py`：讀取單一或多個 metadata 與文字檔，匯入 SQLite。
 - `backend/scripts/verify_case_db.py`：驗證 SQLite 筆數、搜尋、路徑與 sample case；可用 `--require-chunks` 與 `--require-embeddings` 檢查 chunk 與 embedding 完整性。
 - `backend/scripts/check_data_quality.py`：檢查 metadata 與 SQLite DB 是否含 mojibake 類異常字元。
@@ -212,7 +212,7 @@ frontend/dist/
 - `backend/tests/test_build_case_chunks.py`：chunking 邏輯、section hint 與 SQLite 寫入測試。
 - `backend/tests/test_cross_year_pipeline_defaults.py`：跨年度 pipeline 預設輸出路徑測試。
 - `backend/tests/test_data_quality.py`：資料品質檢查測試。
-- `backend/tests/test_embedding_service.py`：本機 embedding、provider factory、embedding 寫入、語意搜尋排序與案件層級語意相似測試。
+- `backend/tests/test_embedding_service.py`：本機 embedding、provider factory、預留 AI provider 錯誤、非法維度、embedding 寫入、語意搜尋排序與案件層級語意相似測試。
 - `backend/tests/test_import_cases_to_db.py`：SQLite 匯入腳本測試，包含多 metadata 匯入與 metadata 目錄解析。
 - `backend/tests/test_search_service.py`：搜尋 fallback 單元測試，覆蓋 normalized text、案號與爭議類型 fallback。
 - `backend/tests/test_similar_case_service.py`：相似案件 service 單元測試。
@@ -485,7 +485,13 @@ PRIMARY KEY(chunk_id, embedding_model)
 local_hashing_cjk_v1
 ```
 
-注意：這是學校專題版的本機 hashing vector MVP，不等同於正式語意 embedding model。
+目前 provider 狀態：
+
+- `local`：唯一已實作 provider，使用本機 CJK hashing vector。
+- `local_hashing`：`local` 的相容別名。
+- `openai` / `ai`：預留給未來正式 AI provider，目前會明確拋出 `EmbeddingProviderError`。
+
+注意：這是學校專題版的本機 hashing vector MVP，不等同於正式語意 embedding model。若未來換正式 AI model，只改環境變數不會更新既有資料，必須用新 provider / model 重建 `chunk_embeddings`。
 
 ### `case_search`
 
@@ -1030,6 +1036,12 @@ py .\backend\scripts\build_case_chunks.py --db .\backend\data\insurance_cases.db
 py .\backend\scripts\build_chunk_embeddings.py --db .\backend\data\insurance_cases.db
 ```
 
+可指定 provider、model、dims 與小批量試跑：
+
+```powershell
+py .\backend\scripts\build_chunk_embeddings.py --provider local --model local_hashing_cjk_v1 --dims 384 --limit 100
+```
+
 目前正式 DB 驗證結果：
 
 - `processed_chunks` = 17254
@@ -1192,15 +1204,12 @@ http://127.0.0.1:5173
 
 ### 最近一次本機穩定檢查
 
-2026-07-22 已完成以下檢查：
+2026-07-28 已完成以下檢查：
 
-- `py -m pytest`：36 passed。
+- `py -m pytest`：47 passed。
 - `py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks --require-embeddings`：passed，`cases = 2992`、`case_chunks = 17254`、`chunk_embeddings = 17254`。
-- `pnpm build`：TypeScript 與 Vite build 成功；僅有 chunk size warning。
-- `py -m py_compile`：後端主要設定、service 與 router 檔案通過語法檢查。
-- 本機後端 `http://127.0.0.1:8000/api/health` 回傳 `status = ok`、`database_ready = true`。
-- 本機前端 `http://127.0.0.1:5173/` 可回傳首頁 HTML。
-- 瀏覽器人工檢查 Dashboard、案件、全文搜尋、語意搜尋、統計 direct route、分析驗證頁皆可載入，console 無 error。
+- `py -m py_compile .\backend\app\services\embedding_service.py .\backend\scripts\build_chunk_embeddings.py`：通過。
+- `py .\backend\scripts\build_chunk_embeddings.py --help`：可正常顯示 provider、model、dims 與 limit 參數。
 
 注意：語意搜尋頁第一次載入會計算 17254 筆 chunk embedding 相似度，可能短暫顯示「載入中」；等待數秒後會顯示結果。
 

@@ -57,8 +57,16 @@ py .\backend\scripts\build_chunk_embeddings.py --db .\backend\data\insurance_cas
 可選參數：
 
 ```powershell
-py .\backend\scripts\build_chunk_embeddings.py --dims 384 --limit 100
+py .\backend\scripts\build_chunk_embeddings.py --provider local --model local_hashing_cjk_v1 --dims 384 --limit 100
 ```
+
+provider 狀態：
+
+- `local`：目前唯一已實作 provider。
+- `local_hashing`：`local` 的相容別名。
+- `openai` / `ai`：預留給未來正式 AI integration，目前會明確拋出錯誤，不會自動 fallback。
+
+注意：`chunk_embeddings.embedding_model` 是 API 查詢時用來選向量的關鍵欄位。只改環境變數不會改變既有 DB 內的向量；換正式模型後必須重建 embeddings。
 
 ## 驗證方式
 
@@ -170,10 +178,11 @@ GET /api/cases/{case_id}/semantic-similar?limit=5
 
 1. 在 `backend/app/services/embedding_service.py` 實作 OpenAI 或其他 AI provider 的 `embed_texts(texts)`。
 2. 保留目前 `local` provider 作為 fallback。
-3. 新增必要環境變數，例如 provider、model、API key 名稱。
+3. 新增必要環境變數，例如 provider、model、API key 名稱；API key 只能放在 `.env` 或部署平台 secret。
 4. 重跑 `backend/scripts/build_chunk_embeddings.py`，用新 `embedding_model` 名稱寫入 `chunk_embeddings`。
-5. API query 可增加 `embedding_model` 參數，讓展示時能比較 local model 與 AI model。
-6. 若資料量擴大，再將 SQLite BLOB 改成 PostgreSQL + pgvector 或其他 ANN index。
+5. 執行 `py -m pytest` 與 `verify_case_db.py --require-embeddings`。
+6. API query 可增加 `embedding_model` 參數，讓展示時能比較 local model 與 AI model。
+7. 若資料量擴大，再將 SQLite BLOB 改成 PostgreSQL + pgvector 或其他 ANN index。
 
 注意：不要把 API key 寫入程式碼或 commit 到 Git；應使用 `.env` / 環境變數，並只在 `.env.example` 說明變數名稱。
 
