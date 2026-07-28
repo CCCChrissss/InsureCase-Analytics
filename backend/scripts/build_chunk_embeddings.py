@@ -30,7 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--provider",
         default=EMBEDDING_PROVIDER,
-        help="Embedding provider name. Current implemented provider: local.",
+        help="Embedding provider name. Implemented providers: local, huggingface.",
     )
     parser.add_argument("--model", default=MODEL_NAME, help="Embedding model name stored in chunk_embeddings.")
     parser.add_argument("--dims", type=int, default=DEFAULT_DIMS, help="Embedding vector dimensions.")

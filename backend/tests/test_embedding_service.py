@@ -62,6 +62,38 @@ class FakeEmbeddingProvider:
         return self.embeddings
 
 
+class FakeHuggingFaceResponse:
+    def __init__(self, *, status_code: int = 200, payload=None, text: str = "") -> None:
+        self.status_code = status_code
+        self.payload = payload
+        self.text = text
+
+    def json(self):
+        if isinstance(self.payload, Exception):
+            raise self.payload
+        return self.payload
+
+
+class FakeHuggingFaceClient:
+    def __init__(self, responses: list[FakeHuggingFaceResponse | Exception]) -> None:
+        self.responses = responses
+        self.calls = []
+
+    def post(self, url: str, *, headers: dict, json: dict, timeout: float):
+        self.calls.append(
+            {
+                "url": url,
+                "headers": headers,
+                "json": json,
+                "timeout": timeout,
+            }
+        )
+        response = self.responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+
 def make_embedding(vector: list[float], *, norm: float = 1.0, token_count: int = 1) -> embedding_service.EmbeddedText:
     return embedding_service.EmbeddedText(vector=vector, norm=norm, token_count=token_count)
 
@@ -128,6 +160,7 @@ def test_unsupported_embedding_provider_lists_known_options() -> None:
     except embedding_service.EmbeddingProviderError as error:
         message = str(error)
         assert "Unsupported embedding provider: unknown" in message
+        assert "huggingface" in message
         assert "local" in message
         assert "openai" in message
     else:
@@ -141,6 +174,139 @@ def test_embedding_provider_rejects_invalid_dimensions() -> None:
         assert "dimensions must be greater than 0" in str(error)
     else:
         raise AssertionError("Expected EmbeddingProviderError")
+
+
+def test_huggingface_embedding_provider_requires_api_key() -> None:
+    try:
+        embedding_service.HuggingFaceEmbeddingProvider(
+            model_name=embedding_service.HUGGINGFACE_DEFAULT_MODEL_NAME,
+            dims=1024,
+            api_key="",
+        )
+    except embedding_service.EmbeddingProviderError as error:
+        assert "EMBEDDING_API_KEY or HF_TOKEN" in str(error)
+    else:
+        raise AssertionError("Expected EmbeddingProviderError")
+
+
+def test_create_huggingface_provider_uses_default_model_and_dimensions(monkeypatch) -> None:
+    monkeypatch.setattr(embedding_service, "EMBEDDING_API_KEY", "hf_test")
+
+    provider = embedding_service.create_embedding_provider(provider_name="hf")
+
+    assert provider.provider_name == "huggingface"
+    assert provider.model_name == embedding_service.HUGGINGFACE_DEFAULT_MODEL_NAME
+    assert provider.dims == embedding_service.HUGGINGFACE_DEFAULT_DIMS
+
+
+def test_huggingface_embedding_provider_embeds_batch_with_fake_response() -> None:
+    fake_client = FakeHuggingFaceClient(
+        [
+            FakeHuggingFaceResponse(
+                payload=[
+                    [1.0, 0.0, 0.0],
+                    [0.0, 2.0, 0.0],
+                ]
+            )
+        ]
+    )
+    provider = embedding_service.HuggingFaceEmbeddingProvider(
+        model_name=embedding_service.HUGGINGFACE_DEFAULT_MODEL_NAME,
+        dims=3,
+        api_key="hf_test",
+        batch_size=2,
+        max_retries=0,
+        http_client=fake_client,
+    )
+
+    embeddings = provider.embed_texts(["癌症保險金", "住院日額"])
+
+    assert len(embeddings) == 2
+    assert embeddings[0].vector == [1.0, 0.0, 0.0]
+    assert embeddings[0].norm == 1.0
+    assert embeddings[0].token_count > 0
+    assert embeddings[1].vector == [0.0, 1.0, 0.0]
+    assert embeddings[1].norm == 2.0
+    assert fake_client.calls[0]["url"].endswith("/BAAI/bge-large-zh-v1.5")
+    assert fake_client.calls[0]["headers"]["Authorization"] == "Bearer hf_test"
+    assert fake_client.calls[0]["json"] == {
+        "inputs": ["癌症保險金", "住院日額"],
+        "options": {"wait_for_model": True},
+    }
+
+
+def test_huggingface_embedding_provider_skips_empty_text_without_api_call() -> None:
+    fake_client = FakeHuggingFaceClient([])
+    provider = embedding_service.HuggingFaceEmbeddingProvider(
+        model_name=embedding_service.HUGGINGFACE_DEFAULT_MODEL_NAME,
+        dims=3,
+        api_key="hf_test",
+        http_client=fake_client,
+    )
+
+    embeddings = provider.embed_texts(["   "])
+
+    assert embeddings == [embedding_service.EmbeddedText(vector=[0.0, 0.0, 0.0], norm=0.0, token_count=0)]
+    assert fake_client.calls == []
+
+
+def test_huggingface_embedding_provider_retries_retryable_http_status(monkeypatch) -> None:
+    fake_client = FakeHuggingFaceClient(
+        [
+            FakeHuggingFaceResponse(status_code=503, payload={"error": "loading"}, text="loading"),
+            FakeHuggingFaceResponse(payload=[[1.0, 0.0, 0.0]]),
+        ]
+    )
+    monkeypatch.setattr(embedding_service.time, "sleep", lambda _: None)
+    provider = embedding_service.HuggingFaceEmbeddingProvider(
+        model_name=embedding_service.HUGGINGFACE_DEFAULT_MODEL_NAME,
+        dims=3,
+        api_key="hf_test",
+        max_retries=1,
+        retry_backoff_seconds=0.01,
+        http_client=fake_client,
+    )
+
+    embeddings = provider.embed_texts(["癌症保險金"])
+
+    assert embeddings[0].vector == [1.0, 0.0, 0.0]
+    assert len(fake_client.calls) == 2
+
+
+def test_huggingface_embedding_provider_raises_for_non_retryable_http_error() -> None:
+    fake_client = FakeHuggingFaceClient(
+        [FakeHuggingFaceResponse(status_code=400, payload={"error": "bad request"}, text="bad request")]
+    )
+    provider = embedding_service.HuggingFaceEmbeddingProvider(
+        model_name=embedding_service.HUGGINGFACE_DEFAULT_MODEL_NAME,
+        dims=3,
+        api_key="hf_test",
+        max_retries=3,
+        http_client=fake_client,
+    )
+
+    try:
+        provider.embed_texts(["癌症保險金"])
+    except embedding_service.EmbeddingProviderError as error:
+        assert "HTTP 400" in str(error)
+    else:
+        raise AssertionError("Expected EmbeddingProviderError")
+
+    assert len(fake_client.calls) == 1
+
+
+def test_parse_huggingface_feature_response_supports_common_shapes() -> None:
+    assert embedding_service.parse_huggingface_feature_response([1, 2, 3], expected_count=1) == [[1.0, 2.0, 3.0]]
+    assert embedding_service.parse_huggingface_feature_response([[1, 0], [0, 1]], expected_count=1) == [
+        [0.5, 0.5]
+    ]
+    assert embedding_service.parse_huggingface_feature_response(
+        [
+            [[1, 0], [0, 1]],
+            [[0, 2], [0, 4]],
+        ],
+        expected_count=2,
+    ) == [[0.5, 0.5], [0.0, 3.0]]
 
 
 def test_build_chunk_embeddings_writes_one_embedding_per_chunk(tmp_path: Path) -> None:

@@ -162,7 +162,7 @@ frontend/dist/
 ### 根目錄
 
 - `.gitignore`：忽略 Python cache、虛擬環境、`.env`、資料產物、SQLite DB、前端 dependencies、前端 build 產物與本機工具狀態。
-- `.env.example`：根目錄環境變數範例，包含後端 DB path、CORS origins、embedding provider 設定與前端 API base URL；目前標示 `local` 為唯一已實作 provider，`openai` / `ai` 為預留名稱。
+- `.env.example`：根目錄環境變數範例，包含後端 DB path、CORS origins、embedding provider 設定、Hugging Face provider 範例與前端 API base URL；`openai` / `ai` 仍為預留名稱。
 - `README.md`：專案介紹、目前資料狀態、pipeline、後端與前端啟動方式。
 - `requirements.txt`：Python 相依套件，包含 `beautifulsoup4`、`fastapi`、`httpx`、`pdfplumber`、`pypdf`、`pytest`、`requests`、`uvicorn`。
 - `foi_ods_life_mvp_crawler.py`：FOI ODS metadata 與 PDF URL 爬蟲。
@@ -180,7 +180,7 @@ frontend/dist/
 - `docs/cross_year_trial_run_roc114_full_year.md`：ROC 114 全年度跨年度試跑報告，記錄 2500 筆 metadata、PDF/text、案件整理與 trial DB 驗證結果。
 - `docs/roc114_summary_similarity_quality_check.md`：ROC 114 摘要與相似案件抽樣品質檢查，記錄摘要覆蓋率、截段污染檢查、相似案件 top 5 檢查與已知例外。
 - `docs/embedding_pipeline.md`：本機 chunk embedding MVP、語意搜尋 API、provider 狀態與後續正式 AI provider 升級路線。
-- `docs/ai_embedding_provider_plan.md`：正式 AI embedding provider 接入規格，包含 provider 介面、環境變數、API key 管理、batch、retry、費用控制、DB model version、測試與展示說法。
+- `docs/ai_embedding_provider_plan.md`：正式 AI embedding provider 接入規格與 Hugging Face provider 實作狀態，包含 provider 介面、環境變數、API key 管理、batch、retry、費用控制、DB model version、測試與展示說法。
 
 ### backend
 
@@ -198,7 +198,7 @@ frontend/dist/
 - `backend/app/routers/statistics.py`：統計 API，支援可選 `roc_year` 篩選。
 - `backend/app/routers/summaries.py`：案件摘要 API。
 - `backend/app/services/case_service.py`：案件查詢、篩選、分頁、PDF path resolver。
-- `backend/app/services/embedding_service.py`：embedding provider 介面、本機 CJK hashing vector、chunk embedding 建置、chunk 語意搜尋與案件層級語意相似；目前 `local` 可用，`openai` / `ai` 會明確回報尚未實作，並會驗證 provider 輸出筆數、維度、token_count、norm 與非有限數值。
+- `backend/app/services/embedding_service.py`：embedding provider 介面、本機 CJK hashing vector、Hugging Face Feature Extraction provider、chunk embedding 建置、chunk 語意搜尋與案件層級語意相似；目前 `local` 與 `huggingface` / `hf` 可用，`openai` / `ai` 會明確回報尚未實作，並會驗證 provider 輸出筆數、維度、token_count、norm 與非有限數值。
 - `backend/app/services/quality_service.py`：ROC 114 分析驗證報告資料。
 - `backend/app/services/search_service.py`：FTS5 搜尋、LIKE fallback、snippet 產生；FTS5 報錯或 0 筆時會進 LIKE fallback，且 fallback 會查案號、爭議類型與 normalized text。
 - `backend/app/services/similar_case_service.py`：規則式相似案件計分。
@@ -206,7 +206,7 @@ frontend/dist/
 - `backend/app/services/summary_service.py`：案件摘要查詢。
 - `backend/scripts/extract_case_summaries.py`：從 normalized text 產生規則式摘要並寫入 `case_summaries`；已支援「二、申請人主張」與非固定序號的「判斷理由」標題。
 - `backend/scripts/build_case_chunks.py`：將 `case_texts.normalized_text` 切成可重跑的 `case_chunks`，保留 section hint、字元起訖位置與 chunk 長度，作為後續 embedding 前置資料。
-- `backend/scripts/build_chunk_embeddings.py`：為 `case_chunks` 建立 embedding，支援 `--provider`、`--model`、`--dims` 與 `--limit`，目前可用 provider 為 `local`。
+- `backend/scripts/build_chunk_embeddings.py`：為 `case_chunks` 建立 embedding，支援 `--provider`、`--model`、`--dims` 與 `--limit`，目前可用 provider 為 `local` 與 `huggingface`。
 - `backend/scripts/import_cases_to_db.py`：讀取單一或多個 metadata 與文字檔，匯入 SQLite。
 - `backend/scripts/verify_case_db.py`：驗證 SQLite 筆數、搜尋、路徑與 sample case；可用 `--require-chunks` 與 `--require-embeddings` 檢查 chunk 與 embedding 完整性。
 - `backend/scripts/check_data_quality.py`：檢查 metadata 與 SQLite DB 是否含 mojibake 類異常字元。
@@ -214,7 +214,7 @@ frontend/dist/
 - `backend/tests/test_build_case_chunks.py`：chunking 邏輯、section hint 與 SQLite 寫入測試。
 - `backend/tests/test_cross_year_pipeline_defaults.py`：跨年度 pipeline 預設輸出路徑測試。
 - `backend/tests/test_data_quality.py`：資料品質檢查測試。
-- `backend/tests/test_embedding_service.py`：本機 embedding、provider factory、預留 AI provider 錯誤、非法維度、fake provider、provider 輸出驗證、embedding 寫入、語意搜尋排序與案件層級語意相似測試。
+- `backend/tests/test_embedding_service.py`：本機 embedding、provider factory、預留 AI provider 錯誤、非法維度、fake provider、fake Hugging Face HTTP client、provider 輸出驗證、embedding 寫入、語意搜尋排序與案件層級語意相似測試。
 - `backend/tests/test_import_cases_to_db.py`：SQLite 匯入腳本測試，包含多 metadata 匯入與 metadata 目錄解析。
 - `backend/tests/test_search_service.py`：搜尋 fallback 單元測試，覆蓋 normalized text、案號與爭議類型 fallback。
 - `backend/tests/test_similar_case_service.py`：相似案件 service 單元測試。
@@ -489,11 +489,12 @@ local_hashing_cjk_v1
 
 目前 provider 狀態：
 
-- `local`：唯一已實作 provider，使用本機 CJK hashing vector。
+- `local`：正式展示 DB 目前使用的 provider，使用本機 CJK hashing vector。
 - `local_hashing`：`local` 的相容別名。
-- `openai` / `ai`：預留給未來正式 AI provider，目前會明確拋出 `EmbeddingProviderError`。
+- `huggingface` / `hf`：已實作 Hugging Face Feature Extraction provider，預設模型為 `BAAI/bge-large-zh-v1.5`、維度 1024，需要 `EMBEDDING_API_KEY` 或 `HF_TOKEN`。
+- `openai` / `ai`：預留給未來 OpenAI 類 provider，目前會明確拋出 `EmbeddingProviderError`。
 
-注意：這是學校專題版的本機 hashing vector MVP，不等同於正式語意 embedding model。若未來換正式 AI model，只改環境變數不會更新既有資料，必須用新 provider / model 重建 `chunk_embeddings`。
+注意：正式 DB 目前仍是學校專題版的本機 hashing vector MVP，不等同於正式語意 embedding model。若未來換 Hugging Face 或其他正式 AI model，只改環境變數不會更新既有資料，必須用新 provider / model 重建 `chunk_embeddings`。
 
 ### `case_search`
 
@@ -789,7 +790,7 @@ Query parameters：
 
 ## 9. 尚未完成項目
 
-- 實務級 embedding model。
+- 正式展示 DB 尚未切換為實務級 embedding model。
 - ANN 向量索引。
 - OCR fallback。
 - ROC 116 或更多年度資料蒐集。
@@ -800,8 +801,8 @@ Query parameters：
 - API 錯誤回應格式統一。
 - 正式 React Router。
 - 前端自動化測試。
-- 正式 AI embedding provider 與向量重建流程。
-- 正式 AI embedding provider 目前已有接入規格，但尚未實作外部 API 呼叫。
+- Hugging Face embeddings 尚未對正式 DB 全量重建與抽樣驗證。
+- OpenAI 或其他外部 AI embedding provider 尚未實作。
 - 實務級向量資料庫或 ANN index。
 
 ## 10. 目前可能的 bug 或技術債
@@ -818,7 +819,7 @@ Query parameters：
 
 建議：
 
-- 後續實作正式 AI embedding provider，重建 `chunk_embeddings`，再視資料量導入 pgvector 或其他向量索引。
+- 後續先用 Hugging Face provider 小批量重建 `chunk_embeddings`，抽樣比較品質與成本；若要擴到更多資料，再視資料量導入 pgvector 或其他向量索引。
 
 ### ROC 114 一月亂碼問題已修正
 
@@ -1245,11 +1246,12 @@ http://127.0.0.1:5173
 - 已建立本機 chunk embedding pipeline，正式 DB 目前有 17254 筆 `local_hashing_cjk_v1` embedding，且每個 chunk 皆有 embedding。
 - 已新增前端語意搜尋頁，可展示 query、embedding 模型、候選 chunk、命中 chunk、score、section hint 與案件來源。
 - 已新增案件層級語意相似 API 與案件詳情頁區塊，可展示相似案件、分數與實際命中 chunk。
-- 已建立 embedding provider 介面，目前可用 provider 為 `local`，`openai` / `ai` 會明確提示尚未實作。
-- 已新增 `docs/ai_embedding_provider_plan.md`，規劃正式 AI embedding provider 的環境變數、API key 管理、batch、retry、費用控制、DB model version、測試與 embeddings 重建流程。
+- 已建立 embedding provider 介面，目前可用 provider 為 `local` 與 `huggingface` / `hf`，`openai` / `ai` 會明確提示尚未實作。
+- 已新增 Hugging Face provider 小批量接入口，預設模型為 `BAAI/bge-large-zh-v1.5`、維度 1024，支援 `EMBEDDING_API_KEY` / `HF_TOKEN`、batch、retry、timeout 與 fake HTTP 測試。
+- 已新增 `docs/ai_embedding_provider_plan.md`，規劃正式 AI embedding provider 的環境變數、API key 管理、batch、retry、費用控制、DB model version、測試與 embeddings 重建流程，並記錄 Hugging Face provider 實作狀態。
 - 已補上正式 AI provider 實作前測試保護，包含 fake provider、provider 回傳筆數檢查、向量維度檢查、`token_count` / `norm` 檢查與非有限數值檢查。
 
-### 下一步：串接實際 AI embedding model 或擴大跨年度資料
+### 下一步：小批量試跑 Hugging Face embeddings 或擴大跨年度資料
 
 優先原因：
 
@@ -1260,7 +1262,7 @@ http://127.0.0.1:5173
 
 建議工作：
 
-1. 若要強化語意品質：依 `docs/ai_embedding_provider_plan.md` 決定正式 provider 與 model，再實作 OpenAI 或其他正式 AI embedding provider，並以新 `embedding_model` 重建 `chunk_embeddings`。
+1. 若要強化語意品質：設定 Hugging Face token，以 `--limit 20` / `--limit 100` 小批量建立 `BAAI/bge-large-zh-v1.5` embeddings，抽樣比較 local model 與 Hugging Face model，再決定是否全量重建正式 DB。
 2. 若要強化資料範圍：試跑 ROC 116 小期間。
 
 ### 第 8 階段：跨年度擴充

@@ -5,19 +5,31 @@ import math
 import re
 import sqlite3
 import struct
+import time
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Protocol, Sequence
 
+import requests
+
+from backend.app.config import EMBEDDING_API_KEY
+from backend.app.config import EMBEDDING_BATCH_SIZE
 from backend.app.config import EMBEDDING_DIMS
+from backend.app.config import EMBEDDING_MAX_RETRIES
 from backend.app.config import EMBEDDING_MODEL
 from backend.app.config import EMBEDDING_PROVIDER
+from backend.app.config import EMBEDDING_RETRY_BACKOFF_SECONDS
+from backend.app.config import EMBEDDING_TIMEOUT_SECONDS
+from backend.app.config import HUGGINGFACE_API_BASE_URL
 from backend.app.database import connect
 
 LOCAL_PROVIDER_NAME = "local"
 LOCAL_MODEL_NAME = "local_hashing_cjk_v1"
+HUGGINGFACE_PROVIDER_NAME = "huggingface"
+HUGGINGFACE_DEFAULT_MODEL_NAME = "BAAI/bge-large-zh-v1.5"
+HUGGINGFACE_DEFAULT_DIMS = 1024
 RESERVED_AI_PROVIDER_NAMES = {"openai", "ai"}
 MODEL_NAME = EMBEDDING_MODEL
 DEFAULT_DIMS = EMBEDDING_DIMS
@@ -55,6 +67,108 @@ class LocalHashingEmbeddingProvider:
         return [EmbeddedText(*vectorize_text(text, dims=self.dims)) for text in texts]
 
 
+class HuggingFaceEmbeddingProvider:
+    provider_name = HUGGINGFACE_PROVIDER_NAME
+
+    def __init__(
+        self,
+        *,
+        model_name: str,
+        dims: int,
+        api_key: str,
+        api_base_url: str = HUGGINGFACE_API_BASE_URL,
+        batch_size: int = EMBEDDING_BATCH_SIZE,
+        max_retries: int = EMBEDDING_MAX_RETRIES,
+        retry_backoff_seconds: float = EMBEDDING_RETRY_BACKOFF_SECONDS,
+        timeout_seconds: float = EMBEDDING_TIMEOUT_SECONDS,
+        http_client: Any = requests,
+    ) -> None:
+        if not api_key:
+            raise EmbeddingProviderError(
+                "Hugging Face embedding provider requires EMBEDDING_API_KEY or HF_TOKEN. "
+                "Store the token in .env or your shell environment; do not commit it."
+            )
+        if batch_size <= 0:
+            raise EmbeddingProviderError("EMBEDDING_BATCH_SIZE must be greater than 0.")
+        if max_retries < 0:
+            raise EmbeddingProviderError("EMBEDDING_MAX_RETRIES must not be negative.")
+        if retry_backoff_seconds < 0:
+            raise EmbeddingProviderError("EMBEDDING_RETRY_BACKOFF_SECONDS must not be negative.")
+        if timeout_seconds <= 0:
+            raise EmbeddingProviderError("EMBEDDING_TIMEOUT_SECONDS must be greater than 0.")
+
+        self.model_name = model_name
+        self.dims = dims
+        self.api_key = api_key
+        self.api_base_url = api_base_url.rstrip("/")
+        self.batch_size = batch_size
+        self.max_retries = max_retries
+        self.retry_backoff_seconds = retry_backoff_seconds
+        self.timeout_seconds = timeout_seconds
+        self.http_client = http_client
+
+    def embed_texts(self, texts: list[str]) -> list[EmbeddedText]:
+        results = [EmbeddedText(vector=[0.0] * self.dims, norm=0.0, token_count=0) for _ in texts]
+        indexed_texts = [(index, text) for index, text in enumerate(texts) if text and text.strip()]
+
+        for start in range(0, len(indexed_texts), self.batch_size):
+            batch = indexed_texts[start : start + self.batch_size]
+            batch_vectors = self._request_embeddings([text for _, text in batch])
+            if len(batch_vectors) != len(batch):
+                raise EmbeddingProviderError(
+                    f"Hugging Face returned {len(batch_vectors)} embeddings for {len(batch)} input texts."
+                )
+            for (original_index, text), vector in zip(batch, batch_vectors):
+                normalized_vector, norm = normalize_external_vector(vector)
+                results[original_index] = EmbeddedText(
+                    vector=normalized_vector,
+                    norm=norm,
+                    token_count=len(tokenize(text)),
+                )
+
+        return results
+
+    def _request_embeddings(self, texts: list[str]) -> list[list[float]]:
+        url = f"{self.api_base_url}/{self.model_name}"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "inputs": texts,
+            "options": {"wait_for_model": True},
+        }
+
+        last_error: str | None = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = self.http_client.post(
+                    url,
+                    headers=headers,
+                    json=payload,
+                    timeout=self.timeout_seconds,
+                )
+            except requests.RequestException as error:
+                last_error = str(error)
+            else:
+                if response.status_code < 400:
+                    try:
+                        response_payload = response.json()
+                    except ValueError as error:
+                        raise EmbeddingProviderError("Hugging Face response was not valid JSON.") from error
+                    return parse_huggingface_feature_response(response_payload, expected_count=len(texts))
+
+                response_text = getattr(response, "text", "")
+                last_error = f"HTTP {response.status_code}: {response_text[:300]}"
+                if response.status_code not in {429, 500, 502, 503, 504}:
+                    break
+
+            if attempt < self.max_retries:
+                time.sleep(self.retry_backoff_seconds * (attempt + 1))
+
+        raise EmbeddingProviderError(f"Hugging Face embedding request failed for model {self.model_name}: {last_error}")
+
+
 def create_embedding_provider(
     *,
     provider_name: str | None = None,
@@ -74,6 +188,16 @@ def create_embedding_provider(
             dims=resolved_dims,
         )
 
+    if resolved_provider in {HUGGINGFACE_PROVIDER_NAME, "hf"}:
+        resolved_model = HUGGINGFACE_DEFAULT_MODEL_NAME if resolved_model == LOCAL_MODEL_NAME else resolved_model
+        if resolved_model == HUGGINGFACE_DEFAULT_MODEL_NAME and resolved_dims == DEFAULT_DIMS:
+            resolved_dims = HUGGINGFACE_DEFAULT_DIMS
+        return HuggingFaceEmbeddingProvider(
+            model_name=resolved_model,
+            dims=resolved_dims,
+            api_key=EMBEDDING_API_KEY,
+        )
+
     if resolved_provider in RESERVED_AI_PROVIDER_NAMES:
         raise EmbeddingProviderError(
             f"Embedding provider '{resolved_provider}' is reserved for a future external AI integration "
@@ -81,7 +205,9 @@ def create_embedding_provider(
             "or implement the provider in backend/app/services/embedding_service.py before rebuilding embeddings."
         )
 
-    supported = ", ".join(sorted({LOCAL_PROVIDER_NAME, "local_hashing", *RESERVED_AI_PROVIDER_NAMES}))
+    supported = ", ".join(
+        sorted({LOCAL_PROVIDER_NAME, "local_hashing", HUGGINGFACE_PROVIDER_NAME, "hf", *RESERVED_AI_PROVIDER_NAMES})
+    )
     raise EmbeddingProviderError(f"Unsupported embedding provider: {resolved_provider}. Known providers: {supported}.")
 
 
@@ -137,6 +263,73 @@ def unpack_vector(blob: bytes, dims: int) -> tuple[float, ...]:
 
 def dot_product(left: Iterable[float], right: Iterable[float]) -> float:
     return sum(a * b for a, b in zip(left, right))
+
+
+def normalize_external_vector(vector: Sequence[float]) -> tuple[list[float], float]:
+    values = [float(value) for value in vector]
+    norm = math.sqrt(sum(value * value for value in values))
+    if norm > 0:
+        return [value / norm for value in values], norm
+    return values, norm
+
+
+def is_number_sequence(value: Any) -> bool:
+    return isinstance(value, list) and all(isinstance(item, int | float) for item in value)
+
+
+def average_vectors(vectors: Sequence[Sequence[float]]) -> list[float]:
+    if not vectors:
+        return []
+    first_dims = len(vectors[0])
+    if first_dims == 0:
+        return []
+    sums = [0.0] * first_dims
+    count = 0
+    for vector in vectors:
+        if len(vector) != first_dims:
+            raise EmbeddingProviderError("Hugging Face token embeddings have inconsistent dimensions.")
+        for index, value in enumerate(vector):
+            sums[index] += float(value)
+        count += 1
+    return [value / count for value in sums]
+
+
+def coerce_huggingface_embedding(value: Any) -> list[float]:
+    if isinstance(value, dict) and "embedding" in value:
+        return coerce_huggingface_embedding(value["embedding"])
+    if is_number_sequence(value):
+        return [float(item) for item in value]
+    if isinstance(value, list) and value and all(is_number_sequence(item) for item in value):
+        return average_vectors(value)
+    raise EmbeddingProviderError("Hugging Face response contains an unsupported embedding shape.")
+
+
+def parse_huggingface_feature_response(payload: Any, *, expected_count: int) -> list[list[float]]:
+    if isinstance(payload, dict):
+        if "error" in payload:
+            raise EmbeddingProviderError(f"Hugging Face returned an error: {payload['error']}")
+        if "embeddings" in payload:
+            payload = payload["embeddings"]
+        elif "data" in payload:
+            payload = payload["data"]
+        else:
+            raise EmbeddingProviderError("Hugging Face response is missing embeddings data.")
+
+    if expected_count == 1:
+        if is_number_sequence(payload):
+            return [coerce_huggingface_embedding(payload)]
+        if isinstance(payload, list) and payload and all(is_number_sequence(item) for item in payload):
+            return [coerce_huggingface_embedding(payload)]
+
+    if not isinstance(payload, list):
+        raise EmbeddingProviderError("Hugging Face response must be a list of embeddings.")
+
+    embeddings = [coerce_huggingface_embedding(item) for item in payload]
+    if len(embeddings) != expected_count:
+        raise EmbeddingProviderError(
+            f"Hugging Face response contains {len(embeddings)} embeddings for {expected_count} inputs."
+        )
+    return embeddings
 
 
 def validate_provider_embeddings(

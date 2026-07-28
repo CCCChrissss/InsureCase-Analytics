@@ -4,7 +4,7 @@
 
 本文件規劃如何將目前的本機 `local_hashing_cjk_v1` 語意搜尋 MVP，升級成可串接正式 AI embedding model 的工程架構。
 
-目標不是立即替換模型，而是先定義清楚：
+目前已先完成 Hugging Face provider 的第一版小批量接入口。目標不是立即替換正式展示 DB，而是先定義並落實清楚：
 
 - provider 介面如何擴充。
 - API key 與敏感資訊如何管理。
@@ -19,6 +19,15 @@
 
 - `backend/app/services/embedding_service.py` 已有 provider factory。
 - `local` provider 已實作，可離線建立 `local_hashing_cjk_v1` embeddings。
+- `huggingface` / `hf` provider 已實作，可透過 Hugging Face Inference API Feature Extraction 取得 embeddings。
+- Hugging Face provider 預設模型為 `BAAI/bge-large-zh-v1.5`，預設維度 1024。
+- Hugging Face provider 支援：
+  - `EMBEDDING_API_KEY` 或 `HF_TOKEN`
+  - `EMBEDDING_BATCH_SIZE`
+  - `EMBEDDING_MAX_RETRIES`
+  - `EMBEDDING_RETRY_BACKOFF_SECONDS`
+  - `EMBEDDING_TIMEOUT_SECONDS`
+  - `HUGGINGFACE_API_BASE_URL`
 - `openai` / `ai` provider 名稱已保留，但目前會明確拋出 `EmbeddingProviderError`。
 - `backend/scripts/build_chunk_embeddings.py` 已支援：
   - `--provider`
@@ -31,7 +40,7 @@
   - `token_count` 不可為負數。
   - `norm` 必須是有限且非負數。
   - vector 不可包含 NaN 或 Infinity。
-- `backend/tests/test_embedding_service.py` 已加入 fake provider 測試，不需要呼叫外部 API 即可驗證寫入與異常輸出。
+- `backend/tests/test_embedding_service.py` 已加入 fake provider 與 fake Hugging Face HTTP client 測試，不需要呼叫外部 API 即可驗證寫入、回應解析、重試與異常輸出。
 - `chunk_embeddings` 已用 `(chunk_id, embedding_model)` 作為主鍵，可同時保留不同模型的 embeddings。
 - 語意搜尋 API 與案件層級語意相似 API 目前會依 `embedding_model` 查詢向量。
 
@@ -42,18 +51,18 @@
 - `embedding_model`：`local_hashing_cjk_v1`
 - `embedding_dims`：384
 
-## 3. 暫不實作範圍
+## 3. 目前暫不執行範圍
 
 這一階段不做：
 
 - 不提交任何 API key。
-- 不呼叫外部 AI API。
+- pytest 不呼叫外部 AI API。
 - 不重建正式 DB 的 embeddings。
 - 不改前端畫面。
 - 不改 `data/` 或 `backend/data/`。
 - 不導入 PostgreSQL / pgvector。
 
-原因：正式 AI provider 會影響費用、模型版本、向量維度、重建時間與展示結果，必須先有明確規格再實作。
+原因：正式 AI provider 會影響費用、模型版本、向量維度、重建時間與展示結果。程式已具備小批量接入口，但正式展示 DB 是否切換需要先試跑與抽樣驗證。
 
 ## 4. Provider 設計
 
@@ -80,7 +89,16 @@ class EmbeddingProvider(Protocol):
 - 不可在 provider 內靜默 fallback 到 `local`。
 - 失敗時應拋出明確錯誤，讓建置腳本停止或進入重試流程。
 
-建議命名：
+Hugging Face 範例：
+
+```text
+EMBEDDING_PROVIDER=huggingface
+EMBEDDING_MODEL=BAAI/bge-large-zh-v1.5
+EMBEDDING_DIMS=1024
+EMBEDDING_API_KEY=<only in shell env or deployment secret>
+```
+
+其他 provider 建議命名：
 
 ```text
 EMBEDDING_PROVIDER=openai
@@ -100,11 +118,13 @@ EMBEDDING_MODEL=local_hashing_cjk_v1
 EMBEDDING_DIMS=384
 ```
 
-正式 AI provider 建議新增：
+外部 AI provider 支援：
 
 ```text
 EMBEDDING_API_KEY=<only in .env or deployment secret>
-EMBEDDING_BATCH_SIZE=64
+HF_TOKEN=<Hugging Face token alias>
+HUGGINGFACE_API_BASE_URL=https://router.huggingface.co/hf-inference/models
+EMBEDDING_BATCH_SIZE=16
 EMBEDDING_MAX_RETRIES=3
 EMBEDDING_RETRY_BACKOFF_SECONDS=2
 EMBEDDING_TIMEOUT_SECONDS=60
@@ -117,7 +137,7 @@ EMBEDDING_TIMEOUT_SECONDS=60
 - provider 讀不到必要 API key 時，應明確報錯。
 - 不要在程式碼、README、測試或 commit history 中硬編碼 key。
 
-目前 `.env.example` 已先列出上述外部 provider 變數名稱作為未來接入提示，但正式 provider 尚未實作。
+目前 `.env.example` 已列出上述外部 provider 變數名稱與 Hugging Face 範例；所有 token 欄位都只能放假值或空值。
 
 ## 6. Model 選擇原則
 
@@ -130,7 +150,9 @@ EMBEDDING_TIMEOUT_SECONDS=60
 - 是否能穩定批次處理 17254 個 chunks。
 - 未來是否容易擴充到更多年度。
 
-本專案目前先不在程式中寫死特定外部模型，避免模型名稱、價格或 API 行為變動時造成誤導。
+本專案目前第一個外部 provider 選用 `BAAI/bge-large-zh-v1.5` 作為預設 Hugging Face model，原因是它是中文 embedding model、模型頁標示 MIT license、維度為 1024，且可透過 Hugging Face Feature Extraction 介面試跑。
+
+其他候選模型仍可透過 `--model` 與 `--dims` 指定，但必須先確認模型授權、維度、API 可用性與成本。
 
 ## 7. Batch 策略
 
@@ -147,13 +169,13 @@ EMBEDDING_TIMEOUT_SECONDS=60
 建議 script 行為：
 
 ```text
-py .\backend\scripts\build_chunk_embeddings.py --provider openai --model <model-name> --dims <dims>
+py .\backend\scripts\build_chunk_embeddings.py --provider huggingface --model BAAI/bge-large-zh-v1.5 --dims 1024
 ```
 
 試跑時先用：
 
 ```text
-py .\backend\scripts\build_chunk_embeddings.py --provider openai --model <model-name> --dims <dims> --limit 100
+py .\backend\scripts\build_chunk_embeddings.py --provider huggingface --model BAAI/bge-large-zh-v1.5 --dims 1024 --limit 100
 ```
 
 ## 8. Retry 與 Rate Limit
@@ -262,7 +284,9 @@ embedding_model=<model-name>
 建議測試：
 
 - `local` provider 正常。
-- `openai` provider 在缺 API key 時明確報錯。
+- `huggingface` provider 在缺 API key 時明確報錯。
+- `huggingface` provider 可用 fake HTTP client 驗證 batch payload、Authorization header、常見回應格式解析、空字串略過、retryable HTTP status 重試與 non-retryable HTTP status 報錯。
+- `openai` / `ai` provider 仍明確標示預留未實作。
 - fake provider 可模擬固定向量回傳。此項目前已完成。
 - batch 寫入不會破壞既有 embeddings。
 - 同一 chunk 可保留不同 `embedding_model`。
@@ -279,7 +303,7 @@ embedding_model=<model-name>
 py -m pytest .\backend\tests\test_embedding_service.py
 py -m pytest
 py -m py_compile .\backend\app\services\embedding_service.py .\backend\scripts\build_chunk_embeddings.py
-py .\backend\scripts\build_chunk_embeddings.py --provider <provider> --model <model> --dims <dims> --limit 100
+py .\backend\scripts\build_chunk_embeddings.py --provider huggingface --model BAAI/bge-large-zh-v1.5 --dims 1024 --limit 100
 py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks --require-embeddings
 ```
 
@@ -296,8 +320,8 @@ py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks --
 
 ```text
 系統目前使用本機 CJK hashing vector 完成語意搜尋 MVP，
-已建立 provider 邊界，未來可替換成正式 AI embedding model。
-正式模型接入時只需要新增 provider、設定環境變數並重建 chunk_embeddings，
+已建立 provider 邊界，且已完成 Hugging Face provider 小批量接入口。
+正式展示 DB 若要切換成 Hugging Face embedding，需要設定 token 並重建 chunk_embeddings，
 案件搜尋 API 與前端展示流程可大致沿用。
 ```
 
@@ -305,18 +329,19 @@ py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks --
 
 ```text
 目前已經串接 OpenAI。
+目前正式展示 DB 已經使用 Hugging Face embeddings。
 目前語意分數等同法律相似度。
 目前模型已可取代專業判斷。
 ```
 
 ## 15. 建議實作順序
 
-1. 決定正式 provider 與 model。
-2. 補 `.env.example` 的 API key 變數名稱。
-3. 在 `embedding_service.py` 實作 provider。
-4. 用 `--limit 20` 小批量試跑。
-5. 用 `--limit 100` 檢查品質與費用。
-6. 全量重建 embeddings。
+1. 設定 Hugging Face token 到 shell 環境變數，不提交 key。
+2. 用 `--limit 20` 小批量試跑。
+3. 用 `--limit 100` 檢查品質與費用。
+4. 抽樣比較 local model 與 Hugging Face model 結果。
+5. 若品質與成本可接受，再全量重建 embeddings。
+6. 後續如需 OpenAI 或其他 provider，再在 `embedding_service.py` 新增 provider。
 7. 增加 API 的 `embedding_model` 可選參數。
 8. 在前端展示目前使用的 model。
 9. 抽樣比較 local MVP 與正式 AI model 結果。

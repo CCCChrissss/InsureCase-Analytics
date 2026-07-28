@@ -4,7 +4,9 @@
 
 在 `case_chunks` 基礎上建立可查詢的向量資料，讓系統可以先用 chunk 層級做語意搜尋，後續再聚合成案件層級的相似案件推薦。
 
-目前版本是學校專題版 MVP：使用本機純 Python hashing vector，不依賴外部 API，也不需要 API key。
+目前正式展示資料仍是學校專題版 MVP：使用本機純 Python hashing vector，不依賴外部 API，也不需要 API key。
+
+程式已另外支援 Hugging Face embedding provider，可用於小批量試跑與後續正式 AI embedding 替換；但只改 provider 設定不會改變既有 DB 內容，必須重建 `chunk_embeddings`。
 
 ## 目前模型
 
@@ -62,11 +64,21 @@ py .\backend\scripts\build_chunk_embeddings.py --provider local --model local_ha
 
 provider 狀態：
 
-- `local`：目前唯一已實作 provider。
+- `local`：目前正式 DB 使用的 provider。
 - `local_hashing`：`local` 的相容別名。
+- `huggingface` / `hf`：已實作 Hugging Face Feature Extraction provider，預設模型為 `BAAI/bge-large-zh-v1.5`，預設維度 1024，需要 `EMBEDDING_API_KEY` 或 `HF_TOKEN`。
 - `openai` / `ai`：預留給未來正式 AI integration，目前會明確拋出錯誤，不會自動 fallback。
 
 注意：`chunk_embeddings.embedding_model` 是 API 查詢時用來選向量的關鍵欄位。只改環境變數不會改變既有 DB 內的向量；換正式模型後必須重建 embeddings。
+
+Hugging Face 小批量試跑：
+
+```powershell
+$env:EMBEDDING_API_KEY="hf_your_token_here"
+py .\backend\scripts\build_chunk_embeddings.py --provider huggingface --model BAAI/bge-large-zh-v1.5 --dims 1024 --limit 20
+```
+
+注意：上述指令會寫入指定 DB 的 `chunk_embeddings`。正式試跑前建議先複製 DB 或使用 trial DB，避免直接改正式展示資料。
 
 ## 驗證方式
 
@@ -137,7 +149,7 @@ GET /api/cases/{case_id}/semantic-similar?limit=5
 
 實務版：
 
-- 建議改用正式 embedding model，例如 OpenAI embedding 或中文/多語 embedding model。
+- 建議改用正式 embedding model，例如 Hugging Face BGE、OpenAI embedding 或其他中文/多語 embedding model。
 - 建議使用 PostgreSQL + pgvector 或其他 ANN index。
 - 需要記錄 model version、向量維度、重建時間與資料版本。
 - 需要建立評估集，避免只憑主觀感覺判斷相似度品質。
@@ -172,13 +184,14 @@ GET /api/cases/{case_id}/semantic-similar?limit=5
 目前 `local_hashing_cjk_v1` 是本機 MVP。程式已先建立 provider factory：
 
 - `local`：目前可用，使用本機 CJK hashing vector。
-- `openai` / `ai`：目前會明確回報尚未實作，避免誤以為已經串接外部模型。
+- `huggingface` / `hf`：目前可用，透過 Hugging Face Inference API Feature Extraction 取得 embeddings。
+- `openai` / `ai`：目前會明確回報尚未實作，避免誤以為已經串接 OpenAI 類 provider。
 
 未來若要改成實際 AI embedding model，建議做法：
 
-1. 在 `backend/app/services/embedding_service.py` 實作 OpenAI 或其他 AI provider 的 `embed_texts(texts)`。
-2. 保留目前 `local` provider 作為 fallback。
-3. 新增必要環境變數，例如 provider、model、API key 名稱；API key 只能放在 `.env` 或部署平台 secret。
+1. 先用 `huggingface` provider 進行 `--limit 20` / `--limit 100` 小批量試跑。
+2. 保留目前 `local` provider 作為可離線比較基準。
+3. API key 只能放在 `.env`、shell 環境變數或部署平台 secret。
 4. 重跑 `backend/scripts/build_chunk_embeddings.py`，用新 `embedding_model` 名稱寫入 `chunk_embeddings`。
 5. 執行 `py -m pytest` 與 `verify_case_db.py --require-embeddings`。
 6. API query 可增加 `embedding_model` 參數，讓展示時能比較 local model 與 AI model。
@@ -188,6 +201,6 @@ GET /api/cases/{case_id}/semantic-similar?limit=5
 
 ## 下一步
 
-1. 抽樣評估目前 local model 的語意相似品質。
-2. 決定要串接哪一個正式 AI embedding model。
-3. 實作對應 provider 並用新 model 重建 embeddings。
+1. 用 Hugging Face provider 小批量建立 `BAAI/bge-large-zh-v1.5` embeddings。
+2. 抽樣比較 local model 與 Hugging Face model 的語意相似品質。
+3. 若品質與成本可接受，再用新 model 全量重建 embeddings。

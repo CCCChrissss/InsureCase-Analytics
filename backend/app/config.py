@@ -10,6 +10,11 @@ DEFAULT_CORS_ORIGINS = ("http://localhost:5173", "http://127.0.0.1:5173")
 DEFAULT_EMBEDDING_PROVIDER = "local"
 DEFAULT_EMBEDDING_MODEL = "local_hashing_cjk_v1"
 DEFAULT_EMBEDDING_DIMS = 384
+DEFAULT_EMBEDDING_BATCH_SIZE = 16
+DEFAULT_EMBEDDING_MAX_RETRIES = 3
+DEFAULT_EMBEDDING_RETRY_BACKOFF_SECONDS = 2.0
+DEFAULT_EMBEDDING_TIMEOUT_SECONDS = 60.0
+DEFAULT_HUGGINGFACE_API_BASE_URL = "https://router.huggingface.co/hf-inference/models"
 
 
 def resolve_project_path(value: str | Path) -> Path:
@@ -30,8 +35,26 @@ def parse_int_env(value: str | None, default: int) -> int:
     return int(value)
 
 
+def parse_float_env(value: str | None, default: float) -> float:
+    if value is None or not value.strip():
+        return default
+    return float(value)
+
+
 DATABASE_PATH = resolve_project_path(os.environ.get("INSURANCE_CASES_DB_PATH", DEFAULT_DATABASE_PATH))
 CORS_ORIGINS = parse_csv_env(os.environ.get("BACKEND_CORS_ORIGINS"), DEFAULT_CORS_ORIGINS)
 EMBEDDING_PROVIDER = os.environ.get("EMBEDDING_PROVIDER", DEFAULT_EMBEDDING_PROVIDER).strip() or DEFAULT_EMBEDDING_PROVIDER
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL).strip() or DEFAULT_EMBEDDING_MODEL
 EMBEDDING_DIMS = parse_int_env(os.environ.get("EMBEDDING_DIMS"), DEFAULT_EMBEDDING_DIMS)
+EMBEDDING_API_KEY = os.environ.get("EMBEDDING_API_KEY", "").strip() or os.environ.get("HF_TOKEN", "").strip()
+EMBEDDING_BATCH_SIZE = parse_int_env(os.environ.get("EMBEDDING_BATCH_SIZE"), DEFAULT_EMBEDDING_BATCH_SIZE)
+EMBEDDING_MAX_RETRIES = parse_int_env(os.environ.get("EMBEDDING_MAX_RETRIES"), DEFAULT_EMBEDDING_MAX_RETRIES)
+EMBEDDING_RETRY_BACKOFF_SECONDS = parse_float_env(
+    os.environ.get("EMBEDDING_RETRY_BACKOFF_SECONDS"),
+    DEFAULT_EMBEDDING_RETRY_BACKOFF_SECONDS,
+)
+EMBEDDING_TIMEOUT_SECONDS = parse_float_env(os.environ.get("EMBEDDING_TIMEOUT_SECONDS"), DEFAULT_EMBEDDING_TIMEOUT_SECONDS)
+HUGGINGFACE_API_BASE_URL = (
+    os.environ.get("HUGGINGFACE_API_BASE_URL", DEFAULT_HUGGINGFACE_API_BASE_URL).strip()
+    or DEFAULT_HUGGINGFACE_API_BASE_URL
+)

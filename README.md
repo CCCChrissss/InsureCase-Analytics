@@ -30,6 +30,7 @@
 - 後端 pytest 測試
 - 案件詳情、PDF、摘要、相似案件與語意相似案件 API 測試
 - 正式 AI provider 實作前測試保護，包含 fake provider、輸出筆數、維度與非有限數值檢查
+- Hugging Face embedding provider 小批量接入，可用 fake HTTP 測試驗證，不會在測試中呼叫外部 API
 - 前端基本 build 驗證
 - 跨年度匯入前置支援
 - ROC 114 一月小期間跨年度試跑文件
@@ -290,11 +291,22 @@ EMBEDDING_DIMS=384
 
 `local` 是目前可用 provider；`openai` / AI provider 介面已預留，但尚未實作外部 API 呼叫。
 
+已支援 Hugging Face provider：
+
+```text
+EMBEDDING_PROVIDER=huggingface
+EMBEDDING_MODEL=BAAI/bge-large-zh-v1.5
+EMBEDDING_DIMS=1024
+EMBEDDING_API_KEY=<your Hugging Face token>
+```
+
+`huggingface` 也可使用別名 `hf`，API token 可使用 `EMBEDDING_API_KEY` 或 `HF_TOKEN`。目前正式 DB 仍是 `local_hashing_cjk_v1` embeddings；若要讓語意搜尋改用 Hugging Face 結果，必須用新 provider / model 重建 `chunk_embeddings`。
+
 正式 AI provider 接入前的工程規格已整理在 `docs/ai_embedding_provider_plan.md`。
 
 目前也已補上實作前測試保護：provider 回傳 embeddings 時會檢查筆數、向量維度、`token_count`、`norm` 與非有限數值；測試使用 fake provider，不會呼叫外部 API。
 
-若設定 `EMBEDDING_PROVIDER=openai` 或 `EMBEDDING_PROVIDER=ai`，目前後端會明確拋出 `EmbeddingProviderError`，避免誤以為已經串接正式 AI。未來要替換成正式 AI embedding model 時，建議流程是：
+若設定 `EMBEDDING_PROVIDER=openai` 或 `EMBEDDING_PROVIDER=ai`，目前後端會明確拋出 `EmbeddingProviderError`，避免誤以為已經串接 OpenAI 類 provider。未來要替換成其他正式 AI embedding model 時，建議流程是：
 
 ```text
 1. 在 backend/app/services/embedding_service.py 實作新的 provider。
@@ -307,6 +319,13 @@ EMBEDDING_DIMS=384
 
 ```powershell
 py .\backend\scripts\build_chunk_embeddings.py --provider local --model local_hashing_cjk_v1 --dims 384
+```
+
+Hugging Face 小批量試跑範例：
+
+```powershell
+$env:EMBEDDING_API_KEY="hf_your_token_here"
+py .\backend\scripts\build_chunk_embeddings.py --provider huggingface --model BAAI/bge-large-zh-v1.5 --dims 1024 --limit 20
 ```
 
 ### Quality Report
@@ -544,9 +563,9 @@ pnpm build
 建議後續開發順序：
 
 ```text
-1. 依 docs/ai_embedding_provider_plan.md 決定正式 provider 與 model
-2. 實作 OpenAI 或其他正式 AI embedding provider
-3. 用 --limit 20 / --limit 100 小批量試跑 embeddings
+1. 使用 Hugging Face provider 搭配 `--limit 20` 小批量試跑 embeddings
+2. 比較 `local_hashing_cjk_v1` 與 `BAAI/bge-large-zh-v1.5` 的查找品質
+3. 評估是否全量重建 Hugging Face embeddings
 4. 試跑 ROC 116 小期間資料
 5. 導入 Docker / CI / 部署設定
 ```
