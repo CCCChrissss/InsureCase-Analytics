@@ -71,3 +71,35 @@ def test_search_uses_like_fallback_when_fts5_returns_empty(
     assert result["items"][0]["case_id"] == "case_1"
     assert result["items"][0]["match_source"] == "like_fallback_empty_fts5"
     assert "癌症" in result["items"][0]["snippet"]
+
+
+def test_like_fallback_searches_case_number_when_fts5_returns_empty(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "test_cases.db"
+    create_search_fixture(db_path)
+
+    monkeypatch.setattr(search_service, "connect", lambda: connect_test_db(db_path))
+
+    result = search_service.search_cases("000001", page=1, page_size=10)
+
+    assert result["total"] == 1
+    assert result["items"][0]["case_number"] == "115年評字第000001號"
+    assert result["items"][0]["match_source"] == "like_fallback_empty_fts5"
+
+
+def test_like_fallback_searches_dispute_type_when_fts5_returns_empty(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "test_cases.db"
+    create_search_fixture(db_path)
+
+    monkeypatch.setattr(search_service, "connect", lambda: connect_test_db(db_path))
+
+    result = search_service.search_cases("給付", page=1, page_size=10)
+
+    assert result["total"] == 1
+    assert result["items"][0]["dispute_type"] == "保險金給付"
+    assert result["items"][0]["match_source"] == "like_fallback_empty_fts5"

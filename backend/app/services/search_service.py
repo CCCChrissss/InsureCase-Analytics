@@ -28,9 +28,17 @@ def search_with_like(
     offset: int,
 ) -> tuple[int, list[sqlite3.Row]]:
     like_query = f"%{query}%"
+    like_params = (like_query, like_query, like_query)
     total = connection.execute(
-        "SELECT COUNT(*) FROM case_texts WHERE normalized_text LIKE ?",
-        (like_query,),
+        """
+        SELECT COUNT(*)
+        FROM case_texts
+        JOIN cases ON cases.case_id = case_texts.case_id
+        WHERE cases.case_number LIKE ?
+           OR cases.dispute_type LIKE ?
+           OR case_texts.normalized_text LIKE ?;
+        """,
+        like_params,
     ).fetchone()[0]
     rows = connection.execute(
         """
@@ -38,11 +46,13 @@ def search_with_like(
                cases.dispute_type, case_texts.normalized_text
         FROM case_texts
         JOIN cases ON cases.case_id = case_texts.case_id
-        WHERE case_texts.normalized_text LIKE ?
+        WHERE cases.case_number LIKE ?
+           OR cases.dispute_type LIKE ?
+           OR case_texts.normalized_text LIKE ?
         ORDER BY cases.decision_date DESC, cases.case_number DESC
         LIMIT ? OFFSET ?;
         """,
-        (like_query, page_size, offset),
+        (*like_params, page_size, offset),
     ).fetchall()
     return total, rows
 

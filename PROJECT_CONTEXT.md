@@ -198,7 +198,7 @@ frontend/dist/
 - `backend/app/services/case_service.py`：案件查詢、篩選、分頁、PDF path resolver。
 - `backend/app/services/embedding_service.py`：embedding provider 介面、本機 CJK hashing vector、chunk embedding 建置、chunk 語意搜尋與案件層級語意相似。
 - `backend/app/services/quality_service.py`：ROC 114 分析驗證報告資料。
-- `backend/app/services/search_service.py`：FTS5 搜尋、LIKE fallback、snippet 產生；FTS5 報錯或 0 筆時會進 LIKE fallback。
+- `backend/app/services/search_service.py`：FTS5 搜尋、LIKE fallback、snippet 產生；FTS5 報錯或 0 筆時會進 LIKE fallback，且 fallback 會查案號、爭議類型與 normalized text。
 - `backend/app/services/similar_case_service.py`：規則式相似案件計分。
 - `backend/app/services/statistics_service.py`：總覽、爭議類型、決定日期統計，支援可選年度條件。
 - `backend/app/services/summary_service.py`：案件摘要查詢。
@@ -214,7 +214,7 @@ frontend/dist/
 - `backend/tests/test_data_quality.py`：資料品質檢查測試。
 - `backend/tests/test_embedding_service.py`：本機 embedding、provider factory、embedding 寫入、語意搜尋排序與案件層級語意相似測試。
 - `backend/tests/test_import_cases_to_db.py`：SQLite 匯入腳本測試，包含多 metadata 匯入與 metadata 目錄解析。
-- `backend/tests/test_search_service.py`：搜尋 fallback 單元測試。
+- `backend/tests/test_search_service.py`：搜尋 fallback 單元測試，覆蓋 normalized text、案號與爭議類型 fallback。
 - `backend/tests/test_similar_case_service.py`：相似案件 service 單元測試。
 - `backend/tests/test_summary_service.py`：摘要擷取與 summary service 測試，包含 FOI 標題格式變異的 regression tests。
 
@@ -578,6 +578,7 @@ Query parameters：
 - 優先使用 SQLite FTS5 `MATCH`。
 - 若 FTS5 query 產生 `sqlite3.OperationalError`，fallback 到 `LIKE`。
 - 若 FTS5 沒報錯但回傳 0 筆，也會 fallback 到 `LIKE`。
+- FTS5 與 LIKE fallback 的查詢範圍皆包含案號、爭議類型與 normalized text。
 - 回傳 snippet 與 `match_source`。
 
 ### Semantic Search
@@ -1108,7 +1109,7 @@ py -m pytest
 - API smoke tests。
 - 分析驗證 API tests。
 - 統計 API 年度篩選 tests。
-- 搜尋 fallback service test。
+- 搜尋 fallback service test，包含 normalized text、案號與爭議類型 fallback。
 - chunking pipeline tests。
 - embedding service tests。
 - 摘要擷取與 summary service tests，包含「申請人主張」標題缺少「之」與「判斷理由」非第六段的 regression tests。

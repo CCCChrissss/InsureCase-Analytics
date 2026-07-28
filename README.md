@@ -207,6 +207,12 @@ FTS5 報錯 → LIKE fallback
 FTS5 0 筆 → LIKE fallback
 ```
 
+FTS5 與 LIKE fallback 的搜尋範圍皆包含：
+
+- 案號 `case_number`
+- 爭議類型 `dispute_type`
+- 正規化全文 `normalized_text`
+
 前端全文搜尋頁會展示：
 
 - 查詢文字、總命中案件、本頁顯示筆數。
