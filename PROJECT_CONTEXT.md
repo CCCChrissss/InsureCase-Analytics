@@ -351,8 +351,8 @@ VITE_API_BASE_URL 若存在則使用該值
 - 側邊欄導覽：查找首頁、案件查找、全文搜尋、語意搜尋、分析驗證。
 - Dashboard：案件查找工作台，提供案件查找、全文搜尋、語意搜尋入口與資料整理狀態。
 - 案件管理：年度、爭議類型、案號 filter，案件列表，案件詳情。
-- 全文搜尋：關鍵字輸入，搜尋結果，snippet，點擊進入案件詳情。
-- 語意搜尋：輸入查詢文字，展示 embedding 模型、候選 chunk、分數、段落提示與案件來源。
+- 全文搜尋：關鍵字輸入，顯示查詢摘要、FTS5 / LIKE fallback 來源、命中片段，點擊進入案件詳情。
+- 語意搜尋：輸入查詢文字，展示 embedding 模型、候選 chunk、cosine similarity、score bar、段落提示、命中段落與案件來源。
 - 統計分析：目前保留 direct route 與後端 API 作為輔助檢查，不放在主要導覽。
 - 分析驗證：展示 ROC 114 摘要覆蓋率、截段污染檢查、相似度計分規則、抽樣案件、已知例外與限制。
 
@@ -750,7 +750,8 @@ Query parameters：
 - 案件管理頁年度篩選。
 - 案件詳情區。
 - 全文搜尋頁。
-- 語意搜尋頁，展示 query、embedding 模型、候選 chunk 數、命中 chunk、score、section hint 與案件來源。
+- 全文搜尋頁，展示 query、命中數、match_source、fallback 說明、snippet 與案件來源。
+- 語意搜尋頁，展示 query、embedding 模型、候選 chunk 數、分析流程、模型限制、命中 chunk、score、score bar、section hint 與案件來源。
 - 案件詳情頁語意相似案件區塊，展示相似案件、分數與實際命中 chunk。
 - 統計分析頁仍保留 direct route，但不作為主導覽項目。
 - 分析驗證頁。
@@ -1142,7 +1143,8 @@ Invoke-WebRequest -Uri "http://127.0.0.1:8000/api/quality/roc114-summary-similar
 - `/api/statistics/overview` 的 `case_count` 應為 2992。
 - `/api/statistics/overview?roc_year=115` 應可回傳年度篩選後的統計。
 - `/api/search?q=癌症` 應有搜尋結果。
-- `/api/semantic-search?q=癌症保險金` 應回傳 embedding 模型、候選 chunk 數、score 與命中段落。
+- `/api/search?q=癌症` 的前端結果應顯示 `FTS5`、`LIKE 補查` 或 `LIKE fallback` 來源標籤。
+- `/api/semantic-search?q=癌症保險金` 應回傳 embedding 模型、候選 chunk 數、score 與命中段落，前端應顯示 cosine 分數與模型限制。
 - `/api/cases/{case_id}/summary` 應回傳 `rule_based_v1` 摘要。
 - `/api/cases/{case_id}/similar` 應回傳相似案件與命中原因。
 - `/api/cases/{case_id}/semantic-similar` 應回傳案件層級語意相似案件與命中 chunk。
@@ -1179,8 +1181,8 @@ http://127.0.0.1:5173
 - 案件詳情可看到 metadata、全文與 PDF 連結。
 - 案件詳情可看到案件摘要。
 - 案件詳情可看到相似案件。
-- 搜尋頁可查「癌症」。
-- 語意搜尋頁可查「癌症保險金」，並顯示 embedding 模型、候選 chunk、score、section hint 與命中段落。
+- 搜尋頁可查「癌症」，並顯示搜尋摘要、match source、fallback 說明與 snippet。
+- 語意搜尋頁可查「癌症保險金」，並顯示 embedding 模型、候選 chunk、cosine score、score bar、section hint、命中段落與本機 MVP 限制。
 - 側邊欄不再顯示統計主入口。
 - 若直接開啟 `?view=statistics`，統計頁仍可作為輔助檢查使用。
 - 分析驗證頁可看到摘要品質、相似度規則、抽樣案件與已知例外。

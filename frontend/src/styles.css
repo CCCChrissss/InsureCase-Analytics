@@ -244,6 +244,36 @@ button {
   padding: 16px;
 }
 
+.search-method-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px;
+}
+
+.search-method-grid div {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e1e9e7;
+  border-radius: 6px;
+  background: #fbfcfc;
+}
+
+.search-method-grid svg {
+  color: #2f6f73;
+}
+
+.search-method-grid strong {
+  color: #18393b;
+}
+
+.search-method-grid span {
+  color: #53645f;
+  font-size: 0.9rem;
+}
+
 .workflow-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -357,6 +387,10 @@ button {
   display: grid;
 }
 
+.search-metrics {
+  grid-template-columns: 1.1fr repeat(3, minmax(0, 1fr));
+}
+
 .case-row,
 .result-row {
   display: grid;
@@ -378,6 +412,49 @@ button {
 .case-number {
   color: #18393b;
   font-weight: 700;
+}
+
+.result-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.source-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border: 1px solid #d8e1df;
+  border-radius: 999px;
+  color: #4d5d59;
+  background: #f5f8f7;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.source-badge.fts5 {
+  border-color: #b8d9d4;
+  color: #24595c;
+  background: #ecf7f5;
+}
+
+.source-badge.like-empty {
+  border-color: #d7c7ee;
+  color: #573a79;
+  background: #f6f1fb;
+}
+
+.source-badge.like-error {
+  border-color: #ead8a8;
+  color: #624a1c;
+  background: #fffaf0;
+}
+
+.source-explain {
+  color: #64736f;
+  font-size: 0.84rem;
 }
 
 .case-meta,
@@ -761,6 +838,16 @@ button {
   color: #2f6f73;
 }
 
+.semantic-flow .semantic-warning {
+  border-color: #ead8a8;
+  color: #624a1c;
+  background: #fffaf0;
+}
+
+.semantic-flow .semantic-warning svg {
+  color: #ae7a25;
+}
+
 .semantic-results {
   display: grid;
 }
@@ -790,6 +877,20 @@ button {
   font-weight: 700;
 }
 
+.score-meter {
+  width: 72px;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5ecea;
+}
+
+.score-meter div {
+  height: 100%;
+  border-radius: inherit;
+  background: #2f6f73;
+}
+
 .semantic-result-body {
   display: grid;
   gap: 8px;
@@ -816,6 +917,12 @@ button {
   color: #4d5d59;
   background: #f5f8f7;
   font-size: 0.82rem;
+}
+
+.semantic-evidence-label {
+  color: #64736f;
+  font-size: 0.84rem;
+  font-weight: 700;
 }
 
 .link-button {
@@ -919,6 +1026,8 @@ button {
 
   .metric-grid,
   .semantic-metrics,
+  .search-metrics,
+  .search-method-grid,
   .workflow-grid,
   .two-columns,
   .case-layout,

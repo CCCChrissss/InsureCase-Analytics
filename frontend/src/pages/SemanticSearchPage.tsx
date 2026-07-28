@@ -1,5 +1,5 @@
 import React from "react";
-import { BrainCircuit, FileText, Search } from "lucide-react";
+import { AlertTriangle, BrainCircuit, FileText, Search, Sigma } from "lucide-react";
 
 import { apiGet, apiPath } from "../api/client";
 import { AsyncBlock, Metric, PageHeader, PanelHeader } from "../components/ui";
@@ -12,6 +12,10 @@ function formatScore(score: number) {
 
 function shortText(value: string, maxLength = 420) {
   return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
+}
+
+function scorePercent(score: number) {
+  return `${Math.round(Math.max(0, Math.min(1, score)) * 100)}%`;
 }
 
 export function SemanticSearchPage({ onOpenCase }: { onOpenCase: (caseId: string) => void }) {
@@ -31,7 +35,7 @@ export function SemanticSearchPage({ onOpenCase }: { onOpenCase: (caseId: string
     <section className="page">
       <PageHeader
         title="語意搜尋"
-        description="以案件 chunk embedding 比對查詢文字，展示命中段落、分數、段落提示與案件來源。"
+        description="以案件 chunk embedding 比對查詢文字，展示模型、候選範圍、cosine similarity、命中段落與案件來源。"
       />
 
       <form
@@ -78,15 +82,19 @@ export function SemanticSearchPage({ onOpenCase }: { onOpenCase: (caseId: string
               <div className="semantic-flow">
                 <div>
                   <BrainCircuit size={18} />
-                  <span>查詢文字轉為本機 CJK hashing vector</span>
+                  <span>查詢文字先轉為本機 CJK n-gram hashing vector。</span>
                 </div>
                 <div>
                   <FileText size={18} />
-                  <span>與 17254 個案件 chunk embedding 計算 cosine similarity</span>
+                  <span>與 {data.total_candidates.toLocaleString("zh-TW")} 個案件 chunk embedding 計算 cosine similarity。</span>
                 </div>
                 <div>
-                  <Search size={18} />
-                  <span>依分數排序後回傳最相近段落與案件來源</span>
+                  <Sigma size={18} />
+                  <span>依分數排序，回傳最相近段落、section hint、chunk index 與案件來源。</span>
+                </div>
+                <div className="semantic-warning">
+                  <AlertTriangle size={18} />
+                  <span>目前模型是本機 MVP，用來展示完整流程；尚不等同 OpenAI、BGE 或其他正式 AI embedding model。</span>
                 </div>
               </div>
             </section>
@@ -99,6 +107,9 @@ export function SemanticSearchPage({ onOpenCase }: { onOpenCase: (caseId: string
                     <div className="semantic-result-rank">
                       <strong>#{index + 1}</strong>
                       <span>{formatScore(item.score)}</span>
+                      <div className="score-meter" aria-label={`相似度分數 ${formatScore(item.score)}`}>
+                        <div style={{ width: scorePercent(item.score) }} />
+                      </div>
                     </div>
                     <div className="semantic-result-body">
                       <button type="button" className="link-button" onClick={() => onOpenCase(item.case_id)}>
@@ -109,7 +120,9 @@ export function SemanticSearchPage({ onOpenCase }: { onOpenCase: (caseId: string
                         <span>{item.dispute_type ?? "無爭議類型"}</span>
                         <span>{item.section_hint ?? "未標示段落"}</span>
                         <span>chunk {item.chunk_index}</span>
+                        <span>cosine {formatScore(item.score)}</span>
                       </div>
+                      <div className="semantic-evidence-label">命中段落</div>
                       <p>{shortText(item.chunk_text)}</p>
                     </div>
                   </article>

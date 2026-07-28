@@ -207,6 +207,13 @@ FTS5 報錯 → LIKE fallback
 FTS5 0 筆 → LIKE fallback
 ```
 
+前端全文搜尋頁會展示：
+
+- 查詢文字、總命中案件、本頁顯示筆數。
+- 每筆結果的案號、決定日期、爭議類型與命中文字片段。
+- `match_source`，例如 `FTS5`、`LIKE 補查`、`LIKE fallback`，用來說明結果來源。
+- FTS5 優先、中文補查與錯誤 fallback 的判讀流程。
+
 ### Summaries
 
 目前摘要方法為 `rule_based_v1`，欄位包含：
@@ -247,6 +254,13 @@ local_hashing_cjk_v1
 ```
 
 這是純 Python 的 CJK n-gram hashing vector，優點是可離線、可重跑、無需 API key；限制是語意品質不等同於 OpenAI embedding、BGE 或其他正式語意模型。
+
+前端語意搜尋頁會展示：
+
+- 查詢文字、embedding 模型、候選 chunk 數、顯示結果筆數。
+- 查詢文字轉向量、候選 chunk 比對、cosine similarity 排序的流程。
+- 每筆結果的 score、score bar、section hint、chunk index、命中段落與案件來源。
+- 明確提示目前是本機 MVP，尚未串接正式 AI embedding model。
 
 案件層級語意相似 API：
 
