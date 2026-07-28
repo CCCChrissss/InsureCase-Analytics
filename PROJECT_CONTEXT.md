@@ -65,7 +65,8 @@
 │  ├─ cross_year_trial_run_roc114_january.md
 │  ├─ cross_year_trial_run_roc114_full_year.md
 │  ├─ roc114_summary_similarity_quality_check.md
-│  └─ embedding_pipeline.md
+│  ├─ embedding_pipeline.md
+│  └─ ai_embedding_provider_plan.md
 ├─ backend/
 │  ├─ schema.sql
 │  ├─ app/
@@ -179,6 +180,7 @@ frontend/dist/
 - `docs/cross_year_trial_run_roc114_full_year.md`：ROC 114 全年度跨年度試跑報告，記錄 2500 筆 metadata、PDF/text、案件整理與 trial DB 驗證結果。
 - `docs/roc114_summary_similarity_quality_check.md`：ROC 114 摘要與相似案件抽樣品質檢查，記錄摘要覆蓋率、截段污染檢查、相似案件 top 5 檢查與已知例外。
 - `docs/embedding_pipeline.md`：本機 chunk embedding MVP、語意搜尋 API、provider 狀態與後續正式 AI provider 升級路線。
+- `docs/ai_embedding_provider_plan.md`：正式 AI embedding provider 接入規格，包含 provider 介面、環境變數、API key 管理、batch、retry、費用控制、DB model version、測試與展示說法。
 
 ### backend
 
@@ -799,6 +801,7 @@ Query parameters：
 - 正式 React Router。
 - 前端自動化測試。
 - 正式 AI embedding provider 與向量重建流程。
+- 正式 AI embedding provider 目前已有接入規格，但尚未實作外部 API 呼叫。
 - 實務級向量資料庫或 ANN index。
 
 ## 10. 目前可能的 bug 或技術債
@@ -1243,6 +1246,7 @@ http://127.0.0.1:5173
 - 已新增前端語意搜尋頁，可展示 query、embedding 模型、候選 chunk、命中 chunk、score、section hint 與案件來源。
 - 已新增案件層級語意相似 API 與案件詳情頁區塊，可展示相似案件、分數與實際命中 chunk。
 - 已建立 embedding provider 介面，目前可用 provider 為 `local`，`openai` / `ai` 會明確提示尚未實作。
+- 已新增 `docs/ai_embedding_provider_plan.md`，規劃正式 AI embedding provider 的環境變數、API key 管理、batch、retry、費用控制、DB model version、測試與 embeddings 重建流程。
 
 ### 下一步：串接實際 AI embedding model 或擴大跨年度資料
 
@@ -1255,7 +1259,7 @@ http://127.0.0.1:5173
 
 建議工作：
 
-1. 若要強化語意品質：實作 OpenAI 或其他正式 AI embedding provider，並以新 `embedding_model` 重建 `chunk_embeddings`。
+1. 若要強化語意品質：依 `docs/ai_embedding_provider_plan.md` 決定正式 provider 與 model，再實作 OpenAI 或其他正式 AI embedding provider，並以新 `embedding_model` 重建 `chunk_embeddings`。
 2. 若要強化資料範圍：試跑 ROC 116 小期間。
 
 ### 第 8 階段：跨年度擴充

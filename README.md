@@ -289,6 +289,8 @@ EMBEDDING_DIMS=384
 
 `local` 是目前可用 provider；`openai` / AI provider 介面已預留，但尚未實作外部 API 呼叫。
 
+正式 AI provider 接入前的工程規格已整理在 `docs/ai_embedding_provider_plan.md`。
+
 若設定 `EMBEDDING_PROVIDER=openai` 或 `EMBEDDING_PROVIDER=ai`，目前後端會明確拋出 `EmbeddingProviderError`，避免誤以為已經串接正式 AI。未來要替換成正式 AI embedding model 時，建議流程是：
 
 ```text
@@ -519,6 +521,7 @@ pnpm build
 - `docs/roc114_summary_similarity_quality_check.md`：ROC 114 摘要與相似案件抽樣品質檢查
 - `docs/chunking_pipeline.md`：案件文字 chunking 設計、欄位與正式 DB 驗證結果
 - `docs/embedding_pipeline.md`：本機 embedding MVP、語意搜尋 API 與後續升級路線
+- `docs/ai_embedding_provider_plan.md`：正式 AI embedding provider 接入規格，包含環境變數、batch、retry、費用控制、重建與測試策略
 
 ## Current Limitations
 
@@ -538,9 +541,10 @@ pnpm build
 建議後續開發順序：
 
 ```text
-1. 實作 OpenAI 或其他正式 AI embedding provider
-2. 試跑 ROC 116 小期間資料
-3. 導入 Docker / CI / 部署設定
+1. 依 docs/ai_embedding_provider_plan.md 決定正式 provider 與 model
+2. 實作 OpenAI 或其他正式 AI embedding provider
+3. 試跑 ROC 116 小期間資料
+4. 導入 Docker / CI / 部署設定
 ```
 
 ## Project Positioning

@@ -1,0 +1,313 @@
+# AI Embedding Provider 接入規格
+
+## 1. 目標
+
+本文件規劃如何將目前的本機 `local_hashing_cjk_v1` 語意搜尋 MVP，升級成可串接正式 AI embedding model 的工程架構。
+
+目標不是立即替換模型，而是先定義清楚：
+
+- provider 介面如何擴充。
+- API key 與敏感資訊如何管理。
+- embeddings 如何重建。
+- model version 如何記錄。
+- 如何控制費用、批次、錯誤與中斷續跑。
+- 如何驗證正式模型比本機 MVP 更適合案件查找。
+
+## 2. 目前狀態
+
+目前已完成：
+
+- `backend/app/services/embedding_service.py` 已有 provider factory。
+- `local` provider 已實作，可離線建立 `local_hashing_cjk_v1` embeddings。
+- `openai` / `ai` provider 名稱已保留，但目前會明確拋出 `EmbeddingProviderError`。
+- `backend/scripts/build_chunk_embeddings.py` 已支援：
+  - `--provider`
+  - `--model`
+  - `--dims`
+  - `--limit`
+- `chunk_embeddings` 已用 `(chunk_id, embedding_model)` 作為主鍵，可同時保留不同模型的 embeddings。
+- 語意搜尋 API 與案件層級語意相似 API 目前會依 `embedding_model` 查詢向量。
+
+目前正式 DB 狀態：
+
+- `case_chunks`：17254
+- `chunk_embeddings`：17254
+- `embedding_model`：`local_hashing_cjk_v1`
+- `embedding_dims`：384
+
+## 3. 暫不實作範圍
+
+這一階段不做：
+
+- 不提交任何 API key。
+- 不呼叫外部 AI API。
+- 不重建正式 DB 的 embeddings。
+- 不改前端畫面。
+- 不改 `data/` 或 `backend/data/`。
+- 不導入 PostgreSQL / pgvector。
+
+原因：正式 AI provider 會影響費用、模型版本、向量維度、重建時間與展示結果，必須先有明確規格再實作。
+
+## 4. Provider 設計
+
+目前 provider 介面：
+
+```python
+class EmbeddingProvider(Protocol):
+    provider_name: str
+    model_name: str
+    dims: int
+
+    def embed_texts(self, texts: list[str]) -> list[EmbeddedText]:
+        pass
+```
+
+正式 AI provider 應遵守：
+
+- 輸入：`list[str]`
+- 輸出：與輸入長度相同的 `list[EmbeddedText]`
+- 每筆輸出包含：
+  - `vector`
+  - `norm`
+  - `token_count`
+- 不可在 provider 內靜默 fallback 到 `local`。
+- 失敗時應拋出明確錯誤，讓建置腳本停止或進入重試流程。
+
+建議命名：
+
+```text
+EMBEDDING_PROVIDER=openai
+EMBEDDING_MODEL=<official-model-name>
+EMBEDDING_DIMS=<model-dimensions>
+```
+
+注意：`EMBEDDING_MODEL` 必須寫入 `chunk_embeddings.embedding_model`，因為 API 會依 model name 查詢 embeddings。
+
+## 5. 環境變數設計
+
+目前已有：
+
+```text
+EMBEDDING_PROVIDER=local
+EMBEDDING_MODEL=local_hashing_cjk_v1
+EMBEDDING_DIMS=384
+```
+
+正式 AI provider 建議新增：
+
+```text
+EMBEDDING_API_KEY=<only in .env or deployment secret>
+EMBEDDING_BATCH_SIZE=64
+EMBEDDING_MAX_RETRIES=3
+EMBEDDING_RETRY_BACKOFF_SECONDS=2
+EMBEDDING_TIMEOUT_SECONDS=60
+```
+
+規則：
+
+- `.env.example` 只能列變數名稱與範例格式，不可放真實 key。
+- `.env` 不可提交 Git。
+- provider 讀不到必要 API key 時，應明確報錯。
+- 不要在程式碼、README、測試或 commit history 中硬編碼 key。
+
+## 6. Model 選擇原則
+
+正式模型選擇時應評估：
+
+- 是否支援中文與繁體中文語境。
+- 是否適合長文本切片後的語意檢索。
+- 向量維度與儲存成本。
+- API 成本與 rate limit。
+- 是否能穩定批次處理 17254 個 chunks。
+- 未來是否容易擴充到更多年度。
+
+本專案目前先不在程式中寫死特定外部模型，避免模型名稱、價格或 API 行為變動時造成誤導。
+
+## 7. Batch 策略
+
+正式 provider 不應一筆一筆送 API。
+
+建議流程：
+
+1. 從 `case_chunks` 讀取尚未建立指定 `embedding_model` 的 chunks。
+2. 依 `EMBEDDING_BATCH_SIZE` 分批。
+3. 每批呼叫 provider。
+4. 成功後立即寫入 `chunk_embeddings`。
+5. 失敗時保留已完成批次，方便續跑。
+
+建議 script 行為：
+
+```text
+py .\backend\scripts\build_chunk_embeddings.py --provider openai --model <model-name> --dims <dims>
+```
+
+試跑時先用：
+
+```text
+py .\backend\scripts\build_chunk_embeddings.py --provider openai --model <model-name> --dims <dims> --limit 100
+```
+
+## 8. Retry 與 Rate Limit
+
+正式 provider 應處理：
+
+- timeout
+- rate limit
+- 暫時性 5xx
+- network error
+- 單筆文字過長
+
+建議策略：
+
+- 預設最多重試 3 次。
+- 使用遞增等待時間。
+- 對不可重試錯誤直接停止。
+- 錯誤訊息應包含 provider、model、batch index，但不可包含 API key。
+- 建置報告應列出失敗 chunk 數與前幾個 chunk_id。
+
+## 9. 費用控制
+
+正式串接前必須先做小批量試跑。
+
+建議順序：
+
+1. `--limit 20`
+2. `--limit 100`
+3. `--limit 1000`
+4. 全量 17254 chunks
+
+每次都應記錄：
+
+- provider
+- model
+- dims
+- processed_chunks
+- embedded_chunks
+- failed_chunks
+- started_at
+- finished_at
+- estimated or actual cost
+
+若 provider API 無法直接回傳費用，至少應記錄 token 或輸入字元統計，方便後續估算。
+
+## 10. DB 與 Model Version 管理
+
+目前 `chunk_embeddings` schema 已可用同一 chunk 保留多個模型：
+
+```sql
+PRIMARY KEY(chunk_id, embedding_model)
+```
+
+因此正式模型建議使用新的 model name 寫入，不要覆蓋 `local_hashing_cjk_v1`。
+
+範例：
+
+```text
+local_hashing_cjk_v1
+official_ai_model_v1
+```
+
+未來若同一 provider 更換維度或前處理規則，也應更換 `embedding_model` 名稱，避免新舊向量混在一起。
+
+後續可考慮新增 `embedding_runs` 表，記錄每次重建：
+
+```sql
+run_id
+provider
+embedding_model
+embedding_dims
+chunk_count
+success_count
+failed_count
+started_at
+finished_at
+status
+notes
+```
+
+## 11. API 設計影響
+
+短期可沿用目前 API：
+
+```text
+GET /api/semantic-search
+GET /api/cases/{case_id}/semantic-similar
+```
+
+中期建議增加可選參數：
+
+```text
+embedding_model=<model-name>
+```
+
+用途：
+
+- 比較 local MVP 與正式 AI model。
+- 展示不同模型的搜尋結果差異。
+- 避免後端只依環境變數選模型，導致展示結果不易追蹤。
+
+## 12. 測試策略
+
+不需要在 pytest 中呼叫真實 AI API。
+
+建議測試：
+
+- `local` provider 正常。
+- `openai` provider 在缺 API key 時明確報錯。
+- fake provider 可模擬固定向量回傳。
+- batch 寫入不會破壞既有 embeddings。
+- 同一 chunk 可保留不同 `embedding_model`。
+- `dims <= 0` 會報錯。
+- provider 回傳數量與輸入數量不一致時會報錯。
+- API 查詢指定不存在的 `embedding_model` 時應回傳空結果或明確錯誤。
+
+## 13. 驗證流程
+
+正式 provider 實作後，建議驗證指令：
+
+```powershell
+py -m pytest .\backend\tests\test_embedding_service.py
+py -m pytest
+py -m py_compile .\backend\app\services\embedding_service.py .\backend\scripts\build_chunk_embeddings.py
+py .\backend\scripts\build_chunk_embeddings.py --provider <provider> --model <model> --dims <dims> --limit 100
+py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks --require-embeddings
+```
+
+若執行全量重建，完成後應確認：
+
+- `chunk_embeddings` 中新 model 的筆數等於 `case_chunks`。
+- `chunks_without_embeddings = 0`。
+- 語意搜尋 API 可回傳新 model 結果。
+- 案件層級語意相似仍可回傳 `matched_chunks`。
+
+## 14. 專題展示說法
+
+目前可說：
+
+```text
+系統目前使用本機 CJK hashing vector 完成語意搜尋 MVP，
+已建立 provider 邊界，未來可替換成正式 AI embedding model。
+正式模型接入時只需要新增 provider、設定環境變數並重建 chunk_embeddings，
+案件搜尋 API 與前端展示流程可大致沿用。
+```
+
+不要說：
+
+```text
+目前已經串接 OpenAI。
+目前語意分數等同法律相似度。
+目前模型已可取代專業判斷。
+```
+
+## 15. 建議實作順序
+
+1. 決定正式 provider 與 model。
+2. 補 `.env.example` 的 API key 變數名稱。
+3. 在 `embedding_service.py` 實作 provider。
+4. 用 fake provider 補單元測試。
+5. 用 `--limit 20` 小批量試跑。
+6. 用 `--limit 100` 檢查品質與費用。
+7. 全量重建 embeddings。
+8. 增加 API 的 `embedding_model` 可選參數。
+9. 在前端展示目前使用的 model。
+10. 抽樣比較 local MVP 與正式 AI model 結果。
