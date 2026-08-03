@@ -19,7 +19,7 @@
 
 - `backend/app/services/embedding_service.py` 已有 provider factory。
 - `local` provider 已實作，可離線建立 `local_hashing_cjk_v1` embeddings。
-- `local_bge` provider 已實作，可透過 Sentence Transformers 在本機執行 `BAAI/bge-large-zh-v1.5`，不需要 API token；CPU 20 chunks trial 已通過。
+- `local_bge` provider 已實作，可透過 Sentence Transformers 在本機執行 `BAAI/bge-large-zh-v1.5`，不需要 API token；CPU 與 RTX 4050 CUDA 20 chunks trial 均已通過。
 - `huggingface` / `hf` provider 已實作，可透過 Hugging Face Inference API Feature Extraction 取得 embeddings。
 - Hugging Face provider 預設模型為 `BAAI/bge-large-zh-v1.5`，預設維度 1024。
 - Hugging Face provider 支援：

@@ -17,32 +17,42 @@ dims: 1024
 
 ## 2. 安裝
 
+先建立專案隔離環境並安裝基礎套件：
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r .\requirements.txt
+```
+
 CPU 版本：
 
 ```powershell
-py -m pip install -r .\requirements-local-ai.txt
+.\.venv\Scripts\python.exe -m pip install -r .\requirements-local-ai.txt
 ```
 
 NVIDIA CUDA 13.0 版本：
 
 ```powershell
-py -m pip install -r .\requirements-local-ai-cuda.txt
+.\.venv\Scripts\python.exe -m pip install -r .\requirements-local-ai-cuda.txt
 ```
 
 驗證環境：
 
 ```powershell
-py -c "import torch, sentence_transformers; print(torch.__version__, torch.version.cuda, torch.cuda.is_available(), sentence_transformers.__version__)"
+.\.venv\Scripts\python.exe -c "import torch, sentence_transformers; print(torch.__version__, torch.version.cuda, torch.cuda.is_available(), sentence_transformers.__version__)"
 ```
 
 目前已驗證環境為：
 
 - Python `3.14.5`
-- torch `2.13.0+cpu`
+- torch `2.13.0+cu130`
+- compiled CUDA `13.0`
 - sentence-transformers `5.6.1`
-- device `cpu`
+- device `cuda:0`
+- GPU `NVIDIA GeForce RTX 4050 Laptop GPU`，約 6 GB VRAM
+- 專案 `.venv` 約 3.27 GB
 
-CUDA wheel 下載曾在 15 分鐘工具上限內未完成，因此 GPU build 尚未驗證成功，不可宣稱目前已使用 RTX 4050。
+已實際在 GPU 建立 tensor 並執行矩陣運算，`torch.cuda.is_available()` 為 `True`；本機 BGE 三筆中文 embedding 與 20 chunks trial 也已使用 RTX 4050 完成。
 
 ## 3. 設定
 
@@ -94,10 +104,10 @@ Copy-Item `
 
 ```powershell
 $env:HF_HUB_OFFLINE="1"
-$env:LOCAL_BGE_DEVICE="cpu"
-$env:LOCAL_BGE_BATCH_SIZE="4"
+$env:LOCAL_BGE_DEVICE="cuda"
+$env:LOCAL_BGE_BATCH_SIZE="2"
 
-py .\backend\scripts\build_chunk_embeddings.py `
+.\.venv\Scripts\python.exe .\backend\scripts\build_chunk_embeddings.py `
   --db .\backend\data\insurance_cases_local_bge_trial.db `
   --provider local_bge `
   --model BAAI/bge-large-zh-v1.5-local `
@@ -111,8 +121,9 @@ py .\backend\scripts\build_chunk_embeddings.py `
 - embedded chunks：`20`
 - empty chunks：`0`
 - dimensions：`1024`
-- device：`cpu`
-- 兩次執行時間：約 `41.1` 至 `50.8` 秒，包含模型載入
+- verified devices：`cpu`、`cuda`
+- CPU 兩次執行時間：約 `41.1` 至 `50.8` 秒，包含模型載入
+- RTX 4050 CUDA 執行時間：約 `27.1` 秒，包含模型載入
 
 trial DB 同時保留：
 
@@ -123,9 +134,9 @@ trial DB 同時保留：
 
 ```powershell
 $env:HF_HUB_OFFLINE="1"
-$env:LOCAL_BGE_DEVICE="cpu"
+$env:LOCAL_BGE_DEVICE="cuda"
 
-py .\backend\scripts\run_semantic_query_trial.py `
+.\.venv\Scripts\python.exe .\backend\scripts\run_semantic_query_trial.py `
   --db .\backend\data\insurance_cases_local_bge_trial.db `
   --provider local_bge `
   --model BAAI/bge-large-zh-v1.5-local `

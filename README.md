@@ -358,10 +358,10 @@ py .\backend\scripts\build_chunk_embeddings.py --provider local --model local_ha
 本機 BGE 小批量試跑範例：
 
 ```powershell
-py -m pip install -r .\requirements-local-ai.txt
+.\.venv\Scripts\python.exe -m pip install -r .\requirements-local-ai-cuda.txt
 $env:HF_HUB_OFFLINE="1"
-$env:LOCAL_BGE_DEVICE="cpu"
-py .\backend\scripts\build_chunk_embeddings.py --db .\backend\data\insurance_cases_local_bge_trial.db --provider local_bge --model BAAI/bge-large-zh-v1.5-local --dims 1024 --limit 20
+$env:LOCAL_BGE_DEVICE="cuda"
+.\.venv\Scripts\python.exe .\backend\scripts\build_chunk_embeddings.py --db .\backend\data\insurance_cases_local_bge_trial.db --provider local_bge --model BAAI/bge-large-zh-v1.5-local --dims 1024 --limit 20
 ```
 
 Hugging Face 小批量試跑範例：
@@ -629,7 +629,7 @@ pnpm build
 
 - 正式 DB 尚未切換為實務級 embedding 模型
 - Hugging Face BGE 目前只完成 trial DB 1000 筆小樣本驗證，尚未全量重建正式 DB
-- 本機 BGE 已完成 CPU 20 chunks 與三個查詢詞的離線流程驗證；尚未完成 1000 筆品質 benchmark、GPU 安裝驗證與正式 DB 全量重建
+- 本機 BGE 已完成 CPU 與 RTX 4050 CUDA 20 chunks、三個查詢詞的離線流程驗證；尚未完成 1000 筆品質 benchmark 與正式 DB 全量重建
 - 前端目前只展示 Hugging Face trial 摘要，不會直接查詢 trial DB 或呼叫 Hugging Face API
 - 15 詞 benchmark v1 已完成 75 筆第一輪 Codex-assisted 原文標註：Strict Precision@5 為 0.8133、Lenient Precision@5 為 0.9333
 - 第二位標註者空白模板與一致性比較工具已完成；第二位獨立標註、實際一致率計算與爭議標記仲裁尚未完成

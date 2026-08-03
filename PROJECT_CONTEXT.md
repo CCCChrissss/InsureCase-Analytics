@@ -182,7 +182,7 @@ frontend/dist/
 - `README.md`：專案介紹、目前資料狀態、pipeline、後端與前端啟動方式。
 - `requirements.txt`：Python 相依套件，包含 `beautifulsoup4`、`fastapi`、`httpx`、`pdfplumber`、`pypdf`、`pytest`、`requests`、`uvicorn`。
 - `requirements-local-ai.txt`：本機 BGE CPU 選用相依，固定 `torch 2.13.0` 與 `sentence-transformers 5.6.1`。
-- `requirements-local-ai-cuda.txt`：本機 BGE NVIDIA CUDA 13.0 選用相依；目前下載未在工具時限內完成，尚未驗證成功。
+- `requirements-local-ai-cuda.txt`：本機 BGE NVIDIA CUDA 13.0 選用相依；已在專案 `.venv` 驗證 `torch 2.13.0+cu130` 與 RTX 4050 GPU 推論。
 - `foi_ods_life_mvp_crawler.py`：FOI ODS metadata 與 PDF URL 爬蟲。
 - `foi_ods_pdf_text_pipeline.py`：下載 PDF、抽取 raw text、產生 normalized text、回寫 metadata 與報表。
 - `foi_ods_case_organizer.py`：將案件依年度、爭議類型、案號整理成單案資料夾。
@@ -523,7 +523,7 @@ local_hashing_cjk_v1
 
 - `local`：正式展示 DB 目前使用的 provider，使用本機 CJK hashing vector。
 - `local_hashing`：`local` 的相容別名。
-- `local_bge`：已實作本機 Sentence Transformers provider，來源模型為 `BAAI/bge-large-zh-v1.5`，DB 儲存名稱為 `BAAI/bge-large-zh-v1.5-local`、維度 1024，不需要 API token；CPU 20 chunks trial 已通過。
+- `local_bge`：已實作本機 Sentence Transformers provider，來源模型為 `BAAI/bge-large-zh-v1.5`，DB 儲存名稱為 `BAAI/bge-large-zh-v1.5-local`、維度 1024，不需要 API token；CPU 與 RTX 4050 CUDA 20 chunks trial 均已通過。
 - `huggingface` / `hf`：已實作 Hugging Face Feature Extraction provider，預設模型為 `BAAI/bge-large-zh-v1.5`、維度 1024，需要 `EMBEDDING_API_KEY` 或 `HF_TOKEN`。
 - `openai` / `ai`：預留給未來 OpenAI 類 provider，目前會明確拋出 `EmbeddingProviderError`。
 
@@ -838,7 +838,7 @@ Query parameters：
 - 正式 React Router。
 - 前端自動化測試。
 - Hugging Face embeddings 尚未對正式 DB 全量重建；目前已完成 trial DB 1000 筆、離線 anchor-based 比較報告，以及 5 個查詢詞的 query-to-document 小樣本試測。
-- 本機 BGE 已完成 CPU 模型載入、20 chunks embeddings 與三個查詢詞離線試測；尚未完成 1000 筆 benchmark、GPU wheel 驗證或正式 DB 全量重建。
+- 本機 BGE 已完成 CPU 與 RTX 4050 CUDA 模型載入、20 chunks embeddings 及三個查詢詞離線試測；尚未完成 1000 筆 benchmark 或正式 DB 全量重建。
 - 前端語意搜尋頁目前只展示 Hugging Face trial 摘要，不會直接查詢 trial DB 或呼叫 Hugging Face API。
 - 15 詞 benchmark v1 已完成 75 筆 Codex-assisted 第一輪原文標註與 Precision@5 報告。
 - 第二位標註者空白模板與一致性比較工具已完成；第二位獨立標註、實際一致率計算與爭議標記仲裁尚未完成。
@@ -1305,7 +1305,7 @@ http://127.0.0.1:5173
 - 已新增案件層級語意相似 API 與案件詳情頁區塊，可展示相似案件、分數與實際命中 chunk。
 - 已讓語意搜尋 API 與案件層級語意相似 API 支援 `embedding_model` / `embedding_provider` 可選參數，並加入 provider/model 維度不一致防呆。
 - 已建立 embedding provider 介面，目前可用 provider 為 `local`、`local_bge` 與 `huggingface` / `hf`，`openai` / `ai` 會明確提示尚未實作。
-- 已完成本機 `BAAI/bge-large-zh-v1.5` CPU provider、模型快取、20 chunks / 1024 維 trial 與三個查詢詞的完全離線搜尋；正式 DB 未切換。
+- 已完成本機 `BAAI/bge-large-zh-v1.5` CPU / CUDA provider、模型快取、20 chunks / 1024 維 trial 與三個查詢詞的完全離線搜尋；RTX 4050 GPU 推論已驗證，正式 DB 未切換。
 - 已新增 Hugging Face provider 小批量接入口，預設模型為 `BAAI/bge-large-zh-v1.5`、維度 1024，支援 `EMBEDDING_API_KEY` / `HF_TOKEN`、batch、retry、timeout 與 fake HTTP 測試。
 - 已完成 Hugging Face `BAAI/bge-large-zh-v1.5` 20 筆、100 筆與 1000 筆 trial DB 試跑，trial DB 中 BGE embeddings 為 1000 筆，正式 DB 未切換。
 - 已新增 `backend/scripts/compare_embedding_models.py`，可在不呼叫 Hugging Face API 的情況下，比較共同 chunks 的 local / BGE anchor-based 相似度排序。
