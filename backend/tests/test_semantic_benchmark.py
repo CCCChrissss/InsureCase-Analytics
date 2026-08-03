@@ -6,6 +6,20 @@ from backend.scripts import evaluate_semantic_benchmark
 from backend.scripts import run_semantic_query_trial
 
 
+def test_query_trial_configures_stdout_as_utf8(monkeypatch) -> None:
+    calls = []
+
+    class FakeStdout:
+        def reconfigure(self, **kwargs) -> None:
+            calls.append(kwargs)
+
+    monkeypatch.setattr(run_semantic_query_trial.sys, "stdout", FakeStdout())
+
+    run_semantic_query_trial.configure_stdout_utf8()
+
+    assert calls == [{"encoding": "utf-8"}]
+
+
 def test_local_bge_query_report_states_offline_execution() -> None:
     report = run_semantic_query_trial.build_markdown_report(
         {

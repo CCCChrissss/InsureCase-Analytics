@@ -44,6 +44,12 @@ def resolve_project_path(value: str | Path) -> Path:
     return path if path.is_absolute() else PROJECT_ROOT / path
 
 
+def configure_stdout_utf8() -> None:
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if callable(reconfigure):
+        reconfigure(encoding="utf-8")
+
+
 def truncate_text(value: str | None, *, limit: int = 160) -> str:
     compact = " ".join((value or "").split())
     return compact if len(compact) <= limit else f"{compact[:limit]}..."
@@ -208,6 +214,7 @@ def main() -> None:
         "queries": query_results,
     }
     json_output = json.dumps(payload, ensure_ascii=False, indent=2)
+    configure_stdout_utf8()
     print(json_output)
 
     if args.json_out:

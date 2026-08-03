@@ -85,10 +85,11 @@ $env:LOCAL_BGE_DEVICE="cuda"
 
 - `--limit 20`：成功。
 - `--limit 100`：成功。
+- `--limit 1000`：成功。
 - Trial DB：`backend/data/insurance_cases_local_bge_trial.db`。
-- BGE embeddings：`BAAI/bge-large-zh-v1.5-local`，1024 維，100 筆。
+- BGE embeddings：`BAAI/bge-large-zh-v1.5-local`，1024 維，1000 筆。
 - Local embeddings：`local_hashing_cjk_v1`，384 維，17254 筆仍保留。
-- 離線 benchmark 報告：`docs/local_bge_semantic_query_trial_100.md`。
+- 離線 benchmark 報告：`docs/local_bge_semantic_query_trial_1000.md`。
 
 ## 驗證方式
 
@@ -226,6 +227,6 @@ GET /api/cases/{case_id}/semantic-similar?limit=5
 
 ## 下一步
 
-1. 在 trial DB 上以 `embedding_provider=local_bge` 進行 query-to-document 比較。
-2. 將前端語意搜尋頁加上模型切換與模型限制提示。
-3. 若品質與成本可接受，再擴大到 `--limit 1000` 或全量重建 trial DB。
+1. 依既有 benchmark 規則人工判讀本機 BGE 1000-candidate 的 75 筆結果。
+2. 與歷史 Hugging Face API BGE benchmark 比較排名與人工 relevance。
+3. 若品質與本機建置時間可接受，再全量重建 trial DB；正式 DB 仍須另行確認後才切換。

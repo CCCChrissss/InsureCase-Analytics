@@ -52,7 +52,7 @@ NVIDIA CUDA 13.0 版本：
 - GPU `NVIDIA GeForce RTX 4050 Laptop GPU`，約 6 GB VRAM
 - 專案 `.venv` 約 3.27 GB
 
-已實際在 GPU 建立 tensor 並執行矩陣運算，`torch.cuda.is_available()` 為 `True`；本機 BGE 100 chunks trial 也已使用 RTX 4050 完成。
+已實際在 GPU 建立 tensor 並執行矩陣運算，`torch.cuda.is_available()` 為 `True`；本機 BGE 1000 chunks trial 也已使用 RTX 4050 完成。
 
 ## 3. 設定
 
@@ -102,7 +102,7 @@ Copy-Item `
   .\backend\data\insurance_cases_local_bge_trial.db
 ```
 
-建立 100 筆 embeddings：
+建立 1000 筆 embeddings：
 
 ```powershell
 $env:HF_HUB_OFFLINE="1"
@@ -114,23 +114,24 @@ $env:LOCAL_BGE_BATCH_SIZE="2"
   --provider local_bge `
   --model BAAI/bge-large-zh-v1.5-local `
   --dims 1024 `
-  --limit 100
+  --limit 1000
 ```
 
 2026-08-03 實測結果：
 
-- processed chunks：`100`
-- embedded chunks：`100`
+- processed chunks：`1000`
+- embedded chunks：`1000`
 - empty chunks：`0`
 - dimensions：`1024`
 - verified device：`cuda`
-- RTX 4050 CUDA 執行時間：約 `25.86` 秒，包含模型載入
+- RTX 4050 CUDA 執行時間：約 `85.12` 秒，包含模型載入
+- 先前 100 chunks CUDA 基準：約 `25.86` 秒，包含模型載入
 - 先前 20 chunks CPU 基準：約 `41.1` 至 `50.8` 秒；20 chunks CUDA 基準約 `27.1` 秒
 
 trial DB 同時保留：
 
 - `local_hashing_cjk_v1`：17254 筆、384 維
-- `BAAI/bge-large-zh-v1.5-local`：100 筆、1024 維
+- `BAAI/bge-large-zh-v1.5-local`：1000 筆、1024 維
 
 ## 6. 本機查詢 trial
 
@@ -145,20 +146,20 @@ $env:LOCAL_BGE_DEVICE="cuda"
   --query-set benchmark-v1 `
   --limit 5 `
   --include-text `
-  --json-out .\outputs\local_bge_semantic_benchmark_v1_100.json `
-  --out .\docs\local_bge_semantic_query_trial_100.md
+  --json-out .\outputs\local_bge_semantic_benchmark_v1_1000.json `
+  --out .\docs\local_bge_semantic_query_trial_1000.md
 ```
 
-15 個查詢均已在 100 筆 candidates 上完成 Top 5 排序，共 75 筆結果。候選範圍涵蓋 16 個案件與 9 種爭議類型，完整結果與限制記錄於 `docs/local_bge_semantic_query_trial_100.md`。
+15 個查詢均已在 1000 筆 candidates 上完成 Top 5 排序，共 75 筆結果。候選範圍涵蓋 167 個案件與 25 種爭議類型；Top 5 合集涵蓋 53 個案件與 19 種爭議類型，完整結果與限制記錄於 `docs/local_bge_semantic_query_trial_1000.md`。
 
-100 筆 candidates 仍未分層抽樣，也尚未完成 75 筆人工 relevance 標註，因此不能宣稱搜尋品質已通過。下一步應擴充到 1000 筆，再沿用固定 benchmark v1 與人工標註規則比較排名品質。
+100 與 1000 candidates 的 15 組查詢中，只有 1 組維持相同 Top 1，平均 Top 5 chunk overlap 為 `0.53 / 5`。這表示前 100 筆候選不足以代表資料範圍，不應作為品質基準。1000 筆仍是依案件與 chunk 順序取樣，也尚未完成 75 筆獨立人工 relevance 標註，因此不能宣稱搜尋品質已通過；下一步應沿用固定 benchmark v1 標註規則，並與歷史 API BGE 結果比較。
 
 ## 7. 正式切換條件
 
 在以下條件全部完成前，不切換正式 DB：
 
-1. 本機 BGE 至少完成 1000 筆 trial。
-2. 固定 15 詞 benchmark 可重跑。
+1. 本機 BGE 至少完成 1000 筆 trial。（已完成）
+2. 固定 15 詞 benchmark 可重跑。（已完成）
 3. 與 Hugging Face API BGE 的排名差異有紀錄。
 4. CPU 或 GPU 的全量重建時間可接受。
 5. 17254 筆 embeddings 全數建立且資料庫驗證通過。
