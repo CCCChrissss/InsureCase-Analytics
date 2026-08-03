@@ -31,6 +31,7 @@
 - 案件詳情、PDF、摘要、相似案件與語意相似案件 API 測試
 - 正式 AI provider 實作前測試保護，包含 fake provider、輸出筆數、維度與非有限數值檢查
 - Hugging Face embedding provider 小批量接入，可用 fake HTTP 測試驗證，不會在測試中呼叫外部 API
+- Hugging Face BGE 100 筆 trial embeddings 與 local hashing 離線比較報告
 - 前端基本 build 驗證
 - 跨年度匯入前置支援
 - ROC 114 一月小期間跨年度試跑文件
@@ -544,12 +545,14 @@ pnpm build
 - `docs/chunking_pipeline.md`：案件文字 chunking 設計、欄位與正式 DB 驗證結果
 - `docs/embedding_pipeline.md`：本機 embedding MVP、語意搜尋 API 與後續升級路線
 - `docs/ai_embedding_provider_plan.md`：正式 AI embedding provider 接入規格，包含環境變數、batch、retry、費用控制、重建與測試策略
+- `docs/hf_embedding_trial_comparison.md`：Hugging Face BGE 100 筆 trial embeddings 與 local hashing 的離線 anchor-based 比較報告
 
 ## Current Limitations
 
 目前尚未完成：
 
-- 實務級 embedding 模型
+- 正式 DB 尚未切換為實務級 embedding 模型
+- Hugging Face BGE 目前只完成 trial DB 小樣本驗證，尚未全量重建正式 DB
 - ANN 向量索引
 - OCR fallback
 - Docker
@@ -563,9 +566,9 @@ pnpm build
 建議後續開發順序：
 
 ```text
-1. 使用 Hugging Face provider 搭配 `--limit 20` 小批量試跑 embeddings
-2. 比較 `local_hashing_cjk_v1` 與 `BAAI/bge-large-zh-v1.5` 的查找品質
-3. 評估是否全量重建 Hugging Face embeddings
+1. 讓語意搜尋 API 支援指定 `embedding_model`
+2. 針對 BGE 查詢詞產生 query embedding，做更接近使用者查詢流程的比較
+3. 評估是否將 Hugging Face embeddings 擴大到 `--limit 1000` 或全量重建 trial DB
 4. 試跑 ROC 116 小期間資料
 5. 導入 Docker / CI / 部署設定
 ```

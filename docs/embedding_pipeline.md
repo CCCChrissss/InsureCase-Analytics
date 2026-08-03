@@ -80,6 +80,15 @@ py .\backend\scripts\build_chunk_embeddings.py --provider huggingface --model BA
 
 注意：上述指令會寫入指定 DB 的 `chunk_embeddings`。正式試跑前建議先複製 DB 或使用 trial DB，避免直接改正式展示資料。
 
+目前已完成 trial DB 小樣本驗證：
+
+- `--limit 20`：成功。
+- `--limit 100`：成功。
+- Trial DB：`backend/data/insurance_cases_hf_trial.db`。
+- BGE embeddings：`BAAI/bge-large-zh-v1.5`，1024 維，100 筆。
+- Local embeddings：`local_hashing_cjk_v1`，384 維，17254 筆仍保留。
+- 離線比較報告：`docs/hf_embedding_trial_comparison.md`。
+
 ## 驗證方式
 
 ```powershell
@@ -201,6 +210,6 @@ GET /api/cases/{case_id}/semantic-similar?limit=5
 
 ## 下一步
 
-1. 用 Hugging Face provider 小批量建立 `BAAI/bge-large-zh-v1.5` embeddings。
-2. 抽樣比較 local model 與 Hugging Face model 的語意相似品質。
-3. 若品質與成本可接受，再用新 model 全量重建 embeddings。
+1. 讓語意搜尋 API 支援指定 `embedding_model`。
+2. 針對 BGE 查詢詞產生 query embedding，做 query-to-document 比較。
+3. 若品質與成本可接受，再擴大到 `--limit 1000` 或全量重建 trial DB。

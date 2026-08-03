@@ -66,7 +66,8 @@
 │  ├─ cross_year_trial_run_roc114_full_year.md
 │  ├─ roc114_summary_similarity_quality_check.md
 │  ├─ embedding_pipeline.md
-│  └─ ai_embedding_provider_plan.md
+│  ├─ ai_embedding_provider_plan.md
+│  └─ hf_embedding_trial_comparison.md
 ├─ backend/
 │  ├─ schema.sql
 │  ├─ app/
@@ -181,6 +182,7 @@ frontend/dist/
 - `docs/roc114_summary_similarity_quality_check.md`：ROC 114 摘要與相似案件抽樣品質檢查，記錄摘要覆蓋率、截段污染檢查、相似案件 top 5 檢查與已知例外。
 - `docs/embedding_pipeline.md`：本機 chunk embedding MVP、語意搜尋 API、provider 狀態與後續正式 AI provider 升級路線。
 - `docs/ai_embedding_provider_plan.md`：正式 AI embedding provider 接入規格與 Hugging Face provider 實作狀態，包含 provider 介面、環境變數、API key 管理、batch、retry、費用控制、DB model version、測試與展示說法。
+- `docs/hf_embedding_trial_comparison.md`：Hugging Face `BAAI/bge-large-zh-v1.5` 100 筆 trial embeddings 與 `local_hashing_cjk_v1` 的離線 anchor-based 比較報告。
 
 ### backend
 
@@ -207,6 +209,7 @@ frontend/dist/
 - `backend/scripts/extract_case_summaries.py`：從 normalized text 產生規則式摘要並寫入 `case_summaries`；已支援「二、申請人主張」與非固定序號的「判斷理由」標題。
 - `backend/scripts/build_case_chunks.py`：將 `case_texts.normalized_text` 切成可重跑的 `case_chunks`，保留 section hint、字元起訖位置與 chunk 長度，作為後續 embedding 前置資料。
 - `backend/scripts/build_chunk_embeddings.py`：為 `case_chunks` 建立 embedding，支援 `--provider`、`--model`、`--dims` 與 `--limit`，目前可用 provider 為 `local` 與 `huggingface`。
+- `backend/scripts/compare_embedding_models.py`：比較同一批共同 chunks 在 local hashing 與候選 embedding model 下的相似度排序，輸出 Markdown 報告；目前用於 Hugging Face 100 筆 trial DB，不會呼叫外部 API。
 - `backend/scripts/import_cases_to_db.py`：讀取單一或多個 metadata 與文字檔，匯入 SQLite。
 - `backend/scripts/verify_case_db.py`：驗證 SQLite 筆數、搜尋、路徑與 sample case；可用 `--require-chunks` 與 `--require-embeddings` 檢查 chunk 與 embedding 完整性。
 - `backend/scripts/check_data_quality.py`：檢查 metadata 與 SQLite DB 是否含 mojibake 類異常字元。
@@ -801,7 +804,7 @@ Query parameters：
 - API 錯誤回應格式統一。
 - 正式 React Router。
 - 前端自動化測試。
-- Hugging Face embeddings 尚未對正式 DB 全量重建與抽樣驗證。
+- Hugging Face embeddings 尚未對正式 DB 全量重建；目前只有 trial DB 100 筆與離線 anchor-based 比較報告。
 - OpenAI 或其他外部 AI embedding provider 尚未實作。
 - 實務級向量資料庫或 ANN index。
 
@@ -1248,10 +1251,13 @@ http://127.0.0.1:5173
 - 已新增案件層級語意相似 API 與案件詳情頁區塊，可展示相似案件、分數與實際命中 chunk。
 - 已建立 embedding provider 介面，目前可用 provider 為 `local` 與 `huggingface` / `hf`，`openai` / `ai` 會明確提示尚未實作。
 - 已新增 Hugging Face provider 小批量接入口，預設模型為 `BAAI/bge-large-zh-v1.5`、維度 1024，支援 `EMBEDDING_API_KEY` / `HF_TOKEN`、batch、retry、timeout 與 fake HTTP 測試。
+- 已完成 Hugging Face `BAAI/bge-large-zh-v1.5` 20 筆與 100 筆 trial DB 試跑，trial DB 中 BGE embeddings 為 100 筆，正式 DB 未切換。
+- 已新增 `backend/scripts/compare_embedding_models.py`，可在不呼叫 Hugging Face API 的情況下，比較共同 chunks 的 local / BGE anchor-based 相似度排序。
+- 已新增 `docs/hf_embedding_trial_comparison.md`，記錄 100 筆 trial 的模型分布、比較方法、可比較查詢詞、略過原因、Top results 與限制。
 - 已新增 `docs/ai_embedding_provider_plan.md`，規劃正式 AI embedding provider 的環境變數、API key 管理、batch、retry、費用控制、DB model version、測試與 embeddings 重建流程，並記錄 Hugging Face provider 實作狀態。
 - 已補上正式 AI provider 實作前測試保護，包含 fake provider、provider 回傳筆數檢查、向量維度檢查、`token_count` / `norm` 檢查與非有限數值檢查。
 
-### 下一步：小批量試跑 Hugging Face embeddings 或擴大跨年度資料
+### 下一步：讓 API 支援指定 embedding model 或擴大跨年度資料
 
 優先原因：
 
@@ -1262,7 +1268,7 @@ http://127.0.0.1:5173
 
 建議工作：
 
-1. 若要強化語意品質：設定 Hugging Face token，以 `--limit 20` / `--limit 100` 小批量建立 `BAAI/bge-large-zh-v1.5` embeddings，抽樣比較 local model 與 Hugging Face model，再決定是否全量重建正式 DB。
+1. 若要強化語意品質：讓語意搜尋 API 支援指定 `embedding_model`，並為 BGE 查詢詞產生 query embedding，做更接近使用者查詢流程的比較；再決定是否擴大到 `--limit 1000` 或全量重建 trial DB。
 2. 若要強化資料範圍：試跑 ROC 116 小期間。
 
 ### 第 8 階段：跨年度擴充

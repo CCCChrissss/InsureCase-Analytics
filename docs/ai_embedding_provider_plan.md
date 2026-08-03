@@ -43,6 +43,8 @@
 - `backend/tests/test_embedding_service.py` 已加入 fake provider 與 fake Hugging Face HTTP client 測試，不需要呼叫外部 API 即可驗證寫入、回應解析、重試與異常輸出。
 - `chunk_embeddings` 已用 `(chunk_id, embedding_model)` 作為主鍵，可同時保留不同模型的 embeddings。
 - 語意搜尋 API 與案件層級語意相似 API 目前會依 `embedding_model` 查詢向量。
+- Hugging Face trial DB 已完成 `--limit 20` 與 `--limit 100` 試跑。
+- `docs/hf_embedding_trial_comparison.md` 已記錄 100 筆 trial embeddings 與 local hashing 的離線 anchor-based 比較。
 
 目前正式 DB 狀態：
 
@@ -50,6 +52,13 @@
 - `chunk_embeddings`：17254
 - `embedding_model`：`local_hashing_cjk_v1`
 - `embedding_dims`：384
+
+目前 Hugging Face trial DB 狀態：
+
+- Trial DB：`backend/data/insurance_cases_hf_trial.db`
+- BGE embeddings：100 筆
+- `embedding_model`：`BAAI/bge-large-zh-v1.5`
+- `embedding_dims`：1024
 
 ## 3. 目前暫不執行範圍
 
@@ -336,12 +345,8 @@ py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks --
 
 ## 15. 建議實作順序
 
-1. 設定 Hugging Face token 到 shell 環境變數，不提交 key。
-2. 用 `--limit 20` 小批量試跑。
-3. 用 `--limit 100` 檢查品質與費用。
-4. 抽樣比較 local model 與 Hugging Face model 結果。
-5. 若品質與成本可接受，再全量重建 embeddings。
-6. 後續如需 OpenAI 或其他 provider，再在 `embedding_service.py` 新增 provider。
-7. 增加 API 的 `embedding_model` 可選參數。
-8. 在前端展示目前使用的 model。
-9. 抽樣比較 local MVP 與正式 AI model 結果。
+1. 增加 API 的 `embedding_model` 可選參數。
+2. 針對 BGE 查詢詞產生 query embedding，做 query-to-document 比較。
+3. 在前端展示目前使用的 model。
+4. 若品質與成本可接受，再擴大到 `--limit 1000` 或全量重建 trial DB。
+5. 後續如需 OpenAI 或其他 provider，再在 `embedding_service.py` 新增 provider。
