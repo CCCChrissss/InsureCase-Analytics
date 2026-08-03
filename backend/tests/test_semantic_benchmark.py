@@ -6,6 +6,24 @@ from backend.scripts import evaluate_semantic_benchmark
 from backend.scripts import run_semantic_query_trial
 
 
+def test_local_bge_query_report_states_offline_execution() -> None:
+    report = run_semantic_query_trial.build_markdown_report(
+        {
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "database": "trial.db",
+            "embedding_provider": "local_bge",
+            "embedding_model": "BAAI/bge-large-zh-v1.5-local",
+            "query_set": "benchmark-v1",
+            "queries": [],
+        }
+    )
+
+    assert report.startswith("# Semantic Query Trial")
+    assert "local BGE model cache" in report
+    assert "does not call an external inference API" in report
+    assert "consumes API quota" not in report
+
+
 def make_results() -> dict:
     return {
         "query_set": "test-v1",

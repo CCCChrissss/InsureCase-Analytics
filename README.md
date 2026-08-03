@@ -604,7 +604,8 @@ pnpm build
 - `docs/chunking_pipeline.md`：案件文字 chunking 設計、欄位與正式 DB 驗證結果
 - `docs/embedding_pipeline.md`：本機 embedding MVP、語意搜尋 API 與後續升級路線
 - `docs/ai_embedding_provider_plan.md`：正式 AI embedding provider 接入規格，包含環境變數、batch、retry、費用控制、重建與測試策略
-- `docs/local_bge_provider.md`：本機 BGE provider、CPU / CUDA 安裝、離線模型快取、20 chunks trial 與正式切換條件
+- `docs/local_bge_provider.md`：本機 BGE provider、CPU / CUDA 安裝、離線模型快取、100 chunks trial 與正式切換條件
+- `docs/local_bge_semantic_query_trial_100.md`：本機 BGE 100 candidates、15 詞 Top 5 結果、20/100 涵蓋比較與限制
 - `docs/hf_embedding_trial_comparison.md`：Hugging Face BGE trial embeddings、local hashing 離線 anchor-based 比較與 query-to-document 小樣本試測報告
 - `docs/hf_semantic_query_trial_1000.md`：Hugging Face BGE 1000 筆 candidates 的 query-to-document 詳細查詢結果
 - `docs/hf_semantic_relevance_check_1000.md`：Hugging Face BGE 1000 筆 trial Top 25 人工 relevance check，含 7 筆較不明確結果的 chunk 原文證據核對
@@ -620,7 +621,7 @@ pnpm build
 
 - 正式 DB 尚未切換為實務級 embedding 模型
 - Hugging Face BGE 目前只完成 trial DB 1000 筆小樣本驗證，尚未全量重建正式 DB
-- 本機 BGE 已完成 CPU 與 RTX 4050 CUDA 20 chunks、三個查詢詞的離線流程驗證；尚未完成 1000 筆品質 benchmark 與正式 DB 全量重建
+- 本機 BGE 已完成 RTX 4050 CUDA 100 chunks、15 詞／75 結果的離線 benchmark；尚未完成 1000 筆 benchmark、第二輪人工 relevance 標註與正式 DB 全量重建
 - 前端目前只展示 Hugging Face trial 摘要，不會直接查詢 trial DB 或呼叫 Hugging Face API
 - 15 詞 benchmark v1 已完成 75 筆第一輪 Codex-assisted 原文標註：Strict Precision@5 為 0.8133、Lenient Precision@5 為 0.9333
 - 第二位標註者空白模板與一致性比較工具已完成；第二位獨立標註、實際一致率計算與爭議標記仲裁尚未完成
@@ -639,7 +640,7 @@ pnpm build
 ```text
 1. 第二位標註者在不查看第一輪答案的情況下，完成 75 筆 `label` 與 `evidence_summary`
 2. 執行標註一致性比較，檢查原始一致率、Cohen's Kappa、混淆矩陣並仲裁所有衝突
-3. 將本機 BGE trial 從 20 擴充到 100、1000 筆，重跑固定 benchmark 並與 API BGE 比較
+3. 將本機 BGE trial 從 100 擴充到 1000 筆，重跑固定 benchmark 並與歷史 API BGE 結果比較
 4. 針對 `手術認定`、`豁免保費` 等低 Strict P@5 查詢調整 query 或加入 reranking
 5. 驗證 CUDA PyTorch，評估 CPU / GPU 全量重建時間，再決定是否替換正式 DB
 6. 試跑 ROC 116 小期間資料

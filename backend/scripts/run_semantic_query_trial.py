@@ -92,8 +92,20 @@ def resolve_queries(explicit_queries: list[str] | None, query_set: str | None) -
 
 
 def build_markdown_report(payload: dict[str, Any]) -> str:
+    provider = str(payload["embedding_provider"]).strip().lower()
+    if provider in embedding_service.LOCAL_BGE_PROVIDER_ALIASES:
+        execution_notes = [
+            "This report generated query embeddings from the local BGE model cache.",
+            "It does not call an external inference API and does not modify the source database.",
+        ]
+    else:
+        execution_notes = [
+            f"This report records query embeddings produced by provider `{provider}`.",
+            "Provider availability and network behavior are controlled by the current backend configuration.",
+        ]
+
     lines = [
-        "# Hugging Face Semantic Query Trial",
+        "# Semantic Query Trial",
         "",
         f"- Created at: `{payload['created_at']}`",
         f"- Database: `{payload['database']}`",
@@ -101,8 +113,7 @@ def build_markdown_report(payload: dict[str, Any]) -> str:
         f"- Embedding model: `{payload['embedding_model']}`",
         f"- Query set: `{payload['query_set']}`",
         "",
-        "This report uses Hugging Face to generate a query embedding, then compares it with stored trial chunk embeddings.",
-        "It consumes API quota and does not modify the source database.",
+        *execution_notes,
         "",
     ]
 

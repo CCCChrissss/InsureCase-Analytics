@@ -19,7 +19,7 @@
 
 - `backend/app/services/embedding_service.py` 已有 provider factory。
 - `local` provider 已實作，可離線建立 `local_hashing_cjk_v1` embeddings。
-- `local_bge` provider 已實作，可透過 Sentence Transformers 在本機執行 `BAAI/bge-large-zh-v1.5`，不需要 API token；CPU 與 RTX 4050 CUDA 20 chunks trial 均已通過。
+- `local_bge` provider 已實作，可透過 Sentence Transformers 在本機執行 `BAAI/bge-large-zh-v1.5`，不需要 API token；RTX 4050 CUDA 100 chunks 與 15 詞 benchmark 已通過流程驗證。
 - `huggingface` / `hf` production provider 已停用；即使環境中有 Token，也會在送出 HTTP request 前拒絕。
 - 後端不再讀取 `EMBEDDING_API_KEY` 或 `HF_TOKEN`。
 - 本機 BGE 使用 `local_files_only=True`，執行期間不會自動連線下載模型。
@@ -336,7 +336,7 @@ GET /api/cases/{case_id}/semantic-similar?embedding_provider=local_bge&embedding
 ```text
 系統目前正式 DB 使用本機 CJK hashing vector 完成語意搜尋 MVP，
 已建立 provider 邊界，Hugging Face Inference API 已強制停用。
-本機 BGE 已在 CPU 與 RTX 4050 CUDA 完成 20 chunks 離線 trial，不需要 API token；
+本機 BGE 已在 RTX 4050 CUDA 完成 100 chunks 與 15 詞 benchmark，不需要 API token；
 正式展示 DB 若要切換，仍需擴大 benchmark 並重建 chunk_embeddings，
 案件搜尋 API 與前端展示流程可大致沿用。
 ```
@@ -352,7 +352,7 @@ GET /api/cases/{case_id}/semantic-similar?embedding_provider=local_bge&embedding
 
 ## 15. 建議實作順序
 
-1. 將本機 BGE trial 從 20 擴大到 100、1000 筆，與既有 API BGE benchmark 比較。
+1. 將本機 BGE trial 從 100 擴大到 1000 筆，與既有 API BGE benchmark 比較。
 2. 將 CPU / GPU 建置時間與記憶體使用納入 1000 筆 trial 報告。
 3. 在前端展示實際 provider、model 與 device。
 4. 品質與效能可接受後，再考慮全量重建正式 DB。

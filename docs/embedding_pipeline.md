@@ -76,7 +76,7 @@ provider 狀態：
 
 ```powershell
 $env:LOCAL_BGE_DEVICE="cuda"
-.\.venv\Scripts\python.exe .\backend\scripts\build_chunk_embeddings.py --db .\backend\data\insurance_cases_local_bge_trial.db --provider local_bge --model BAAI/bge-large-zh-v1.5-local --dims 1024 --limit 20
+.\.venv\Scripts\python.exe .\backend\scripts\build_chunk_embeddings.py --db .\backend\data\insurance_cases_local_bge_trial.db --provider local_bge --model BAAI/bge-large-zh-v1.5-local --dims 1024 --limit 100
 ```
 
 注意：上述指令會寫入指定 DB 的 `chunk_embeddings`。正式試跑前建議先複製 DB 或使用 trial DB，避免直接改正式展示資料。
@@ -85,10 +85,10 @@ $env:LOCAL_BGE_DEVICE="cuda"
 
 - `--limit 20`：成功。
 - `--limit 100`：成功。
-- Trial DB：`backend/data/insurance_cases_hf_trial.db`。
-- BGE embeddings：`BAAI/bge-large-zh-v1.5`，1024 維，100 筆。
+- Trial DB：`backend/data/insurance_cases_local_bge_trial.db`。
+- BGE embeddings：`BAAI/bge-large-zh-v1.5-local`，1024 維，100 筆。
 - Local embeddings：`local_hashing_cjk_v1`，384 維，17254 筆仍保留。
-- 離線比較報告：`docs/hf_embedding_trial_comparison.md`。
+- 離線 benchmark 報告：`docs/local_bge_semantic_query_trial_100.md`。
 
 ## 驗證方式
 
