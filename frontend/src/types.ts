@@ -16,11 +16,6 @@ export type CountItem = {
   count: number;
 };
 
-export type DateCountItem = {
-  decision_date: string;
-  count: number;
-};
-
 export type CaseSummary = {
   case_id: string;
   case_number: string;
@@ -202,4 +197,4 @@ export type QualityReport = {
   next_steps: string[];
 };
 
-export type Route = "dashboard" | "cases" | "search" | "semantic" | "statistics" | "quality";
+export type Route = "dashboard" | "cases" | "search" | "semantic" | "quality";

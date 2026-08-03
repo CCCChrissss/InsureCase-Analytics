@@ -155,8 +155,7 @@
          ├─ Dashboard.tsx
          ├─ QualityPage.tsx
          ├─ SearchPage.tsx
-         ├─ SemanticSearchPage.tsx
-         └─ StatisticsPage.tsx
+         └─ SemanticSearchPage.tsx
 ```
 
 未掃描但專案會使用的產物目錄：
@@ -200,7 +199,7 @@ frontend/dist/
 - `docs/cross_year_trial_run_roc114_full_year.md`：ROC 114 全年度跨年度試跑報告，記錄 2500 筆 metadata、PDF/text、案件整理與 trial DB 驗證結果。
 - `docs/roc114_summary_similarity_quality_check.md`：ROC 114 摘要與相似案件抽樣品質檢查，記錄摘要覆蓋率、截段污染檢查、相似案件 top 5 檢查與已知例外。
 - `docs/embedding_pipeline.md`：本機 chunk embedding MVP、語意搜尋 API、provider 狀態與後續正式 AI provider 升級路線。
-- `docs/ai_embedding_provider_plan.md`：正式 AI embedding provider 接入規格與 Hugging Face provider 實作狀態，包含 provider 介面、環境變數、API key 管理、batch、retry、費用控制、DB model version、測試與展示說法。
+- `docs/ai_embedding_provider_plan.md`：正式 AI embedding provider 接入規格與本機 BGE 狀態，包含 provider 介面、環境變數、模型重建、費用控制、DB model version、測試與展示說法。
 - `docs/local_bge_provider.md`：本機 BGE provider、CPU / CUDA 安裝、離線模型快取、1000 chunks 實測結果、查詢 trial 與正式切換條件。
 - `docs/local_bge_semantic_query_trial_100.md`：本機 BGE 100 candidates 的 15 詞 Top 5 結果、20/100 候選涵蓋比較、執行證據與限制。
 - `docs/local_bge_semantic_query_trial_1000.md`：本機 BGE 1000 candidates 的 15 詞 Top 5 結果、100/1000 排名穩定性、執行證據與限制。
@@ -217,7 +216,7 @@ frontend/dist/
 - `backend/schema.sql`：SQLite schema，定義 `cases`、`case_texts`、`case_summaries`、`case_chunks`、`chunk_embeddings`、`case_search` 與索引。
 - `backend/app/config.py`：後端集中設定，支援由環境變數覆蓋 DB path、CORS origins 與 embedding provider 設定。
 - `backend/app/main.py`：FastAPI app 入口，設定 CORS 與註冊 routers。
-- `backend/app/database.py`：SQLite 連線、預設 DB 路徑與 schema 初始化。
+- `backend/app/database.py`：SQLite 連線與預設 DB 路徑。
 - `backend/app/schemas.py`：Pydantic response models。
 - `backend/app/routers/health.py`：健康檢查 API。
 - `backend/app/routers/cases.py`：案件列表、案件詳情、爭議類型、PDF 讀取 API。
@@ -225,19 +224,19 @@ frontend/dist/
 - `backend/app/routers/search.py`：全文搜尋 API。
 - `backend/app/routers/semantic_search.py`：chunk embedding 語意搜尋 API，支援 `embedding_model` / `embedding_provider` 可選參數。
 - `backend/app/routers/similar_cases.py`：相似案件 API；案件層級語意相似 API 支援 `embedding_model` / `embedding_provider` 可選參數。
-- `backend/app/routers/statistics.py`：統計 API，支援可選 `roc_year` 篩選。
+- `backend/app/routers/statistics.py`：首頁與案件篩選使用的輕量總覽 API，支援可選 `roc_year`。
 - `backend/app/routers/summaries.py`：案件摘要 API。
 - `backend/app/services/case_service.py`：案件查詢、篩選、分頁、PDF path resolver。
-- `backend/app/services/embedding_service.py`：embedding provider 介面、本機 CJK hashing、本機 Sentence Transformers BGE、chunk embedding 建置、chunk 語意搜尋與案件層級語意相似；目前只啟用 `local` 與 `local_bge`，`huggingface` / `hf` 會在 HTTP request 前被拒絕，本機 BGE 強制只讀本機模型快取。
+- `backend/app/services/embedding_service.py`：embedding provider 介面、本機 CJK hashing、本機 Sentence Transformers BGE、chunk embedding 建置、chunk 語意搜尋與案件層級語意相似；目前只啟用 `local` 與 `local_bge`，遠端 Hugging Face HTTP 實作已移除，本機 BGE 強制只讀本機模型快取。
 - `backend/app/services/quality_service.py`：ROC 114 分析驗證報告資料。
 - `backend/app/services/search_service.py`：FTS5 搜尋、LIKE fallback、snippet 產生；FTS5 報錯或 0 筆時會進 LIKE fallback，且 fallback 會查案號、爭議類型與 normalized text。
 - `backend/app/services/similar_case_service.py`：規則式相似案件計分。
-- `backend/app/services/statistics_service.py`：總覽、爭議類型、決定日期統計，支援可選年度條件。
+- `backend/app/services/statistics_service.py`：案件總數、爭議類型數、年度與日期範圍總覽，支援可選年度條件。
 - `backend/app/services/summary_service.py`：案件摘要查詢。
 - `backend/scripts/extract_case_summaries.py`：從 normalized text 產生規則式摘要並寫入 `case_summaries`；已支援「二、申請人主張」與非固定序號的「判斷理由」標題。
 - `backend/scripts/build_case_chunks.py`：將 `case_texts.normalized_text` 切成可重跑的 `case_chunks`，保留 section hint、字元起訖位置與 chunk 長度，作為後續 embedding 前置資料。
 - `backend/scripts/build_chunk_embeddings.py`：為 `case_chunks` 建立 embedding，支援 `--provider`、`--model`、`--dims` 與 `--limit`，目前啟用 provider 為 `local` 與 `local_bge`。
-- `backend/scripts/compare_embedding_models.py`：比較同一批共同 chunks 在 local hashing 與候選 embedding model 下的相似度排序，輸出 Markdown 報告；目前用於 Hugging Face trial DB，不會呼叫外部 API。
+- `backend/scripts/compare_embedding_models.py`：比較同一批共同 chunks 在 local hashing 與候選 embedding model 下的相似度排序，預設使用本機 BGE trial DB 並輸出至 `outputs/`，不會呼叫外部 API。
 - `backend/scripts/compare_semantic_annotations.py`：驗證並比較兩份完整 benchmark 標註，計算原始一致率、Cohen's Kappa、混淆矩陣與各查詢一致率，並輸出待仲裁衝突清單。
 - `backend/scripts/run_semantic_query_trial.py`：在指定 SQLite trial DB 上執行 query-to-document 語意搜尋試測，預設使用本機 BGE，支援重複 `--query`、固定 `benchmark-v1`、JSON 與 Markdown 輸出；查詢不修改 DB，也不使用外部 API。
 - `backend/scripts/evaluate_semantic_benchmark.py`：由 query trial JSON 產生人工標註模板，驗證每筆 label 與 evidence summary 完整性，並輸出 strict / lenient、macro / micro Precision@5 與逐筆證據報告。
@@ -248,7 +247,7 @@ frontend/dist/
 - `backend/tests/test_build_case_chunks.py`：chunking 邏輯、section hint 與 SQLite 寫入測試。
 - `backend/tests/test_cross_year_pipeline_defaults.py`：跨年度 pipeline 預設輸出路徑測試。
 - `backend/tests/test_data_quality.py`：資料品質檢查測試。
-- `backend/tests/test_embedding_service.py`：本機 hashing、本機 BGE fake model、provider factory、Hugging Face fake HTTP client、維度與記憶體錯誤、embedding 寫入、搜尋排序及案件層級語意相似測試。
+- `backend/tests/test_embedding_service.py`：本機 hashing、本機 BGE fake model、provider factory、遠端 aliases 拒絕、維度與記憶體錯誤、embedding 寫入、搜尋排序及案件層級語意相似測試。
 - `backend/tests/test_import_cases_to_db.py`：SQLite 匯入腳本測試，包含多 metadata 匯入與 metadata 目錄解析。
 - `backend/tests/test_search_service.py`：搜尋 fallback 單元測試，覆蓋 normalized text、案號與爭議類型 fallback。
 - `backend/tests/test_semantic_annotation_agreement.py`：雙標註一致性測試，覆蓋完全一致、部分衝突、標註者名稱重複、結果鍵值不符與 Kappa 無法定義情境。
@@ -528,7 +527,7 @@ local_hashing_cjk_v1
 - `local`：正式展示 DB 目前使用的 provider，使用本機 CJK hashing vector。
 - `local_hashing`：`local` 的相容別名。
 - `local_bge`：已實作本機 Sentence Transformers provider，來源模型為 `BAAI/bge-large-zh-v1.5`，DB 儲存名稱為 `BAAI/bge-large-zh-v1.5-local`、維度 1024，不需要 API token；RTX 4050 CUDA 1000 chunks 與 15 詞 benchmark 流程已通過。
-- `huggingface` / `hf`：遠端 Inference API 已強制停用；即使環境中殘留 Token，也會在送出 HTTP request 前拋出 `EmbeddingProviderError`。
+- `huggingface` / `hf`：可送出遠端 embedding request 的實作已移除；aliases 會直接拋出 `EmbeddingProviderError`。
 - `openai` / `ai`：預留給未來 OpenAI 類 provider，目前會明確拋出 `EmbeddingProviderError`。
 
 注意：正式 DB 目前仍是學校專題版的本機 hashing vector MVP。本機 BGE 已完成 1000 chunks trial，但尚未完成獨立人工品質驗證；只改環境變數不會更新既有資料，仍必須用新 provider / model 重建 `chunk_embeddings`。
@@ -598,6 +597,10 @@ GET /api/dispute-types
 ```
 
 用途：取得爭議類型清單與數量，供前端 filter 使用。
+
+Query parameters：
+
+- `roc_year`：可選；指定後只回傳該年度的爭議類型與數量。
 
 ```text
 GET /api/files/{case_id}/pdf
@@ -719,26 +722,6 @@ Query parameters：
 
 - `roc_year`：可選；指定後只統計該年度案件。
 
-```text
-GET /api/statistics/dispute-types
-```
-
-用途：依爭議類型統計案件數。
-
-Query parameters：
-
-- `roc_year`：可選；指定後只統計該年度案件。
-
-```text
-GET /api/statistics/decision-dates
-```
-
-用途：依決定日期統計案件數。
-
-Query parameters：
-
-- `roc_year`：可選；指定後只統計該年度案件。
-
 ## 8. 目前已完成功能
 
 ### 資料處理
@@ -789,7 +772,7 @@ Query parameters：
 - 摘要 API。
 - 規則式相似案件 API。
 - 分析驗證 API。
-- 統計 API，支援年度篩選。
+- 案件總覽與爭議類型 API，支援年度篩選。
 - 後端 pytest 測試。
 - 案件詳情展示鏈 API 測試，覆蓋詳情、PDF、摘要、規則式相似案件與語意相似案件。
 - OpenAPI docs 可由 FastAPI 自動產生。
@@ -843,7 +826,7 @@ Query parameters：
 - 前端自動化測試。
 - Hugging Face embeddings 尚未對正式 DB 全量重建；目前已完成 trial DB 1000 筆、離線 anchor-based 比較報告，以及 5 個查詢詞的 query-to-document 小樣本試測。
 - 本機 BGE 已完成 RTX 4050 CUDA 1000 chunks embeddings、15 詞／75 結果離線 benchmark；尚未完成獨立人工 relevance 標註、歷史 API BGE 排名比較或正式 DB 全量重建。
-- 前端語意搜尋頁目前只展示 Hugging Face trial 摘要，不會直接查詢 trial DB 或呼叫 Hugging Face API。
+- 前端語意搜尋頁目前展示 Local BGE trial 摘要，不會直接查詢 trial DB 或呼叫外部 embedding API。
 - 15 詞 benchmark v1 已完成 75 筆 Codex-assisted 第一輪原文標註與 Precision@5 報告。
 - 第二位標註者空白模板與一致性比較工具已完成；第二位獨立標註、實際一致率計算與爭議標記仲裁尚未完成。
 - OpenAI 或其他外部 AI embedding provider 尚未實作。
@@ -1263,18 +1246,19 @@ http://127.0.0.1:5173
 - 搜尋頁可查「癌症」，並顯示搜尋摘要、match source、fallback 說明與 snippet。
 - 語意搜尋頁可查「癌症保險金」，並顯示 embedding 模型、候選 chunk、cosine score、score bar、section hint、命中段落與本機 MVP 限制。
 - 側邊欄不再顯示統計主入口。
-- 若直接開啟 `?view=statistics`，統計頁仍可作為輔助檢查使用。
 - 分析驗證頁可看到摘要品質、相似度規則、抽樣案件與已知例外。
 - 瀏覽器 console 無 error。
 
 ### 最近一次本機穩定檢查
 
-2026-07-28 已完成以下檢查：
+2026-08-03 已完成以下檢查：
 
-- `py -m pytest`：52 passed。
+- `.\.venv\Scripts\python.exe -m pytest`：78 passed。
 - `py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks --require-embeddings`：passed，`cases = 2992`、`case_chunks = 17254`、`chunk_embeddings = 17254`。
-- `py -m py_compile .\backend\app\services\embedding_service.py .\backend\scripts\build_chunk_embeddings.py`：通過。
-- `py .\backend\scripts\build_chunk_embeddings.py --help`：可正常顯示 provider、model、dims 與 limit 參數。
+- embedding、案件篩選、統計總覽與模型比較腳本的 `py_compile`：通過。
+- `pnpm build`：TypeScript 與 Vite production build 通過。
+- `compare_embedding_models.py --query 癌症 --top 1 --json`：預設使用本機 BGE trial DB，完成 1000 個共同 chunks 離線比較。
+- 正式執行程式未包含 Hugging Face router URL、Bearer header、Token 讀取或遠端 embedding HTTP client。
 
 注意：語意搜尋頁第一次載入會計算 17254 筆 chunk embedding 相似度，可能短暫顯示「載入中」；等待數秒後會顯示結果。
 
@@ -1295,7 +1279,7 @@ http://127.0.0.1:5173
 - 前端結構拆分。
 - 環境設定集中化與 `.env.example`。
 - SQLite 匯入腳本支援多 metadata。
-- 統計 API 與前端年度篩選。
+- 案件總覽、爭議類型 API 與前端年度篩選。
 - 跨年度 pipeline 預設檔名修正與 readiness 報告。
 - ROC 114 一月資料小期間試跑，metadata / PDF text / case organizer 均成功 112 筆。
 - ROC 114 全年度資料試跑，metadata / PDF text / case organizer 均成功 2500 筆。
@@ -1310,7 +1294,7 @@ http://127.0.0.1:5173
 - 已讓語意搜尋 API 與案件層級語意相似 API 支援 `embedding_model` / `embedding_provider` 可選參數，並加入 provider/model 維度不一致防呆。
 - 已建立 embedding provider 介面，目前只啟用 `local` 與 `local_bge`；`huggingface` / `hf`、`openai` / `ai` 均會明確拒絕執行。
 - 已完成本機 `BAAI/bge-large-zh-v1.5` CUDA provider、模型快取、1000 chunks / 1024 維 trial 與 15 詞／75 結果的完全離線 benchmark；RTX 4050 GPU 推論已驗證，正式 DB 未切換。
-- 曾完成 Hugging Face API provider 與小批量試測；目前 production factory 已停用該 provider，後端不再讀取 `EMBEDDING_API_KEY` / `HF_TOKEN`，歷史 fake HTTP 測試只保留協定回歸用途。
+- 曾完成 Hugging Face API provider 與小批量試測；目前遠端 HTTP provider、response parser、retry 與 Token 設定已從 production code 移除，歷史結果只保留在文件與 trial DB。
 - 已完成 Hugging Face `BAAI/bge-large-zh-v1.5` 20 筆、100 筆與 1000 筆 trial DB 試跑，trial DB 中 BGE embeddings 為 1000 筆，正式 DB 未切換。
 - 已新增 `backend/scripts/compare_embedding_models.py`，可在不呼叫 Hugging Face API 的情況下，比較共同 chunks 的 local / BGE anchor-based 相似度排序。
 - 已更新 `backend/scripts/run_semantic_query_trial.py`，預設以本機 BGE 執行固定 `benchmark-v1` 的 15 個 queries，並分別輸出 JSON 與 Markdown。
@@ -1320,9 +1304,10 @@ http://127.0.0.1:5173
 - 已新增 `docs/hf_semantic_query_trial_1000.md`，記錄 1000 筆 BGE candidates 下 5 個查詢詞的詳細 Top 5 結果。
 - 已更新 `docs/hf_semantic_relevance_check_1000.md`，針對 5 個查詢詞 Top 5、共 25 筆結果做人工 relevance check，並回查 7 筆較不明確結果的 chunk 原文；最終為 24 筆相關、1 筆部分相關、0 筆待確認。
 - 已完成 `docs/hf_semantic_benchmark_v1_results.md`、`docs/hf_semantic_benchmark_v1_annotations.json` 與 `docs/hf_semantic_benchmark_v1_evaluation.md`；第一輪共 61 筆相關、9 筆部分相關、5 筆不相關，Strict P@5 0.8133、Lenient P@5 0.9333。
-- 已新增 `docs/ai_embedding_provider_plan.md`，規劃正式 AI embedding provider 的環境變數、API key 管理、batch、retry、費用控制、DB model version、測試與 embeddings 重建流程，並記錄 Hugging Face provider 實作狀態。
+- 已新增 `docs/ai_embedding_provider_plan.md`，規劃正式 AI embedding provider 的環境變數、費用控制、DB model version、測試與 embeddings 重建流程，並記錄本機 BGE 與歷史 Hugging Face trial 狀態。
 - 已補上正式 AI provider 實作前測試保護，包含 fake provider、provider 回傳筆數檢查、向量維度檢查、`token_count` / `norm` 檢查與非有限數值檢查。
-- 已更新前端 `SemanticSearchPage`，提供 Local MVP 與 Hugging Face BGE Trial 模型狀態切換；Local MVP 可直接查正式 DB，Hugging Face Trial 只展示 1000 筆試測摘要，避免誤認正式 DB 已切換。
+- 已更新前端 `SemanticSearchPage`，提供 Local Hashing MVP 與 Local BGE Trial 模型狀態切換；Local Hashing MVP 可直接查正式 DB，Local BGE Trial 只展示 1000 筆完全離線試測摘要，避免誤認正式 DB 已切換。
+- 已完成迭代後 Code Review：移除舊遠端 Hugging Face HTTP provider、response parser、retry / timeout 設定與專用 fake HTTP 測試；移除隱藏統計頁、重複統計 endpoints、未使用的 `recharts` 與未引用的資料庫初始化函式。
 
 ### 下一步：完成第二位獨立標註並仲裁 benchmark v1
 

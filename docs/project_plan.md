@@ -199,8 +199,6 @@ GET /api/cases/{case_id}
 GET /api/dispute-types
 GET /api/search
 GET /api/statistics/overview
-GET /api/statistics/dispute-types
-GET /api/statistics/decision-dates
 GET /api/files/{case_id}/pdf
 ```
 

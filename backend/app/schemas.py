@@ -141,11 +141,6 @@ class CountItem(BaseModel):
     count: int
 
 
-class DateCountItem(BaseModel):
-    decision_date: str
-    count: int
-
-
 class QualityScope(BaseModel):
     roc_year: int
     case_count: int

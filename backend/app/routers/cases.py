@@ -36,8 +36,8 @@ def get_case_detail(case_id: str) -> dict:
 
 
 @router.get("/dispute-types", response_model=list[CountItem])
-def get_dispute_types() -> list[dict]:
-    return list_dispute_types()
+def get_dispute_types(roc_year: int | None = Query(default=None, ge=1)) -> list[dict]:
+    return list_dispute_types(roc_year=roc_year)
 
 
 @router.get("/files/{case_id}/pdf")

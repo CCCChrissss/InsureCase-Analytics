@@ -40,15 +40,13 @@ def test_statistics_supports_roc_year_filter() -> None:
     roc_year = overview_response.json()["roc_years"][0]
 
     filtered_overview = client.get("/api/statistics/overview", params={"roc_year": roc_year})
-    filtered_disputes = client.get("/api/statistics/dispute-types", params={"roc_year": roc_year})
-    filtered_dates = client.get("/api/statistics/decision-dates", params={"roc_year": roc_year})
+    filtered_disputes = client.get("/api/dispute-types", params={"roc_year": roc_year})
 
     assert filtered_overview.status_code == 200
     assert filtered_overview.json()["case_count"] >= 1
     assert filtered_disputes.status_code == 200
     assert len(filtered_disputes.json()) >= 1
-    assert filtered_dates.status_code == 200
-    assert len(filtered_dates.json()) >= 1
+    assert sum(item["count"] for item in filtered_disputes.json()) == filtered_overview.json()["case_count"]
 
 
 def test_cases() -> None:

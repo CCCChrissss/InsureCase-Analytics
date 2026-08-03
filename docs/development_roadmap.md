@@ -86,7 +86,7 @@ py .\backend\scripts\verify_case_db.py
 - `/docs` 可開啟。
 - `/api/cases` 回傳分頁資料。
 - `/api/search?q=癌症` 有搜尋結果。
-- `/api/statistics/dispute-types` 數量總和 = 492。
+- `/api/dispute-types` 數量總和 = 492，並支援 `roc_year` 篩選。
 
 ## 第 3 階段：React 前端 MVP
 

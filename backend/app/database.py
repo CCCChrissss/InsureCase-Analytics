@@ -3,10 +3,9 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from backend.app.config import DATABASE_PATH, PROJECT_ROOT
+from backend.app.config import DATABASE_PATH
 
 DEFAULT_DB_PATH = DATABASE_PATH
-SCHEMA_PATH = PROJECT_ROOT / "backend" / "schema.sql"
 
 
 def connect(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
@@ -15,8 +14,3 @@ def connect(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON;")
     return connection
-
-
-def initialize_database(db_path: Path = DEFAULT_DB_PATH, schema_path: Path = SCHEMA_PATH) -> None:
-    with connect(db_path) as connection:
-        connection.executescript(schema_path.read_text(encoding="utf-8"))

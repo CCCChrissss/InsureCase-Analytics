@@ -11,13 +11,6 @@ def year_filter_clause(roc_year: int | None) -> tuple[str, list[Any]]:
     return "WHERE roc_year = ?", [roc_year]
 
 
-def append_year_filter(base_where: str, roc_year: int | None) -> tuple[str, list[Any]]:
-    if roc_year is None:
-        return base_where, []
-    prefix = "AND" if base_where.strip().upper().startswith("WHERE") else "WHERE"
-    return f"{base_where} {prefix} roc_year = ?", [roc_year]
-
-
 def get_overview(roc_year: int | None = None) -> dict[str, Any]:
     where, params = year_filter_clause(roc_year)
     with connect() as connection:
@@ -43,35 +36,3 @@ def get_overview(roc_year: int | None = None) -> dict[str, Any]:
         "first_decision_date": date_range["first_decision_date"],
         "last_decision_date": date_range["last_decision_date"],
     }
-
-
-def get_dispute_type_counts(roc_year: int | None = None) -> list[dict[str, Any]]:
-    where, params = append_year_filter("WHERE dispute_type IS NOT NULL AND dispute_type != ''", roc_year)
-    with connect() as connection:
-        rows = connection.execute(
-            f"""
-            SELECT dispute_type AS name, COUNT(*) AS count
-            FROM cases
-            {where}
-            GROUP BY dispute_type
-            ORDER BY count DESC, dispute_type ASC;
-            """,
-            params,
-        ).fetchall()
-    return [dict(row) for row in rows]
-
-
-def get_decision_date_counts(roc_year: int | None = None) -> list[dict[str, Any]]:
-    where, params = append_year_filter("WHERE decision_date IS NOT NULL AND decision_date != ''", roc_year)
-    with connect() as connection:
-        rows = connection.execute(
-            f"""
-            SELECT decision_date, COUNT(*) AS count
-            FROM cases
-            {where}
-            GROUP BY decision_date
-            ORDER BY decision_date ASC;
-            """,
-            params,
-        ).fetchall()
-    return [dict(row) for row in rows]

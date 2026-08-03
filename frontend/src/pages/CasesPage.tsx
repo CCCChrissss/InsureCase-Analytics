@@ -39,7 +39,7 @@ export function CasesPage({
     rocYear
   ]);
   const overview = useAsyncData(() => apiGet<OverviewStatistics>("/statistics/overview"), []);
-  const disputeTypes = useAsyncData(() => apiGet<CountItem[]>(apiPath("/statistics/dispute-types", { roc_year: rocYear })), [rocYear]);
+  const disputeTypes = useAsyncData(() => apiGet<CountItem[]>(apiPath("/dispute-types", { roc_year: rocYear })), [rocYear]);
   const detail = useAsyncData(
     () => (selectedCaseId ? apiGet<CaseDetail>(`/cases/${selectedCaseId}`) : Promise.resolve(null)),
     [selectedCaseId]

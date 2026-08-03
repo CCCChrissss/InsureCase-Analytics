@@ -76,7 +76,7 @@ LOCAL_BGE_BATCH_SIZE=4
 
 模型權重已預先下載到本機 Hugging Face cache。Production loader 固定傳入 `local_files_only=True`，執行期間只讀本機檔案；若模型不存在會直接報錯，不會自動連線下載。
 
-`huggingface` / `hf` Inference API provider 也已在 production factory 強制停用。即使 shell 中殘留 `EMBEDDING_API_KEY` 或 `HF_TOKEN`，後端也不會讀取 Token，並會在送出 HTTP request 前拒絕執行。
+可送出 Hugging Face Inference API request 的 provider 實作已從 production code 移除。`huggingface` / `hf` 只保留為拒絕 aliases；即使 shell 中殘留 `EMBEDDING_API_KEY` 或 `HF_TOKEN`，後端也不會讀取 Token，且沒有遠端 embedding request 程式可執行。
 
 目前 Windows 未啟用 symlink，Hugging Face Hub 會使用降級快取模式，可能占用較多磁碟空間。仍建議設定以下環境變數作為第二層離線保護：
 

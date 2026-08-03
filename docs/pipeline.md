@@ -371,7 +371,8 @@ backend/data/insurance_cases.db
   ↓ FastAPI services
 GET /api/cases
 GET /api/search
-GET /api/statistics/*
+GET /api/dispute-types
+GET /api/statistics/overview
 ```
 
 啟動 API：

@@ -16,10 +16,10 @@ if str(PROJECT_ROOT) not in sys.path:
 from backend.app.services.embedding_service import dot_product
 from backend.app.services.embedding_service import unpack_vector
 
-DEFAULT_DB_PATH = PROJECT_ROOT / "backend" / "data" / "insurance_cases_hf_trial.db"
-DEFAULT_OUTPUT_PATH = PROJECT_ROOT / "docs" / "hf_embedding_trial_comparison.md"
+DEFAULT_DB_PATH = PROJECT_ROOT / "backend" / "data" / "insurance_cases_local_bge_trial.db"
+DEFAULT_OUTPUT_PATH = PROJECT_ROOT / "outputs" / "local_bge_embedding_comparison.md"
 DEFAULT_LOCAL_MODEL = "local_hashing_cjk_v1"
-DEFAULT_CANDIDATE_MODEL = "BAAI/bge-large-zh-v1.5"
+DEFAULT_CANDIDATE_MODEL = "BAAI/bge-large-zh-v1.5-local"
 DEFAULT_QUERIES = (
     "癌症保險金",
     "癌症",
@@ -239,12 +239,12 @@ def build_report(
     compared_count = sum(1 for item in comparisons if item["status"] == "compared")
     skipped_count = len(comparisons) - compared_count
     lines = [
-        "# Hugging Face Embedding Trial Comparison",
+        "# Embedding Model Trial Comparison",
         "",
         "## 1. 目的",
         "",
-        "本報告記錄 Hugging Face `BAAI/bge-large-zh-v1.5` 在 100 筆 trial chunks 上的離線比較結果。",
-        "比較重點不是宣稱模型已正式上線，而是確認外部 embedding provider 寫入後，可以用同一批 chunks 做可追溯的相似度分析。",
+        f"本報告比較 `{local_model}` 與 `{candidate_model}` 在共同 trial chunks 上的離線排序結果。",
+        "比較重點不是宣稱模型已正式上線，而是確認不同 embedding model 可在同一批 chunks 上進行可追溯分析。",
         "",
         "## 2. 試跑資料",
         "",
@@ -267,15 +267,15 @@ def build_report(
             "",
             "## 3. 比較方法",
             "",
-            "本次不再呼叫 Hugging Face API，因此不會產生新的 query embedding，也不會消耗額度。",
+            "本次只讀取 trial DB 已存在的 embeddings，不會呼叫外部 API。",
             "比較採用 anchor-based 方法：",
             "",
-            "1. 在同時擁有 local 與 BGE embeddings 的 100 個 chunks 中，尋找包含查詢詞的 anchor chunk。",
+            f"1. 在同時擁有兩種 embeddings 的 {common_count} 個 chunks 中，尋找包含查詢詞的 anchor chunk。",
             "2. 使用同一個 anchor chunk 的 local 向量，比對其餘共同 chunks。",
             "3. 使用同一個 anchor chunk 的 BGE 向量，比對其餘共同 chunks。",
             "4. 比較兩種模型各自 Top results 的分數、爭議類型與命中段落。",
             "",
-            "限制：這不是完整的 query-to-document 語意搜尋評測。若要比較真實查詢詞，需要再呼叫 Hugging Face 產生 query embedding，或全量建立 BGE embeddings 後新增 API 參數切換模型。",
+            "限制：這是 anchor-based 模型比較，不是完整的 query-to-document 評測。真實查詢詞應使用 run_semantic_query_trial.py 與人工 relevance 標註驗證。",
             "",
             "## 4. 結果摘要",
             "",
@@ -338,9 +338,9 @@ def build_report(
         [
             "## 5. 初步結論",
             "",
-            "- Hugging Face provider、1024 維 BGE embeddings 與 SQLite 寫入流程已通過 100 筆 trial 驗證。",
-            "- 本報告只代表 100 筆小樣本的離線 anchor-based 比較，不能宣稱全量搜尋品質已優於 local MVP。",
-            "- 若要做更接近使用者體驗的比較，下一步應讓 API 支援指定 `embedding_model`，並為查詢詞產生對應 BGE query embedding。",
+            f"- `{candidate_model}` 與 SQLite 寫入流程可用共同 chunks 進行離線比較。",
+            "- 本報告只代表目前共同樣本的 anchor-based 比較，不能宣稱全量搜尋品質已優於 local MVP。",
+            "- 更接近使用者體驗的比較應執行固定 query benchmark，並完成人工 relevance 標註。",
             "- 正式 DB `backend/data/insurance_cases.db` 目前仍應維持 `local_hashing_cjk_v1`，等品質與成本評估後再決定是否全量重建。",
             "",
         ]

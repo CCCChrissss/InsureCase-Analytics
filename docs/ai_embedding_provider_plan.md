@@ -4,7 +4,7 @@
 
 本文件規劃如何將目前的本機 `local_hashing_cjk_v1` 語意搜尋 MVP，升級成可串接正式 AI embedding model 的工程架構。
 
-目前曾完成 Hugging Face API provider 小批量試測，並已完成本機 BGE provider。為避免後續產生外部 API 費用，production factory 現已強制停用 Hugging Face Inference API，只保留歷史 trial 資料作比較。
+目前曾完成 Hugging Face API provider 小批量試測，並已完成本機 BGE provider。為避免後續產生外部 API 費用，可送出 Hugging Face embedding request 的 production code 已移除，只保留歷史 trial 資料作比較，`huggingface` / `hf` aliases 會直接拒絕執行。
 
 - provider 介面如何擴充。
 - API key 與敏感資訊如何管理。
@@ -20,7 +20,7 @@
 - `backend/app/services/embedding_service.py` 已有 provider factory。
 - `local` provider 已實作，可離線建立 `local_hashing_cjk_v1` embeddings。
 - `local_bge` provider 已實作，可透過 Sentence Transformers 在本機執行 `BAAI/bge-large-zh-v1.5`，不需要 API token；RTX 4050 CUDA 1000 chunks 與 15 詞 benchmark 已通過流程驗證。
-- `huggingface` / `hf` production provider 已停用；即使環境中有 Token，也會在送出 HTTP request 前拒絕。
+- `huggingface` / `hf` 遠端實作已移除；即使環境中有 Token，也沒有可送出 embedding request 的 provider。
 - 後端不再讀取 `EMBEDDING_API_KEY` 或 `HF_TOKEN`。
 - 本機 BGE 使用 `local_files_only=True`，執行期間不會自動連線下載模型。
 - `openai` / `ai` provider 名稱已保留，但目前會明確拋出 `EmbeddingProviderError`。
@@ -35,7 +35,7 @@
   - `token_count` 不可為負數。
   - `norm` 必須是有限且非負數。
   - vector 不可包含 NaN 或 Infinity。
-- `backend/tests/test_embedding_service.py` 已加入遠端 provider 強制封鎖、零 HTTP calls、本機 `local_files_only=True`、fake provider 與歷史 fake Hugging Face client 測試。
+- `backend/tests/test_embedding_service.py` 已加入遠端 provider aliases 拒絕、本機 `local_files_only=True`、fake provider 與 embedding 邊界測試。
 - `chunk_embeddings` 已用 `(chunk_id, embedding_model)` 作為主鍵，可同時保留不同模型的 embeddings。
 - 語意搜尋 API 與案件層級語意相似 API 目前會依 `embedding_model` 查詢向量。
 - `GET /api/semantic-search` 與 `GET /api/cases/{case_id}/semantic-similar` 已支援 `embedding_model` / `embedding_provider` query 參數。
@@ -164,7 +164,7 @@ EMBEDDING_DIMS=384
 建議流程：
 
 1. 從 `case_chunks` 讀取尚未建立指定 `embedding_model` 的 chunks。
-2. 依 `EMBEDDING_BATCH_SIZE` 分批。
+2. 依 provider 的 batch size 分批；本機 BGE 使用 `LOCAL_BGE_BATCH_SIZE`。
 3. 每批呼叫 provider。
 4. 成功後立即寫入 `chunk_embeddings`。
 5. 失敗時保留已完成批次，方便續跑。
@@ -298,9 +298,9 @@ GET /api/cases/{case_id}/semantic-similar?embedding_provider=local_bge&embedding
 
 - `local` provider 正常。
 - `huggingface` / `hf` provider 即使 Token 存在也必須明確報錯。
-- 遠端 provider 被拒絕時 fake HTTP client 必須維持零 calls。
+- `huggingface` / `hf` aliases 必須直接拒絕，且 production module 不包含遠端 HTTP provider。
 - 本機 BGE model loader 必須傳入 `local_files_only=True`。
-- 歷史 Hugging Face 協定可用明確測試 opt-in 與 fake HTTP client 驗證，不得連到真實 API。
+- 歷史 Hugging Face API 結果只保留在 trial 報告，不再保留可重新啟用的 HTTP client 實作。
 - `openai` / `ai` provider 仍明確標示預留未實作。
 - fake provider 可模擬固定向量回傳。此項目前已完成。
 - batch 寫入不會破壞既有 embeddings。
@@ -336,7 +336,7 @@ GET /api/cases/{case_id}/semantic-similar?embedding_provider=local_bge&embedding
 
 ```text
 系統目前正式 DB 使用本機 CJK hashing vector 完成語意搜尋 MVP，
-已建立 provider 邊界，Hugging Face Inference API 已強制停用。
+已建立 provider 邊界，Hugging Face Inference API 執行實作已移除。
 本機 BGE 已在 RTX 4050 CUDA 完成 1000 chunks 與 15 詞 benchmark，不需要 API token；
 正式展示 DB 若要切換，仍需完成人工 relevance 驗證並重建 chunk_embeddings，
 案件搜尋 API 與前端展示流程可大致沿用。

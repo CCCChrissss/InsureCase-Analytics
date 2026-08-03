@@ -3,7 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from backend.app.database import PROJECT_ROOT, connect
+from backend.app.config import PROJECT_ROOT
+from backend.app.database import connect
 
 
 VALID_PAGE_SIZE_MAX = 100
@@ -93,16 +94,19 @@ def get_case(case_id: str) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
-def list_dispute_types() -> list[dict[str, Any]]:
+def list_dispute_types(roc_year: int | None = None) -> list[dict[str, Any]]:
+    where, params = build_case_filters(roc_year=roc_year)
     with connect() as connection:
         rows = connection.execute(
-            """
+            f"""
             SELECT dispute_type AS name, COUNT(*) AS count
             FROM cases
-            WHERE dispute_type IS NOT NULL AND dispute_type != ''
+            {where}
+            {"AND" if where else "WHERE"} dispute_type IS NOT NULL AND dispute_type != ''
             GROUP BY dispute_type
             ORDER BY count DESC, dispute_type ASC;
-            """
+            """,
+            params,
         ).fetchall()
     return [dict(row) for row in rows]
 

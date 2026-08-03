@@ -6,7 +6,7 @@
 
 目前正式展示資料仍是學校專題版 MVP：使用本機純 Python hashing vector，不依賴外部 API，也不需要 API key。
 
-程式已另外支援 Hugging Face embedding provider，可用於小批量試跑與後續正式 AI embedding 替換；但只改 provider 設定不會改變既有 DB 內容，必須重建 `chunk_embeddings`。
+程式已另外支援完全離線的本機 BGE provider，可用於小批量試跑與後續正式 AI embedding 替換；但只改 provider 設定不會改變既有 DB 內容，必須重建 `chunk_embeddings`。遠端 Hugging Face embedding provider 實作已移除。
 
 ## 目前模型
 
@@ -67,7 +67,7 @@ provider 狀態：
 - `local`：目前正式 DB 使用的 provider。
 - `local_hashing`：`local` 的相容別名。
 - `local_bge`：本機 Sentence Transformers BGE，stored model 為 `BAAI/bge-large-zh-v1.5-local`、1024 維，只讀本機模型快取。
-- `huggingface` / `hf`：遠端 Inference API 已停用，指定時會在 HTTP request 前明確報錯。
+- `huggingface` / `hf`：遠端 embedding 實作已移除，指定時會直接明確報錯。
 - `openai` / `ai`：預留給未來正式 AI integration，目前會明確拋出錯誤，不會自動 fallback。
 
 注意：`chunk_embeddings.embedding_model` 是 API 查詢時用來選向量的關鍵欄位。只改環境變數不會改變既有 DB 內的向量；換正式模型後必須重建 embeddings。
@@ -133,7 +133,7 @@ GET /api/semantic-search?q=癌症保險金&limit=3
 GET /api/semantic-search?q=癌症保險金&embedding_provider=local_bge&embedding_model=BAAI/bge-large-zh-v1.5-local
 ```
 
-注意：`/api/semantic-search` 需要把查詢文字也轉成向量；本機 BGE 會從本機快取載入模型。指定 `huggingface` / `hf` 時 API 會回傳 400，且不會呼叫外部服務。
+注意：`/api/semantic-search` 需要把查詢文字也轉成向量；本機 BGE 會從本機快取載入模型。指定 `huggingface` / `hf` 時 API 會回傳 400，程式中沒有可送出遠端 embedding request 的 provider。
 
 回傳內容包含：
 
@@ -211,7 +211,7 @@ GET /api/cases/{case_id}/semantic-similar?limit=5
 
 - `local`：目前可用，使用本機 CJK hashing vector。
 - `local_bge`：目前可用，在本機 CPU 或 CUDA 執行 BGE。
-- `huggingface` / `hf`：遠端 API 已停用，避免外部費用。
+- `huggingface` / `hf`：遠端 API 實作已移除，避免外部費用與誤用。
 - `openai` / `ai`：目前會明確回報尚未實作，避免誤以為已經串接 OpenAI 類 provider。
 
 未來若要改成實際 AI embedding model，建議做法：

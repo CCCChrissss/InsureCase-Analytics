@@ -31,7 +31,7 @@
 - 後端 pytest 測試
 - 案件詳情、PDF、摘要、相似案件與語意相似案件 API 測試
 - 正式 AI provider 實作前測試保護，包含 fake provider、輸出筆數、維度與非有限數值檢查
-- Hugging Face embedding provider 小批量接入，可用 fake HTTP 測試驗證，不會在測試中呼叫外部 API
+- 歷史 Hugging Face API 小批量試測報告保留作比較；可送出遠端 embedding request 的程式已移除
 - Hugging Face BGE 1000 筆 trial embeddings 與 local hashing 離線比較報告
 - Hugging Face BGE query-to-document 小樣本試測腳本與 1000 筆 candidates 查詢報告
 - 前端語意搜尋頁已標示 Local MVP 與 Hugging Face BGE Trial 狀態，避免誤認正式 DB 已切換
@@ -200,11 +200,9 @@ GET /api/cases/{case_id}/similar
 GET /api/cases/{case_id}/semantic-similar
 GET /api/quality/roc114-summary-similarity
 GET /api/statistics/overview
-GET /api/statistics/dispute-types
-GET /api/statistics/decision-dates
 ```
 
-目前前端主軸是案件查找、全文搜尋、語意搜尋與案件詳情。統計 API 保留作為資料狀態與內部檢查輔助，不是目前展示主功能。
+目前前端主軸是案件查找、全文搜尋、語意搜尋與案件詳情。只保留統計總覽 API，供首頁資料狀態與案件年度選單使用。
 
 ### Search
 
@@ -269,7 +267,7 @@ GET /api/semantic-search?q=癌症保險金&embedding_provider=local&embedding_mo
 GET /api/semantic-search?q=癌症保險金&embedding_provider=local_bge&embedding_model=BAAI/bge-large-zh-v1.5-local
 ```
 
-`local_bge` 在本機執行 BGE，不需要 token，且固定使用 `local_files_only=True`。`huggingface` / `hf` 遠端 provider 已停用；即使環境中殘留 Token，API 也會在送出 HTTP request 前回傳 400。若 query provider 輸出維度與 DB stored embeddings 維度不一致，API 同樣會回傳 400。
+`local_bge` 在本機執行 BGE，不需要 token，且固定使用 `local_files_only=True`。可送出 Hugging Face embedding request 的實作已移除；`huggingface` / `hf` 只保留為拒絕 aliases，API 會直接回傳 400。若 query provider 輸出維度與 DB stored embeddings 維度不一致，API 同樣會回傳 400。
 
 目前模型：
 
@@ -324,7 +322,7 @@ LOCAL_BGE_BATCH_SIZE=4
 
 本機 BGE 使用 `BAAI/bge-large-zh-v1.5` 權重，不需要 API token。選用套件與 CPU / CUDA 安裝方式記錄於 `docs/local_bge_provider.md`。
 
-Hugging Face Inference API 已強制停用：
+Hugging Face Inference API 執行實作已移除：
 
 ```text
 embedding_provider=huggingface -> HTTP 400
@@ -603,7 +601,7 @@ pnpm build
 - `docs/roc114_summary_similarity_quality_check.md`：ROC 114 摘要與相似案件抽樣品質檢查
 - `docs/chunking_pipeline.md`：案件文字 chunking 設計、欄位與正式 DB 驗證結果
 - `docs/embedding_pipeline.md`：本機 embedding MVP、語意搜尋 API 與後續升級路線
-- `docs/ai_embedding_provider_plan.md`：正式 AI embedding provider 接入規格，包含環境變數、batch、retry、費用控制、重建與測試策略
+- `docs/ai_embedding_provider_plan.md`：正式 AI embedding provider 接入規格，包含本機執行、重建、費用控制與測試策略
 - `docs/local_bge_provider.md`：本機 BGE provider、CPU / CUDA 安裝、離線模型快取、1000 chunks trial 與正式切換條件
 - `docs/local_bge_semantic_query_trial_100.md`：本機 BGE 100 candidates、15 詞 Top 5 結果、20/100 涵蓋比較與限制
 - `docs/local_bge_semantic_query_trial_1000.md`：本機 BGE 1000 candidates、15 詞 Top 5 結果、100/1000 排名穩定性與限制
@@ -623,7 +621,7 @@ pnpm build
 - 正式 DB 尚未切換為實務級 embedding 模型
 - Hugging Face BGE 目前只完成 trial DB 1000 筆小樣本驗證，尚未全量重建正式 DB
 - 本機 BGE 已完成 RTX 4050 CUDA 1000 chunks、15 詞／75 結果的離線 benchmark；尚未完成獨立人工 relevance 標註、歷史 API BGE 排名比較與正式 DB 全量重建
-- 前端目前只展示 Hugging Face trial 摘要，不會直接查詢 trial DB 或呼叫 Hugging Face API
+- 前端目前展示 Local BGE trial 摘要，不會直接查詢 trial DB 或呼叫外部 embedding API
 - 15 詞 benchmark v1 已完成 75 筆第一輪 Codex-assisted 原文標註：Strict Precision@5 為 0.8133、Lenient Precision@5 為 0.9333
 - 第二位標註者空白模板與一致性比較工具已完成；第二位獨立標註、實際一致率計算與爭議標記仲裁尚未完成
 - ANN 向量索引

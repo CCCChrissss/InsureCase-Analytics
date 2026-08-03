@@ -8,10 +8,9 @@ import { Dashboard } from "./pages/Dashboard";
 import { QualityPage } from "./pages/QualityPage";
 import { SearchPage } from "./pages/SearchPage";
 import { SemanticSearchPage } from "./pages/SemanticSearchPage";
-import { StatisticsPage } from "./pages/StatisticsPage";
 import type { HealthResponse, Route } from "./types";
 
-const ROUTES: Route[] = ["dashboard", "cases", "search", "semantic", "statistics", "quality"];
+const ROUTES: Route[] = ["dashboard", "cases", "search", "semantic", "quality"];
 
 function parseRoute(value: string | null): Route | null {
   return ROUTES.includes(value as Route) ? (value as Route) : null;
@@ -134,7 +133,6 @@ export function App() {
             onOpenCase={selectCase}
           />
         )}
-        {route === "statistics" && <StatisticsPage />}
         {route === "quality" && <QualityPage />}
       </main>
     </div>

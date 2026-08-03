@@ -16,22 +16,22 @@ import { AsyncBlock, Metric, PageHeader, PanelHeader } from "../components/ui";
 import { useAsyncData } from "../hooks/useAsyncData";
 import type { SemanticSearchResponse } from "../types";
 
-type SemanticModelMode = "local" | "hf_trial";
+type SemanticModelMode = "local" | "local_bge_trial";
 
 const LOCAL_MODEL = {
   mode: "local" as const,
-  label: "Local MVP",
+  label: "Local Hashing MVP",
   provider: "local",
   model: "local_hashing_cjk_v1",
   dims: 384,
   candidates: 17254,
 };
 
-const HF_TRIAL_MODEL = {
-  mode: "hf_trial" as const,
-  label: "Hugging Face BGE Trial",
-  provider: "huggingface",
-  model: "BAAI/bge-large-zh-v1.5",
+const LOCAL_BGE_TRIAL_MODEL = {
+  mode: "local_bge_trial" as const,
+  label: "Local BGE Trial",
+  provider: "local_bge",
+  model: "BAAI/bge-large-zh-v1.5-local",
   dims: 1024,
   candidates: 1000,
 };
@@ -61,7 +61,7 @@ export function SemanticSearchPage({ onOpenCase }: { onOpenCase: (caseId: string
   const [submittedQuery, setSubmittedQuery] = React.useState("除外責任");
   const [limit, setLimit] = React.useState(10);
   const [modelMode, setModelMode] = React.useState<SemanticModelMode>("local");
-  const selectedModel = modelMode === "local" ? LOCAL_MODEL : HF_TRIAL_MODEL;
+  const selectedModel = modelMode === "local" ? LOCAL_MODEL : LOCAL_BGE_TRIAL_MODEL;
   const isLocalMode = modelMode === "local";
   const results = useAsyncData(
     () =>
@@ -100,12 +100,12 @@ export function SemanticSearchPage({ onOpenCase }: { onOpenCase: (caseId: string
           </button>
           <button
             type="button"
-            className={`model-option trial ${modelMode === "hf_trial" ? "active" : ""}`}
-            onClick={() => setModelMode("hf_trial")}
+            className={`model-option trial ${modelMode === "local_bge_trial" ? "active" : ""}`}
+            onClick={() => setModelMode("local_bge_trial")}
           >
             <FlaskConical size={20} />
-            <strong>Hugging Face BGE Trial</strong>
-            <span>已完成 1000 筆 candidates 試測，但正式 DB 尚未切換。</span>
+            <strong>Local BGE Trial</strong>
+            <span>已在 RTX 4050 完成 1000 筆離線試測，但正式 DB 尚未切換。</span>
           </button>
         </div>
         <div className="model-status-panel">
@@ -120,7 +120,7 @@ export function SemanticSearchPage({ onOpenCase }: { onOpenCase: (caseId: string
             <span>
               {isLocalMode
                 ? "此模式會查詢正式 SQLite DB。搜尋品質是本機 hashing MVP，適合展示流程，不等同正式 AI 語意模型。"
-                : "此模式目前只展示 trial 報告。前端不會直接呼叫 Hugging Face API，也不會查正式 DB 以外的 trial DB。"}
+                : "此模式目前只展示本機 BGE trial 報告，不會呼叫外部 API，也不會查詢正式 DB 以外的 trial DB。"}
             </span>
           </div>
         </div>
@@ -187,7 +187,7 @@ export function SemanticSearchPage({ onOpenCase }: { onOpenCase: (caseId: string
                     </div>
                     <div className="semantic-warning">
                       <AlertTriangle size={18} />
-                      <span>這是本機 MVP 模型，適合展示語意搜尋流程；正式 AI 模型仍以 Hugging Face trial 報告作為評估依據。</span>
+                      <span>這是本機 hashing MVP，適合展示查詢流程；本機 BGE 的品質仍需完成 75 筆人工 relevance 標註。</span>
                     </div>
                   </div>
                 </section>
@@ -229,17 +229,16 @@ export function SemanticSearchPage({ onOpenCase }: { onOpenCase: (caseId: string
         </>
       ) : (
         <section className="panel">
-          <PanelHeader title="Hugging Face BGE 1000 筆試測摘要" />
+          <PanelHeader title="Local BGE 1000 筆離線試測摘要" />
           <div className="trial-summary">
             <div className="metric-grid semantic-metrics">
-              <Metric label="Provider" value={HF_TRIAL_MODEL.provider} />
-              <Metric label="Embedding 模型" value={HF_TRIAL_MODEL.model} />
-              <Metric label="Trial candidates" value={HF_TRIAL_MODEL.candidates.toLocaleString("zh-TW")} />
-              <Metric label="狀態" value="文件驗證完成" />
+              <Metric label="Provider" value={LOCAL_BGE_TRIAL_MODEL.provider} />
+              <Metric label="Embedding 模型" value={LOCAL_BGE_TRIAL_MODEL.model} />
+              <Metric label="Trial candidates" value={LOCAL_BGE_TRIAL_MODEL.candidates.toLocaleString("zh-TW")} />
+              <Metric label="狀態" value="等待人工標註" />
             </div>
             <div className="semantic-method-note">
-              這組結果來自 `docs/hf_semantic_query_trial_1000.md`。因正式 DB 尚未全量重建 BGE embeddings，前端目前只展示試測摘要，不直接查詢
-              Hugging Face。
+              這組結果來自 `docs/local_bge_semantic_query_trial_1000.md`，由本機模型快取與 RTX 4050 產生。正式 DB 尚未全量重建 BGE embeddings，因此前端目前只展示試測摘要。
             </div>
             <div className="trial-summary-table">
               {TRIAL_QUERY_SUMMARY.map((item) => (
@@ -253,11 +252,11 @@ export function SemanticSearchPage({ onOpenCase }: { onOpenCase: (caseId: string
             <div className="semantic-flow">
               <div>
                 <BarChart3 size={18} />
-                <span>可展示重點：1000 筆 trial 已證明 BGE 查詢流程可跑通，且部分查詢詞的 Top 5 類型集中。</span>
+                <span>可展示重點：1000 筆 trial 已證明本機 BGE 查詢流程可跑通，全程不使用外部 embedding API。</span>
               </div>
               <div className="semantic-warning">
                 <AlertTriangle size={18} />
-                <span>限制：這還不是正式 DB 切換；若要上線 BGE 搜尋，仍需全量重建 embeddings 並補足人工 relevance check。</span>
+                <span>限制：這還不是正式 DB 切換；目前需先完成 75 筆人工 relevance 標註，再決定是否全量重建 embeddings。</span>
               </div>
             </div>
           </div>
