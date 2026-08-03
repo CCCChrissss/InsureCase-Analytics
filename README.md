@@ -383,6 +383,38 @@ $env:LOCAL_BGE_DEVICE="cuda"
 
 這個固定查詢集會產生 15 個 queries、共 75 筆 Top 5 結果。標註規則、模板建立與 Precision@5 計算方式請看 `docs/hf_semantic_benchmark_v1_protocol.md`。
 
+本機 BGE 1000-candidate 結果的人工標註工具：
+
+```powershell
+.\.venv\Scripts\python.exe .\backend\scripts\annotate_semantic_benchmark.py
+```
+
+工具會顯示查詢詞、排名、分數、案件資訊、命中 chunk 與前後相鄰 chunk。每完成一筆就會以 UTF-8 原子寫入方式儲存，下次執行會從第一筆未完成項目繼續；過程不會呼叫任何外部 API。
+
+操作鍵：
+
+- `r`：相關（`relevant`）
+- `p`：部分相關（`partially_relevant`）
+- `n`：不相關（`not_relevant`）
+- `s`：本次先略過
+- `q`：儲存既有進度並結束
+
+只標註單一查詢詞或重新檢查指定筆數：
+
+```powershell
+.\.venv\Scripts\python.exe .\backend\scripts\annotate_semantic_benchmark.py --query 除外責任
+.\.venv\Scripts\python.exe .\backend\scripts\annotate_semantic_benchmark.py --index 1
+```
+
+標註工作檔為 `outputs/local_bge_semantic_benchmark_v1_1000_annotations.json`，不提交 Git。75 筆全部完成後，執行以下指令驗證完整性並產生 Precision@5 報告：
+
+```powershell
+.\.venv\Scripts\python.exe .\backend\scripts\evaluate_semantic_benchmark.py `
+  --results .\outputs\local_bge_semantic_benchmark_v1_1000.json `
+  --annotations .\outputs\local_bge_semantic_benchmark_v1_1000_annotations.json `
+  --out .\outputs\local_bge_semantic_benchmark_v1_1000_evaluation.md
+```
+
 ### Quality Report
 
 分析驗證 API 回傳 ROC 114 摘要與相似案件品質檢查結果：

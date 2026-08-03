@@ -154,7 +154,46 @@ $env:LOCAL_BGE_DEVICE="cuda"
 
 100 與 1000 candidates 的 15 組查詢中，只有 1 組維持相同 Top 1，平均 Top 5 chunk overlap 為 `0.53 / 5`。這表示前 100 筆候選不足以代表資料範圍，不應作為品質基準。1000 筆仍是依案件與 chunk 順序取樣，也尚未完成 75 筆獨立人工 relevance 標註，因此不能宣稱搜尋品質已通過；下一步應沿用固定 benchmark v1 標註規則，並與歷史 API BGE 結果比較。
 
-## 7. 正式切換條件
+## 7. 人工標註
+
+在專案根目錄執行：
+
+```powershell
+.\.venv\Scripts\python.exe .\backend\scripts\annotate_semantic_benchmark.py
+```
+
+預設工作檔為 `outputs/local_bge_semantic_benchmark_v1_1000_annotations.json`。工具會逐筆顯示：
+
+- 查詢詞、排名與 cosine score。
+- 案號、爭議類型與段落提示。
+- 命中 chunk 原文及前後相鄰 chunk。
+
+標註快捷鍵：`r` 相關、`p` 部分相關、`n` 不相關、`s` 暫時略過、`q` 結束。選擇 relevance label 後，還必須填寫原文證據摘要；完成一筆就會立即安全寫入 JSON，重新執行時會從未完成項目續作。
+
+只處理單一查詢詞：
+
+```powershell
+.\.venv\Scripts\python.exe .\backend\scripts\annotate_semantic_benchmark.py --query 除外責任
+```
+
+重新檢查或修改第 1 筆：
+
+```powershell
+.\.venv\Scripts\python.exe .\backend\scripts\annotate_semantic_benchmark.py --index 1
+```
+
+標註工具只讀 trial DB，且不載入模型、不呼叫 Hugging Face 或其他外部 API。
+
+75 筆全部完成後產生評測報告：
+
+```powershell
+.\.venv\Scripts\python.exe .\backend\scripts\evaluate_semantic_benchmark.py `
+  --results .\outputs\local_bge_semantic_benchmark_v1_1000.json `
+  --annotations .\outputs\local_bge_semantic_benchmark_v1_1000_annotations.json `
+  --out .\outputs\local_bge_semantic_benchmark_v1_1000_evaluation.md
+```
+
+## 8. 正式切換條件
 
 在以下條件全部完成前，不切換正式 DB：
 

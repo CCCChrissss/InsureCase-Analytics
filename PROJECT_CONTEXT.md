@@ -107,6 +107,7 @@
 │  │     ├─ statistics_service.py
 │  │     └─ summary_service.py
 │  ├─ scripts/
+│  │  ├─ annotate_semantic_benchmark.py
 │  │  ├─ build_chunk_embeddings.py
 │  │  ├─ build_case_chunks.py
 │  │  ├─ compare_semantic_annotations.py
@@ -117,6 +118,7 @@
 │  │  ├─ run_semantic_query_trial.py
 │  │  └─ verify_case_db.py
 │  └─ tests/
+│     ├─ test_semantic_annotation_cli.py
 │     ├─ test_api.py
 │     ├─ test_build_case_chunks.py
 │     ├─ test_cross_year_pipeline_defaults.py
@@ -234,6 +236,7 @@ frontend/dist/
 - `backend/app/services/statistics_service.py`：案件總數、爭議類型數、年度與日期範圍總覽，支援可選年度條件。
 - `backend/app/services/summary_service.py`：案件摘要查詢。
 - `backend/scripts/extract_case_summaries.py`：從 normalized text 產生規則式摘要並寫入 `case_summaries`；已支援「二、申請人主張」與非固定序號的「判斷理由」標題。
+- `backend/scripts/annotate_semantic_benchmark.py`：本機互動式人工標註工具，逐筆顯示 benchmark 命中內容與相鄰 chunks，支援相關／部分相關／不相關、略過、離開、指定查詢與指定序號；每筆完成後即原子寫入 UTF-8 JSON，不呼叫外部 API。
 - `backend/scripts/build_case_chunks.py`：將 `case_texts.normalized_text` 切成可重跑的 `case_chunks`，保留 section hint、字元起訖位置與 chunk 長度，作為後續 embedding 前置資料。
 - `backend/scripts/build_chunk_embeddings.py`：為 `case_chunks` 建立 embedding，支援 `--provider`、`--model`、`--dims` 與 `--limit`，目前啟用 provider 為 `local` 與 `local_bge`。
 - `backend/scripts/compare_embedding_models.py`：比較同一批共同 chunks 在 local hashing 與候選 embedding model 下的相似度排序，預設使用本機 BGE trial DB 並輸出至 `outputs/`，不會呼叫外部 API。
@@ -250,6 +253,7 @@ frontend/dist/
 - `backend/tests/test_embedding_service.py`：本機 hashing、本機 BGE fake model、provider factory、遠端 aliases 拒絕、維度與記憶體錯誤、embedding 寫入、搜尋排序及案件層級語意相似測試。
 - `backend/tests/test_import_cases_to_db.py`：SQLite 匯入腳本測試，包含多 metadata 匯入與 metadata 目錄解析。
 - `backend/tests/test_search_service.py`：搜尋 fallback 單元測試，覆蓋 normalized text、案號與爭議類型 fallback。
+- `backend/tests/test_semantic_annotation_cli.py`：人工標註 CLI 單元測試，覆蓋快捷鍵、續作篩選、標註驗證、原子儲存、SQLite 唯讀脈絡查詢與互動流程。
 - `backend/tests/test_semantic_annotation_agreement.py`：雙標註一致性測試，覆蓋完全一致、部分衝突、標註者名稱重複、結果鍵值不符與 Kappa 無法定義情境。
 - `backend/tests/test_semantic_benchmark.py`：固定 15 詞查詢集、參數互斥、標註模板、Precision@5 計算與證據必填驗證。
 - `backend/tests/test_similar_case_service.py`：相似案件 service 單元測試。
@@ -1109,6 +1113,21 @@ py -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
 http://127.0.0.1:8000/docs
 ```
 
+### 執行本機 BGE 人工標註
+
+在專案根目錄執行：
+
+```powershell
+.\.venv\Scripts\python.exe .\backend\scripts\annotate_semantic_benchmark.py
+```
+
+預設讀取：
+
+- 標註檔：`outputs/local_bge_semantic_benchmark_v1_1000_annotations.json`
+- 脈絡資料庫：`backend/data/insurance_cases_local_bge_trial.db`（唯讀）
+
+每筆必須選擇 `r`、`p` 或 `n`，並輸入一段以原文為依據的判斷摘要。可用 `s` 暫時略過、`q` 結束；重新執行會從第一筆未完成項目繼續。
+
 ### 啟動前端
 
 在 `frontend/` 目錄執行：
@@ -1151,6 +1170,7 @@ py -m py_compile .\foi_ods_case_organizer.py
 py -m py_compile .\backend\scripts\import_cases_to_db.py
 py -m py_compile .\backend\scripts\build_case_chunks.py
 py -m py_compile .\backend\scripts\build_chunk_embeddings.py
+py -m py_compile .\backend\scripts\annotate_semantic_benchmark.py
 py -m py_compile .\backend\scripts\compare_embedding_models.py
 py -m py_compile .\backend\scripts\compare_semantic_annotations.py
 py -m py_compile .\backend\scripts\run_semantic_query_trial.py
@@ -1175,6 +1195,7 @@ py -m pytest
 - embedding service tests。
 - 摘要擷取與 summary service tests，包含「申請人主張」標題缺少「之」與「判斷理由」非第六段的 regression tests。
 - 相似案件 service tests。
+- 人工標註 CLI tests，包含續作、原子儲存與唯讀相鄰 chunk 查詢。
 - 匯入腳本多 metadata tests。
 
 ### SQLite 匯入驗證
@@ -1253,7 +1274,7 @@ http://127.0.0.1:5173
 
 2026-08-03 已完成以下檢查：
 
-- `.\.venv\Scripts\python.exe -m pytest`：78 passed。
+- `.\.venv\Scripts\python.exe -m pytest`：84 passed。
 - `py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks --require-embeddings`：passed，`cases = 2992`、`case_chunks = 17254`、`chunk_embeddings = 17254`。
 - embedding、案件篩選、統計總覽與模型比較腳本的 `py_compile`：通過。
 - `pnpm build`：TypeScript 與 Vite production build 通過。
@@ -1300,6 +1321,7 @@ http://127.0.0.1:5173
 - 已更新 `backend/scripts/run_semantic_query_trial.py`，預設以本機 BGE 執行固定 `benchmark-v1` 的 15 個 queries，並分別輸出 JSON 與 Markdown。
 - 已新增 `backend/scripts/evaluate_semantic_benchmark.py`，可建立 75 筆標註模板、驗證 label 與 evidence summary，並計算 strict / lenient、macro / micro Precision@5。
 - 已新增 `backend/scripts/compare_semantic_annotations.py`，可比較兩位標註者的 75 筆結果，輸出一致率、Cohen's Kappa、混淆矩陣、各查詢一致率與待仲裁衝突。
+- 已新增 `backend/scripts/annotate_semantic_benchmark.py`，可在終端機逐筆閱讀本機 BGE benchmark 命中內容與相鄰 chunks，並安全續作 75 筆人工標註。
 - 已新增 `docs/hf_embedding_trial_comparison.md`，記錄 trial 模型分布、比較方法、可比較查詢詞、略過原因、Top results、100 筆與 1000 筆 query-to-document 小樣本結果與限制。
 - 已新增 `docs/hf_semantic_query_trial_1000.md`，記錄 1000 筆 BGE candidates 下 5 個查詢詞的詳細 Top 5 結果。
 - 已更新 `docs/hf_semantic_relevance_check_1000.md`，針對 5 個查詢詞 Top 5、共 25 筆結果做人工 relevance check，並回查 7 筆較不明確結果的 chunk 原文；最終為 24 筆相關、1 筆部分相關、0 筆待確認。
@@ -1309,7 +1331,7 @@ http://127.0.0.1:5173
 - 已更新前端 `SemanticSearchPage`，提供 Local Hashing MVP 與 Local BGE Trial 模型狀態切換；Local Hashing MVP 可直接查正式 DB，Local BGE Trial 只展示 1000 筆完全離線試測摘要，避免誤認正式 DB 已切換。
 - 已完成迭代後 Code Review：移除舊遠端 Hugging Face HTTP provider、response parser、retry / timeout 設定與專用 fake HTTP 測試；移除隱藏統計頁、重複統計 endpoints、未使用的 `recharts` 與未引用的資料庫初始化函式。
 
-### 下一步：完成第二位獨立標註並仲裁 benchmark v1
+### 下一步：完成本機 BGE benchmark 人工標註
 
 優先原因：
 
@@ -1317,16 +1339,16 @@ http://127.0.0.1:5173
 - chunking、本機 embedding、前端語意搜尋展示與案件層級語意相似展示已完成。
 - 前端結構已整理，後續可以承接更複雜功能。
 - 跨年度 trial DB 已建立並通過資料品質檢查，正式 DB 也已切換為跨年度資料。
-- Hugging Face query-to-document benchmark v1 已完成 15 詞、75 筆第一輪標註與 Precision@5；第二位空白模板及一致性比較工具也已完成，但仍需要真正的第二位標註者獨立判讀。
+- 歷史 Hugging Face query-to-document benchmark v1 已完成第一輪標註；目前需要先完成本機 BGE 1000-candidate 的 75 筆獨立人工標註，才能用相同規則比較品質。
 
 建議工作：
 
-1. 第二位標註者在不查看第一輪答案的情況下完成 75 筆結果。
-2. 執行一致性比較，檢查原始一致率、Cohen's Kappa 與混淆矩陣，並仲裁所有衝突。
-3. 依固定規則人工判讀本機 BGE 1000-candidate 的 75 筆結果，並與歷史 API BGE 結果比較。
-4. 針對 `手術認定` 與 `豁免保費` 等低 Strict P@5 查詢改善 query 或加入 reranking。
-5. 驗證 CUDA PyTorch 並評估 CPU / GPU 全量建置時間，再決定是否切換正式 DB。
-6. 若要強化資料範圍：試跑 ROC 116 小期間。
+1. 使用 `backend/scripts/annotate_semantic_benchmark.py` 完成 75 筆本機 BGE 結果，每筆填寫 label 與 evidence summary。
+2. 執行 benchmark 評測器，產生本機 BGE strict / lenient Precision@5 報告。
+3. 與歷史 Hugging Face API BGE benchmark 依查詢詞、排名及 Precision@5 比較。
+4. 視比較結果決定是否需要第二位獨立標註與衝突仲裁。
+5. 針對低 Strict P@5 查詢改善 query 或加入 reranking。
+6. 評估 GPU 全量建置時間後，再決定是否切換正式 DB。
 
 ### 第 8 階段：跨年度擴充
 
