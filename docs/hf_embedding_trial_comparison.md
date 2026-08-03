@@ -2,8 +2,8 @@
 
 ## 1. 目的
 
-本報告記錄 Hugging Face `BAAI/bge-large-zh-v1.5` 在 100 筆 trial chunks 上的離線比較結果。
-比較重點不是宣稱模型已正式上線，而是確認外部 embedding provider 寫入後，可以用同一批 chunks 做可追溯的相似度分析。
+本報告記錄 Hugging Face `BAAI/bge-large-zh-v1.5` 在 trial DB 上的離線比較與 query-to-document 試測結果。
+比較重點不是宣稱模型已正式上線，而是確認外部 embedding provider 寫入後，可以用同一批 chunks 做可追溯的相似度分析，並逐步擴大到 1000 筆 candidates。
 
 ## 2. 試跑資料
 
@@ -30,7 +30,7 @@
 3. 使用同一個 anchor chunk 的 BGE 向量，比對其餘共同 chunks。
 4. 比較兩種模型各自 Top results 的分數、爭議類型與命中段落。
 
-限制：這不是完整的 query-to-document 語意搜尋評測。若要比較真實查詢詞，需要再呼叫 Hugging Face 產生 query embedding，或全量建立 BGE embeddings 後新增 API 參數切換模型。
+限制：這裡的 anchor-based 比較不是完整的 query-to-document 語意搜尋評測；真實 query-to-document 結果請看本報告後段與 `docs/hf_semantic_query_trial_1000.md`。正式 DB 尚未切換為 BGE embeddings。
 
 ## 4. 結果摘要
 
@@ -274,9 +274,37 @@ py .\backend\scripts\run_semantic_query_trial.py --db .\backend\data\insurance_c
 
 注意：這個指令會呼叫 Hugging Face API 產生 query embedding，會消耗少量 API 額度。token 只應放在 shell 環境變數，不要寫進 Git、文件或程式碼。
 
-## 6. 初步結論
+## 6. 1000 筆 Query-to-Document 試測
 
-- Hugging Face provider、1024 維 BGE embeddings 與 SQLite 寫入流程已通過 100 筆 trial 驗證。
-- 本報告只代表 100 筆小樣本的離線 anchor-based 比較，不能宣稱全量搜尋品質已優於 local MVP。
-- 已完成第一個真實 query-to-document 小樣本試測；下一步應擴大到更多查詢詞與更多 trial candidates，例如 `--limit 1000`。
+100 筆小樣本確認流程可行後，已將 Hugging Face BGE trial embeddings 擴大到 1000 筆，並用 5 個查詢詞重跑 query-to-document 試測。
+
+試測條件：
+
+- Trial DB：`backend/data/insurance_cases_hf_trial.db`
+- Embedding model：`BAAI/bge-large-zh-v1.5`
+- BGE embeddings：`1000`
+- 每個查詢的 candidates：`1000`
+- 詳細結果：`docs/hf_semantic_query_trial_1000.md`
+
+結果摘要：
+
+| query | Top 1 | Top 5 判讀 |
+| --- | --- | --- |
+| `除外責任` | `113年評字第004957號` / 除外責任 / 0.6207 | Top 5 中 4 筆為除外責任，另 1 筆為承保範圍，語意上仍與條款範圍、除外條款相關。 |
+| `必要性醫療` | `114年評字第002461號` / 必要性醫療 / 0.5469 | Top 5 全部為必要性醫療，類型集中度最高。 |
+| `癌症` | `114年評字第004027號` / 停效期間事故認定 / 0.5232 | Top 5 中 2 筆為癌症或其併發症認定，也出現停效期間事故與理賠金額認定，代表模型可能抓到疾病事實，但不一定只依爭議類型分類。 |
+| `住院` | `114年評字第005691號` / 必要性醫療 / 0.6179 | Top 5 中 4 筆為必要性醫療，另 1 筆為承保範圍，符合住院常與醫療必要性、保險給付範圍同時出現的案件特性。 |
+| `失能` | `114年評字第005531號` / 投保時已患疾病或在妊娠中 / 0.6086 | Top 5 中有失能或豁免保費、失能等級認定與因果關係認定，語意相關但類型較分散，仍需要回看 chunk 原文。 |
+
+初步判讀：
+
+- 從 100 筆擴大到 1000 筆後，`除外責任`、`必要性醫療`、`住院` 的結果更穩定，Top 5 多數落在合理爭議類型。
+- `癌症` 與 `失能` 查詢較容易跨到其他爭議類型，這不一定是錯誤，因為評議案件分類是法律爭點，query embedding 抓到的是文字語意與事實描述。
+- 目前可以說明 BGE trial 已具備可展示的語意搜尋雛形，但仍不能宣稱正式 DB 已切換或全量品質已驗證。
+
+## 7. 初步結論
+
+- Hugging Face provider、1024 維 BGE embeddings 與 SQLite 寫入流程已通過 1000 筆 trial 驗證。
+- 本報告仍只代表 trial DB 小樣本與 5 個查詢詞，不能宣稱全量搜尋品質已優於 local MVP。
+- 已完成真實 query-to-document 小樣本試測；下一步應在前端提供模型狀態提示，並決定是否繼續全量重建 trial DB。
 - 正式 DB `backend/data/insurance_cases.db` 目前仍應維持 `local_hashing_cjk_v1`，等品質與成本評估後再決定是否全量重建。

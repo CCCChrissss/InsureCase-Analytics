@@ -32,8 +32,8 @@
 - 案件詳情、PDF、摘要、相似案件與語意相似案件 API 測試
 - 正式 AI provider 實作前測試保護，包含 fake provider、輸出筆數、維度與非有限數值檢查
 - Hugging Face embedding provider 小批量接入，可用 fake HTTP 測試驗證，不會在測試中呼叫外部 API
-- Hugging Face BGE 100 筆 trial embeddings 與 local hashing 離線比較報告
-- Hugging Face BGE query-to-document 小樣本試測腳本，可用 trial DB 重跑查詢
+- Hugging Face BGE 1000 筆 trial embeddings 與 local hashing 離線比較報告
+- Hugging Face BGE query-to-document 小樣本試測腳本與 1000 筆 candidates 查詢報告
 - 前端基本 build 驗證
 - 跨年度匯入前置支援
 - ROC 114 一月小期間跨年度試跑文件
@@ -573,14 +573,15 @@ pnpm build
 - `docs/chunking_pipeline.md`：案件文字 chunking 設計、欄位與正式 DB 驗證結果
 - `docs/embedding_pipeline.md`：本機 embedding MVP、語意搜尋 API 與後續升級路線
 - `docs/ai_embedding_provider_plan.md`：正式 AI embedding provider 接入規格，包含環境變數、batch、retry、費用控制、重建與測試策略
-- `docs/hf_embedding_trial_comparison.md`：Hugging Face BGE 100 筆 trial embeddings、local hashing 離線 anchor-based 比較與 query-to-document 小樣本試測報告
+- `docs/hf_embedding_trial_comparison.md`：Hugging Face BGE trial embeddings、local hashing 離線 anchor-based 比較與 query-to-document 小樣本試測報告
+- `docs/hf_semantic_query_trial_1000.md`：Hugging Face BGE 1000 筆 candidates 的 query-to-document 詳細查詢結果
 
 ## Current Limitations
 
 目前尚未完成：
 
 - 正式 DB 尚未切換為實務級 embedding 模型
-- Hugging Face BGE 目前只完成 trial DB 小樣本驗證與 100 筆 query-to-document 試測，尚未全量重建正式 DB
+- Hugging Face BGE 目前只完成 trial DB 1000 筆小樣本驗證，尚未全量重建正式 DB
 - ANN 向量索引
 - OCR fallback
 - Docker
@@ -594,9 +595,9 @@ pnpm build
 建議後續開發順序：
 
 ```text
-1. 擴大 Hugging Face trial DB 到 `--limit 1000`，用多個查詢詞比較 query-to-document 品質
-2. 前端語意搜尋頁加入模型切換與模型限制提示
-3. 評估是否將 Hugging Face embeddings 全量重建到 trial DB，再決定是否替換正式 DB
+1. 前端語意搜尋頁加入模型切換與模型限制提示，清楚區分 local MVP 與 Hugging Face trial
+2. 評估是否將 Hugging Face embeddings 全量重建到 trial DB，再決定是否替換正式 DB
+3. 若要強化評測，補更多查詢詞與人工標註的 relevance check
 4. 試跑 ROC 116 小期間資料
 5. 導入 Docker / CI / 部署設定
 ```
