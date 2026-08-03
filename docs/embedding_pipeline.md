@@ -116,12 +116,22 @@ Query parameters：
 - `q`：查詢文字。
 - `limit`：回傳筆數，預設 10，上限 50。
 - `min_score`：最低分數，預設 0。
+- `embedding_model`：可選，指定要查詢的 `chunk_embeddings.embedding_model`。
+- `embedding_provider`：可選，指定 query 文字要使用哪個 provider 轉向量。
 
 範例：
 
 ```text
 GET /api/semantic-search?q=癌症保險金&limit=3
 ```
+
+指定 BGE 試驗模型的範例：
+
+```text
+GET /api/semantic-search?q=癌症保險金&embedding_provider=huggingface&embedding_model=BAAI/bge-large-zh-v1.5
+```
+
+注意：`/api/semantic-search` 需要把查詢文字也轉成向量；若指定 `embedding_model=BAAI/bge-large-zh-v1.5`，必須搭配 `embedding_provider=huggingface` 與 Hugging Face token。若 provider 產生的 query vector 維度與 DB stored embeddings 維度不一致，API 會回傳 400，避免產生錯誤相似度。
 
 回傳內容包含：
 
@@ -139,6 +149,11 @@ GET /api/semantic-search?q=癌症保險金&limit=3
 ```text
 GET /api/cases/{case_id}/semantic-similar?limit=5
 ```
+
+可選參數：
+
+- `embedding_model`：指定要使用哪個 stored embedding model。
+- `embedding_provider`：指定 provider；案件層級相似主要讀取已存在 embeddings，通常只指定 `embedding_model` 即可。
 
 做法：
 
@@ -203,13 +218,13 @@ GET /api/cases/{case_id}/semantic-similar?limit=5
 3. API key 只能放在 `.env`、shell 環境變數或部署平台 secret。
 4. 重跑 `backend/scripts/build_chunk_embeddings.py`，用新 `embedding_model` 名稱寫入 `chunk_embeddings`。
 5. 執行 `py -m pytest` 與 `verify_case_db.py --require-embeddings`。
-6. API query 可增加 `embedding_model` 參數，讓展示時能比較 local model 與 AI model。
+6. API query 已支援 `embedding_model` / `embedding_provider` 參數，讓展示時能比較 local model 與 AI model。
 7. 若資料量擴大，再將 SQLite BLOB 改成 PostgreSQL + pgvector 或其他 ANN index。
 
 注意：不要把 API key 寫入程式碼或 commit 到 Git；應使用 `.env` / 環境變數，並只在 `.env.example` 說明變數名稱。
 
 ## 下一步
 
-1. 讓語意搜尋 API 支援指定 `embedding_model`。
-2. 針對 BGE 查詢詞產生 query embedding，做 query-to-document 比較。
+1. 在 trial DB 上以 `embedding_provider=huggingface` 進行少量 query-to-document API 比較。
+2. 將前端語意搜尋頁加上模型切換與模型限制提示。
 3. 若品質與成本可接受，再擴大到 `--limit 1000` 或全量重建 trial DB。

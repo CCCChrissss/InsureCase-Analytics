@@ -523,6 +523,12 @@ def semantic_search(
 
     scored: list[dict[str, Any]] = []
     for row in rows:
+        if row["embedding_dims"] != provider.dims:
+            raise EmbeddingProviderError(
+                f"Stored embeddings for model '{provider.model_name}' have {row['embedding_dims']} dimensions, "
+                f"but query provider '{provider.provider_name}' produced {provider.dims} dimensions. "
+                "Use a matching embedding_provider for the selected embedding_model."
+            )
         candidate_vector = unpack_vector(row["embedding"], row["embedding_dims"])
         score = dot_product(embedded_query.vector, candidate_vector)
         if score <= min_score:

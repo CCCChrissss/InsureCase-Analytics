@@ -3,6 +3,8 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
+from backend.app.routers import semantic_search as semantic_search_router
+from backend.app.routers import similar_cases as similar_cases_router
 
 
 client = TestClient(app)
@@ -182,6 +184,98 @@ def test_semantic_similar_cases_not_found() -> None:
     response = client.get("/api/cases/not-a-real-case-id/semantic-similar")
 
     assert response.status_code == 404
+
+
+def test_semantic_search_accepts_embedding_model_params(monkeypatch) -> None:
+    captured = {}
+
+    def fake_semantic_search(query: str, **kwargs):
+        kwargs["query"] = query
+        captured.update(kwargs)
+        return {
+            "query": query,
+            "embedding_model": kwargs["model_name"],
+            "items": [],
+            "total_candidates": 0,
+        }
+
+    monkeypatch.setattr(semantic_search_router, "semantic_search", fake_semantic_search)
+
+    response = client.get(
+        "/api/semantic-search",
+        params={
+            "q": "癌症保險金",
+            "embedding_model": "BAAI/bge-large-zh-v1.5",
+            "embedding_provider": "huggingface",
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["query"] == "癌症保險金"
+    assert captured["model_name"] == "BAAI/bge-large-zh-v1.5"
+    assert captured["provider_name"] == "huggingface"
+    assert response.json()["embedding_model"] == "BAAI/bge-large-zh-v1.5"
+
+
+def test_semantic_search_returns_400_for_invalid_embedding_provider(monkeypatch) -> None:
+    def fake_semantic_search(*_, **__):
+        raise semantic_search_router.EmbeddingProviderError("Unsupported embedding provider: bad.")
+
+    monkeypatch.setattr(semantic_search_router, "semantic_search", fake_semantic_search)
+
+    response = client.get(
+        "/api/semantic-search",
+        params={"q": "癌症保險金", "embedding_provider": "bad"},
+    )
+
+    assert response.status_code == 400
+    assert "Unsupported embedding provider" in response.json()["detail"]
+
+
+def test_semantic_similar_accepts_embedding_model_params(monkeypatch) -> None:
+    captured = {}
+
+    def fake_semantic_similar_cases(case_id: str, **kwargs):
+        captured["case_id"] = case_id
+        captured.update(kwargs)
+        return {
+            "case_id": case_id,
+            "embedding_model": kwargs["model_name"],
+            "source_chunk_count": 0,
+            "items": [],
+            "total_candidates": 0,
+        }
+
+    monkeypatch.setattr(similar_cases_router, "semantic_similar_cases", fake_semantic_similar_cases)
+
+    response = client.get(
+        "/api/cases/case_demo/semantic-similar",
+        params={
+            "embedding_model": "BAAI/bge-large-zh-v1.5",
+            "embedding_provider": "huggingface",
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["case_id"] == "case_demo"
+    assert captured["model_name"] == "BAAI/bge-large-zh-v1.5"
+    assert captured["provider_name"] == "huggingface"
+    assert response.json()["embedding_model"] == "BAAI/bge-large-zh-v1.5"
+
+
+def test_semantic_similar_returns_400_for_invalid_embedding_provider(monkeypatch) -> None:
+    def fake_semantic_similar_cases(*_, **__):
+        raise similar_cases_router.EmbeddingProviderError("Unsupported embedding provider: bad.")
+
+    monkeypatch.setattr(similar_cases_router, "semantic_similar_cases", fake_semantic_similar_cases)
+
+    response = client.get(
+        "/api/cases/case_demo/semantic-similar",
+        params={"embedding_provider": "bad"},
+    )
+
+    assert response.status_code == 400
+    assert "Unsupported embedding provider" in response.json()["detail"]
 
 
 def test_roc114_quality_report() -> None:

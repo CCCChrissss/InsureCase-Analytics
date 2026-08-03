@@ -195,8 +195,8 @@ frontend/dist/
 - `backend/app/routers/cases.py`：案件列表、案件詳情、爭議類型、PDF 讀取 API。
 - `backend/app/routers/quality.py`：分析驗證 API，回傳 ROC 114 摘要與相似案件品質檢查結果。
 - `backend/app/routers/search.py`：全文搜尋 API。
-- `backend/app/routers/semantic_search.py`：chunk embedding 語意搜尋 API。
-- `backend/app/routers/similar_cases.py`：相似案件 API。
+- `backend/app/routers/semantic_search.py`：chunk embedding 語意搜尋 API，支援 `embedding_model` / `embedding_provider` 可選參數。
+- `backend/app/routers/similar_cases.py`：相似案件 API；案件層級語意相似 API 支援 `embedding_model` / `embedding_provider` 可選參數。
 - `backend/app/routers/statistics.py`：統計 API，支援可選 `roc_year` 篩選。
 - `backend/app/routers/summaries.py`：案件摘要 API。
 - `backend/app/services/case_service.py`：案件查詢、篩選、分頁、PDF path resolver。
@@ -213,11 +213,11 @@ frontend/dist/
 - `backend/scripts/import_cases_to_db.py`：讀取單一或多個 metadata 與文字檔，匯入 SQLite。
 - `backend/scripts/verify_case_db.py`：驗證 SQLite 筆數、搜尋、路徑與 sample case；可用 `--require-chunks` 與 `--require-embeddings` 檢查 chunk 與 embedding 完整性。
 - `backend/scripts/check_data_quality.py`：檢查 metadata 與 SQLite DB 是否含 mojibake 類異常字元。
-- `backend/tests/test_api.py`：API smoke tests，覆蓋 health、statistics、cases、case detail、PDF、search、summary、similar、semantic-similar 與 quality。
+- `backend/tests/test_api.py`：API smoke tests，覆蓋 health、statistics、cases、case detail、PDF、search、summary、similar、semantic-similar、semantic model params 與 quality。
 - `backend/tests/test_build_case_chunks.py`：chunking 邏輯、section hint 與 SQLite 寫入測試。
 - `backend/tests/test_cross_year_pipeline_defaults.py`：跨年度 pipeline 預設輸出路徑測試。
 - `backend/tests/test_data_quality.py`：資料品質檢查測試。
-- `backend/tests/test_embedding_service.py`：本機 embedding、provider factory、預留 AI provider 錯誤、非法維度、fake provider、fake Hugging Face HTTP client、provider 輸出驗證、embedding 寫入、語意搜尋排序與案件層級語意相似測試。
+- `backend/tests/test_embedding_service.py`：本機 embedding、provider factory、預留 AI provider 錯誤、非法維度、fake provider、fake Hugging Face HTTP client、provider 輸出驗證、embedding 寫入、語意搜尋排序、provider/model 維度不一致防呆與案件層級語意相似測試。
 - `backend/tests/test_import_cases_to_db.py`：SQLite 匯入腳本測試，包含多 metadata 匯入與 metadata 目錄解析。
 - `backend/tests/test_search_service.py`：搜尋 fallback 單元測試，覆蓋 normalized text、案號與爭議類型 fallback。
 - `backend/tests/test_similar_case_service.py`：相似案件 service 單元測試。
@@ -606,12 +606,15 @@ Query parameters：
 - `q`：必填，最小長度 1。
 - `limit`：預設 10，最大 50。
 - `min_score`：最低分數，預設 0。
+- `embedding_model`：可選，指定要查詢的 stored embedding model。
+- `embedding_provider`：可選，指定 query 文字轉向量時使用的 provider。
 
 目前方法：
 
 - 使用 `local_hashing_cjk_v1`。
 - 回傳命中的 `chunk_text`、`section_hint`、`score` 與案件基本資料。
 - 這是本機 MVP，尚不是正式語意模型。
+- 若指定 Hugging Face model，需搭配 `embedding_provider=huggingface` 與 token 產生 query embedding；若 provider 輸出維度與 stored embeddings 維度不一致，API 會回傳 400。
 
 ### Summaries
 
@@ -1249,6 +1252,7 @@ http://127.0.0.1:5173
 - 已建立本機 chunk embedding pipeline，正式 DB 目前有 17254 筆 `local_hashing_cjk_v1` embedding，且每個 chunk 皆有 embedding。
 - 已新增前端語意搜尋頁，可展示 query、embedding 模型、候選 chunk、命中 chunk、score、section hint 與案件來源。
 - 已新增案件層級語意相似 API 與案件詳情頁區塊，可展示相似案件、分數與實際命中 chunk。
+- 已讓語意搜尋 API 與案件層級語意相似 API 支援 `embedding_model` / `embedding_provider` 可選參數，並加入 provider/model 維度不一致防呆。
 - 已建立 embedding provider 介面，目前可用 provider 為 `local` 與 `huggingface` / `hf`，`openai` / `ai` 會明確提示尚未實作。
 - 已新增 Hugging Face provider 小批量接入口，預設模型為 `BAAI/bge-large-zh-v1.5`、維度 1024，支援 `EMBEDDING_API_KEY` / `HF_TOKEN`、batch、retry、timeout 與 fake HTTP 測試。
 - 已完成 Hugging Face `BAAI/bge-large-zh-v1.5` 20 筆與 100 筆 trial DB 試跑，trial DB 中 BGE embeddings 為 100 筆，正式 DB 未切換。
@@ -1257,7 +1261,7 @@ http://127.0.0.1:5173
 - 已新增 `docs/ai_embedding_provider_plan.md`，規劃正式 AI embedding provider 的環境變數、API key 管理、batch、retry、費用控制、DB model version、測試與 embeddings 重建流程，並記錄 Hugging Face provider 實作狀態。
 - 已補上正式 AI provider 實作前測試保護，包含 fake provider、provider 回傳筆數檢查、向量維度檢查、`token_count` / `norm` 檢查與非有限數值檢查。
 
-### 下一步：讓 API 支援指定 embedding model 或擴大跨年度資料
+### 下一步：在 trial DB 做 BGE query-to-document 比較或擴大跨年度資料
 
 優先原因：
 
@@ -1268,7 +1272,7 @@ http://127.0.0.1:5173
 
 建議工作：
 
-1. 若要強化語意品質：讓語意搜尋 API 支援指定 `embedding_model`，並為 BGE 查詢詞產生 query embedding，做更接近使用者查詢流程的比較；再決定是否擴大到 `--limit 1000` 或全量重建 trial DB。
+1. 若要強化語意品質：在 trial DB 上用 `embedding_provider=huggingface` 做少量 query-to-document API 比較，再決定是否擴大到 `--limit 1000` 或全量重建 trial DB。
 2. 若要強化資料範圍：試跑 ROC 116 小期間。
 
 ### 第 8 階段：跨年度擴充

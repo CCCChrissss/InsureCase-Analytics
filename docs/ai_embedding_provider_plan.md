@@ -43,6 +43,7 @@
 - `backend/tests/test_embedding_service.py` 已加入 fake provider 與 fake Hugging Face HTTP client 測試，不需要呼叫外部 API 即可驗證寫入、回應解析、重試與異常輸出。
 - `chunk_embeddings` 已用 `(chunk_id, embedding_model)` 作為主鍵，可同時保留不同模型的 embeddings。
 - 語意搜尋 API 與案件層級語意相似 API 目前會依 `embedding_model` 查詢向量。
+- `GET /api/semantic-search` 與 `GET /api/cases/{case_id}/semantic-similar` 已支援 `embedding_model` / `embedding_provider` query 參數。
 - Hugging Face trial DB 已完成 `--limit 20` 與 `--limit 100` 試跑。
 - `docs/hf_embedding_trial_comparison.md` 已記錄 100 筆 trial embeddings 與 local hashing 的離線 anchor-based 比較。
 
@@ -278,6 +279,7 @@ GET /api/cases/{case_id}/semantic-similar
 
 ```text
 embedding_model=<model-name>
+embedding_provider=<provider-name>
 ```
 
 用途：
@@ -285,6 +287,15 @@ embedding_model=<model-name>
 - 比較 local MVP 與正式 AI model。
 - 展示不同模型的搜尋結果差異。
 - 避免後端只依環境變數選模型，導致展示結果不易追蹤。
+
+目前已完成：
+
+```text
+GET /api/semantic-search?q=癌症保險金&embedding_provider=huggingface&embedding_model=BAAI/bge-large-zh-v1.5
+GET /api/cases/{case_id}/semantic-similar?embedding_model=BAAI/bge-large-zh-v1.5
+```
+
+注意：`/api/semantic-search` 需要產生 query embedding，因此 BGE 查詢需要 Hugging Face token，且會消耗額度。若 selected model 的 stored embeddings 維度與 query provider 輸出維度不一致，API 會回傳 400。
 
 ## 12. 測試策略
 
@@ -303,6 +314,7 @@ embedding_model=<model-name>
 - provider 回傳數量與輸入數量不一致時會報錯。此項目前已完成。
 - provider 回傳維度錯誤或非有限數值時會報錯。此項目前已完成。
 - API 查詢指定不存在的 `embedding_model` 時應回傳空結果或明確錯誤。
+- API 查詢指定 model / provider 維度不一致時應回傳 400，避免錯誤相似度。
 
 ## 13. 驗證流程
 
@@ -345,8 +357,7 @@ py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks --
 
 ## 15. 建議實作順序
 
-1. 增加 API 的 `embedding_model` 可選參數。
-2. 針對 BGE 查詢詞產生 query embedding，做 query-to-document 比較。
-3. 在前端展示目前使用的 model。
-4. 若品質與成本可接受，再擴大到 `--limit 1000` 或全量重建 trial DB。
-5. 後續如需 OpenAI 或其他 provider，再在 `embedding_service.py` 新增 provider。
+1. 在 trial DB 上以 `embedding_provider=huggingface` 進行少量 query-to-document API 比較。
+2. 在前端展示目前使用的 model，並提供模型切換。
+3. 若品質與成本可接受，再擴大到 `--limit 1000` 或全量重建 trial DB。
+4. 後續如需 OpenAI 或其他 provider，再在 `embedding_service.py` 新增 provider。

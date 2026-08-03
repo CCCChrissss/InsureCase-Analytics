@@ -27,6 +27,7 @@
 - 本機 chunk embedding MVP 與語意搜尋 API
 - 前端語意搜尋頁，展示 query、embedding 模型、命中 chunk、score、section hint 與案件來源
 - 案件詳情頁語意相似案件區塊，展示案件層級語意相似與命中段落
+- 語意搜尋 API 支援指定 `embedding_model` / `embedding_provider`
 - 後端 pytest 測試
 - 案件詳情、PDF、摘要、相似案件與語意相似案件 API 測試
 - 正式 AI provider 實作前測試保護，包含 fake provider、輸出筆數、維度與非有限數值檢查
@@ -257,6 +258,15 @@ created_at
 GET /api/semantic-search?q=癌症保險金&limit=10
 ```
 
+語意搜尋 API 可指定模型：
+
+```text
+GET /api/semantic-search?q=癌症保險金&embedding_provider=local&embedding_model=local_hashing_cjk_v1
+GET /api/semantic-search?q=癌症保險金&embedding_provider=huggingface&embedding_model=BAAI/bge-large-zh-v1.5
+```
+
+注意：指定 Hugging Face provider 時，後端需要 `EMBEDDING_API_KEY` 或 `HF_TOKEN`，並會呼叫 Hugging Face 產生 query embedding。若 query provider 輸出維度與 DB stored embeddings 維度不一致，API 會回傳 400，避免產生錯誤相似度。
+
 目前模型：
 
 ```text
@@ -276,6 +286,12 @@ local_hashing_cjk_v1
 
 ```text
 GET /api/cases/{case_id}/semantic-similar?limit=5
+```
+
+案件層級語意相似主要讀取已存在 embeddings，可指定：
+
+```text
+GET /api/cases/{case_id}/semantic-similar?embedding_model=BAAI/bge-large-zh-v1.5
 ```
 
 目前做法是將來源案件的 chunk embeddings 聚合成案件向量，再與候選案件 chunk 比對，回傳相似案件與命中段落。
@@ -566,8 +582,8 @@ pnpm build
 建議後續開發順序：
 
 ```text
-1. 讓語意搜尋 API 支援指定 `embedding_model`
-2. 針對 BGE 查詢詞產生 query embedding，做更接近使用者查詢流程的比較
+1. 在 trial DB 上用 `embedding_provider=huggingface` 做少量 query-to-document API 比較
+2. 前端語意搜尋頁加入模型切換與模型限制提示
 3. 評估是否將 Hugging Face embeddings 擴大到 `--limit 1000` 或全量重建 trial DB
 4. 試跑 ROC 116 小期間資料
 5. 導入 Docker / CI / 部署設定
