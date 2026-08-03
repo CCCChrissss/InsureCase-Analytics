@@ -15,7 +15,6 @@ from typing import Any, Callable, Iterable, Protocol, Sequence
 
 import requests
 
-from backend.app.config import EMBEDDING_API_KEY
 from backend.app.config import EMBEDDING_BATCH_SIZE
 from backend.app.config import EMBEDDING_DIMS
 from backend.app.config import EMBEDDING_MAX_RETRIES
@@ -33,6 +32,10 @@ LOCAL_MODEL_NAME = "local_hashing_cjk_v1"
 HUGGINGFACE_PROVIDER_NAME = "huggingface"
 HUGGINGFACE_DEFAULT_MODEL_NAME = "BAAI/bge-large-zh-v1.5"
 HUGGINGFACE_DEFAULT_DIMS = 1024
+HUGGINGFACE_REMOTE_DISABLED_MESSAGE = (
+    "Hugging Face Inference API is disabled to prevent external API usage and billing. "
+    "Use provider 'local_bge' with model 'BAAI/bge-large-zh-v1.5-local'."
+)
 LOCAL_BGE_PROVIDER_NAME = "local_bge"
 LOCAL_BGE_MODEL_NAME = "BAAI/bge-large-zh-v1.5-local"
 LOCAL_BGE_SOURCE_MODEL_NAME = HUGGINGFACE_DEFAULT_MODEL_NAME
@@ -116,7 +119,13 @@ def load_local_bge_model(model_name: str, device: str) -> Any:
                 "Install them with: py -m pip install -r requirements-local-ai.txt"
             ) from error
 
-        model = SentenceTransformer(model_name, device=device)
+        try:
+            model = SentenceTransformer(model_name, device=device, local_files_only=True)
+        except OSError as error:
+            raise EmbeddingProviderError(
+                f"Local BGE model '{model_name}' was not found in the local Hugging Face cache. "
+                "Download the model explicitly before running local_bge; automatic network access is disabled."
+            ) from error
         _LOCAL_BGE_MODEL_CACHE[cache_key] = model
         return model
 
@@ -229,7 +238,10 @@ class HuggingFaceEmbeddingProvider:
         retry_backoff_seconds: float = EMBEDDING_RETRY_BACKOFF_SECONDS,
         timeout_seconds: float = EMBEDDING_TIMEOUT_SECONDS,
         http_client: Any = requests,
+        remote_api_enabled: bool = False,
     ) -> None:
+        if not remote_api_enabled:
+            raise EmbeddingProviderError(HUGGINGFACE_REMOTE_DISABLED_MESSAGE)
         if not api_key:
             raise EmbeddingProviderError(
                 "Hugging Face embedding provider requires EMBEDDING_API_KEY or HF_TOKEN. "
@@ -348,14 +360,7 @@ def create_embedding_provider(
         )
 
     if resolved_provider in {HUGGINGFACE_PROVIDER_NAME, "hf"}:
-        resolved_model = HUGGINGFACE_DEFAULT_MODEL_NAME if resolved_model == LOCAL_MODEL_NAME else resolved_model
-        if resolved_model == HUGGINGFACE_DEFAULT_MODEL_NAME and resolved_dims == DEFAULT_DIMS:
-            resolved_dims = HUGGINGFACE_DEFAULT_DIMS
-        return HuggingFaceEmbeddingProvider(
-            model_name=resolved_model,
-            dims=resolved_dims,
-            api_key=EMBEDDING_API_KEY,
-        )
+        raise EmbeddingProviderError(HUGGINGFACE_REMOTE_DISABLED_MESSAGE)
 
     if resolved_provider in RESERVED_AI_PROVIDER_NAMES:
         raise EmbeddingProviderError(

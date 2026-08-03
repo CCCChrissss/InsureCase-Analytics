@@ -74,9 +74,11 @@ LOCAL_BGE_BATCH_SIZE=4
 
 ## 4. 模型下載與離線執行
 
-第一次載入會從 Hugging Face Hub 下載約 1.3 GB 模型權重。這是公開模型下載，不是 Inference API 呼叫，不會消耗 Inference Providers credits。
+模型權重已預先下載到本機 Hugging Face cache。Production loader 固定傳入 `local_files_only=True`，執行期間只讀本機檔案；若模型不存在會直接報錯，不會自動連線下載。
 
-目前 Windows 未啟用 symlink，Hugging Face Hub 會使用降級快取模式，可能占用較多磁碟空間。下載完成後可設定：
+`huggingface` / `hf` Inference API provider 也已在 production factory 強制停用。即使 shell 中殘留 `EMBEDDING_API_KEY` 或 `HF_TOKEN`，後端也不會讀取 Token，並會在送出 HTTP request 前拒絕執行。
+
+目前 Windows 未啟用 symlink，Hugging Face Hub 會使用降級快取模式，可能占用較多磁碟空間。仍建議設定以下環境變數作為第二層離線保護：
 
 ```powershell
 $env:HF_HUB_OFFLINE="1"

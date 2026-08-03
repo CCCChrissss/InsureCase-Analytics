@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import sqlite3
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 from backend.app.services import embedding_service
 
@@ -160,6 +162,38 @@ def test_create_local_bge_provider_uses_separate_storage_model() -> None:
     assert provider.dims == 1024
 
 
+def test_load_local_bge_model_uses_local_files_only(monkeypatch) -> None:
+    calls = []
+    fake_model = object()
+
+    def fake_sentence_transformer(model_name: str, **kwargs):
+        calls.append({"model_name": model_name, **kwargs})
+        return fake_model
+
+    monkeypatch.setitem(
+        sys.modules,
+        "sentence_transformers",
+        SimpleNamespace(SentenceTransformer=fake_sentence_transformer),
+    )
+    embedding_service._LOCAL_BGE_MODEL_CACHE.clear()
+    try:
+        loaded_model = embedding_service.load_local_bge_model(
+            embedding_service.LOCAL_BGE_SOURCE_MODEL_NAME,
+            "cpu",
+        )
+    finally:
+        embedding_service._LOCAL_BGE_MODEL_CACHE.clear()
+
+    assert loaded_model is fake_model
+    assert calls == [
+        {
+            "model_name": embedding_service.LOCAL_BGE_SOURCE_MODEL_NAME,
+            "device": "cpu",
+            "local_files_only": True,
+        }
+    ]
+
+
 def test_local_bge_provider_embeds_with_fake_model_and_skips_empty_text() -> None:
     first_vector = [3.0, 4.0, *([0.0] * 1022)]
     second_vector = [0.0, 5.0, *([0.0] * 1022)]
@@ -278,6 +312,7 @@ def test_huggingface_embedding_provider_requires_api_key() -> None:
             model_name=embedding_service.HUGGINGFACE_DEFAULT_MODEL_NAME,
             dims=1024,
             api_key="",
+            remote_api_enabled=True,
         )
     except embedding_service.EmbeddingProviderError as error:
         assert "EMBEDDING_API_KEY or HF_TOKEN" in str(error)
@@ -285,14 +320,35 @@ def test_huggingface_embedding_provider_requires_api_key() -> None:
         raise AssertionError("Expected EmbeddingProviderError")
 
 
-def test_create_huggingface_provider_uses_default_model_and_dimensions(monkeypatch) -> None:
-    monkeypatch.setattr(embedding_service, "EMBEDDING_API_KEY", "hf_test")
+def test_create_huggingface_provider_is_disabled_even_when_token_exists(monkeypatch) -> None:
+    monkeypatch.setenv("EMBEDDING_API_KEY", "hf_test")
+    monkeypatch.setenv("HF_TOKEN", "hf_test")
 
-    provider = embedding_service.create_embedding_provider(provider_name="hf")
+    try:
+        embedding_service.create_embedding_provider(provider_name="hf")
+    except embedding_service.EmbeddingProviderError as error:
+        assert "Inference API is disabled" in str(error)
+        assert "local_bge" in str(error)
+    else:
+        raise AssertionError("Expected EmbeddingProviderError")
 
-    assert provider.provider_name == "huggingface"
-    assert provider.model_name == embedding_service.HUGGINGFACE_DEFAULT_MODEL_NAME
-    assert provider.dims == embedding_service.HUGGINGFACE_DEFAULT_DIMS
+
+def test_huggingface_provider_does_not_call_http_when_remote_api_is_disabled() -> None:
+    fake_client = FakeHuggingFaceClient([FakeHuggingFaceResponse(payload=[[1.0, 0.0, 0.0]])])
+
+    try:
+        embedding_service.HuggingFaceEmbeddingProvider(
+            model_name=embedding_service.HUGGINGFACE_DEFAULT_MODEL_NAME,
+            dims=3,
+            api_key="hf_test",
+            http_client=fake_client,
+        )
+    except embedding_service.EmbeddingProviderError as error:
+        assert "Inference API is disabled" in str(error)
+    else:
+        raise AssertionError("Expected EmbeddingProviderError")
+
+    assert fake_client.calls == []
 
 
 def test_huggingface_embedding_provider_embeds_batch_with_fake_response() -> None:
@@ -313,6 +369,7 @@ def test_huggingface_embedding_provider_embeds_batch_with_fake_response() -> Non
         batch_size=2,
         max_retries=0,
         http_client=fake_client,
+        remote_api_enabled=True,
     )
 
     embeddings = provider.embed_texts(["癌症保險金", "住院日額"])
@@ -338,6 +395,7 @@ def test_huggingface_embedding_provider_skips_empty_text_without_api_call() -> N
         dims=3,
         api_key="hf_test",
         http_client=fake_client,
+        remote_api_enabled=True,
     )
 
     embeddings = provider.embed_texts(["   "])
@@ -361,6 +419,7 @@ def test_huggingface_embedding_provider_retries_retryable_http_status(monkeypatc
         max_retries=1,
         retry_backoff_seconds=0.01,
         http_client=fake_client,
+        remote_api_enabled=True,
     )
 
     embeddings = provider.embed_texts(["癌症保險金"])
@@ -379,6 +438,7 @@ def test_huggingface_embedding_provider_raises_for_non_retryable_http_error() ->
         api_key="hf_test",
         max_retries=3,
         http_client=fake_client,
+        remote_api_enabled=True,
     )
 
     try:

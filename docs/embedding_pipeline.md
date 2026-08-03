@@ -66,16 +66,17 @@ provider 狀態：
 
 - `local`：目前正式 DB 使用的 provider。
 - `local_hashing`：`local` 的相容別名。
-- `huggingface` / `hf`：已實作 Hugging Face Feature Extraction provider，預設模型為 `BAAI/bge-large-zh-v1.5`，預設維度 1024，需要 `EMBEDDING_API_KEY` 或 `HF_TOKEN`。
+- `local_bge`：本機 Sentence Transformers BGE，stored model 為 `BAAI/bge-large-zh-v1.5-local`、1024 維，只讀本機模型快取。
+- `huggingface` / `hf`：遠端 Inference API 已停用，指定時會在 HTTP request 前明確報錯。
 - `openai` / `ai`：預留給未來正式 AI integration，目前會明確拋出錯誤，不會自動 fallback。
 
 注意：`chunk_embeddings.embedding_model` 是 API 查詢時用來選向量的關鍵欄位。只改環境變數不會改變既有 DB 內的向量；換正式模型後必須重建 embeddings。
 
-Hugging Face 小批量試跑：
+本機 BGE 小批量試跑：
 
 ```powershell
-$env:EMBEDDING_API_KEY="hf_your_token_here"
-py .\backend\scripts\build_chunk_embeddings.py --provider huggingface --model BAAI/bge-large-zh-v1.5 --dims 1024 --limit 20
+$env:LOCAL_BGE_DEVICE="cuda"
+.\.venv\Scripts\python.exe .\backend\scripts\build_chunk_embeddings.py --db .\backend\data\insurance_cases_local_bge_trial.db --provider local_bge --model BAAI/bge-large-zh-v1.5-local --dims 1024 --limit 20
 ```
 
 注意：上述指令會寫入指定 DB 的 `chunk_embeddings`。正式試跑前建議先複製 DB 或使用 trial DB，避免直接改正式展示資料。
@@ -125,13 +126,13 @@ Query parameters：
 GET /api/semantic-search?q=癌症保險金&limit=3
 ```
 
-指定 BGE 試驗模型的範例：
+指定本機 BGE 試驗模型的範例：
 
 ```text
-GET /api/semantic-search?q=癌症保險金&embedding_provider=huggingface&embedding_model=BAAI/bge-large-zh-v1.5
+GET /api/semantic-search?q=癌症保險金&embedding_provider=local_bge&embedding_model=BAAI/bge-large-zh-v1.5-local
 ```
 
-注意：`/api/semantic-search` 需要把查詢文字也轉成向量；若指定 `embedding_model=BAAI/bge-large-zh-v1.5`，必須搭配 `embedding_provider=huggingface` 與 Hugging Face token。若 provider 產生的 query vector 維度與 DB stored embeddings 維度不一致，API 會回傳 400，避免產生錯誤相似度。
+注意：`/api/semantic-search` 需要把查詢文字也轉成向量；本機 BGE 會從本機快取載入模型。指定 `huggingface` / `hf` 時 API 會回傳 400，且不會呼叫外部服務。
 
 回傳內容包含：
 
@@ -208,23 +209,23 @@ GET /api/cases/{case_id}/semantic-similar?limit=5
 目前 `local_hashing_cjk_v1` 是本機 MVP。程式已先建立 provider factory：
 
 - `local`：目前可用，使用本機 CJK hashing vector。
-- `huggingface` / `hf`：目前可用，透過 Hugging Face Inference API Feature Extraction 取得 embeddings。
+- `local_bge`：目前可用，在本機 CPU 或 CUDA 執行 BGE。
+- `huggingface` / `hf`：遠端 API 已停用，避免外部費用。
 - `openai` / `ai`：目前會明確回報尚未實作，避免誤以為已經串接 OpenAI 類 provider。
 
 未來若要改成實際 AI embedding model，建議做法：
 
-1. 先用 `huggingface` provider 進行 `--limit 20` / `--limit 100` 小批量試跑。
+1. 先用 `local_bge` provider 進行 `--limit 20` / `--limit 100` / `--limit 1000` 小批量試跑。
 2. 保留目前 `local` provider 作為可離線比較基準。
-3. API key 只能放在 `.env`、shell 環境變數或部署平台 secret。
-4. 重跑 `backend/scripts/build_chunk_embeddings.py`，用新 `embedding_model` 名稱寫入 `chunk_embeddings`。
-5. 執行 `py -m pytest` 與 `verify_case_db.py --require-embeddings`。
-6. API query 已支援 `embedding_model` / `embedding_provider` 參數，讓展示時能比較 local model 與 AI model。
-7. 若資料量擴大，再將 SQLite BLOB 改成 PostgreSQL + pgvector 或其他 ANN index。
+3. 重跑 `backend/scripts/build_chunk_embeddings.py`，以 `BAAI/bge-large-zh-v1.5-local` 寫入 trial DB。
+4. 執行 `.venv` 內的 pytest 與 `verify_case_db.py --require-embeddings`。
+5. API query 已支援 `embedding_model` / `embedding_provider` 參數，可比較 local hashing 與本機 BGE。
+6. 若資料量擴大，再將 SQLite BLOB 改成 PostgreSQL + pgvector 或其他 ANN index。
 
-注意：不要把 API key 寫入程式碼或 commit 到 Git；應使用 `.env` / 環境變數，並只在 `.env.example` 說明變數名稱。
+目前程式不讀取 Hugging Face API Token，`.env.example` 也不再提供遠端 Token 欄位。
 
 ## 下一步
 
-1. 在 trial DB 上以 `embedding_provider=huggingface` 進行少量 query-to-document API 比較。
+1. 在 trial DB 上以 `embedding_provider=local_bge` 進行 query-to-document 比較。
 2. 將前端語意搜尋頁加上模型切換與模型限制提示。
 3. 若品質與成本可接受，再擴大到 `--limit 1000` 或全量重建 trial DB。

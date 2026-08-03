@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sqlite3
 import sys
 from datetime import datetime, timezone
@@ -15,9 +14,9 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from backend.app.services import embedding_service
 
-DEFAULT_DB_PATH = PROJECT_ROOT / "backend" / "data" / "insurance_cases_hf_trial.db"
-DEFAULT_PROVIDER = "huggingface"
-DEFAULT_MODEL = "BAAI/bge-large-zh-v1.5"
+DEFAULT_DB_PATH = PROJECT_ROOT / "backend" / "data" / "insurance_cases_local_bge_trial.db"
+DEFAULT_PROVIDER = embedding_service.LOCAL_BGE_PROVIDER_NAME
+DEFAULT_MODEL = embedding_service.LOCAL_BGE_MODEL_NAME
 DEFAULT_QUERY = "除外責任"
 BENCHMARK_QUERY_SETS = {
     "benchmark-v1": (
@@ -169,14 +168,6 @@ def main() -> None:
         queries = resolve_queries(args.queries, args.query_set)
     except ValueError as error:
         raise SystemExit(str(error)) from error
-
-    provider = args.provider.strip().lower()
-    if provider in {"huggingface", "hf"} and not (
-        os.environ.get("EMBEDDING_API_KEY", "").strip() or os.environ.get("HF_TOKEN", "").strip()
-    ):
-        raise SystemExit(
-            "Missing EMBEDDING_API_KEY or HF_TOKEN. Set the Hugging Face token in your shell environment before running this trial."
-        )
 
     original_connect = embedding_service.connect
     embedding_service.connect = make_connection_factory(db_path)

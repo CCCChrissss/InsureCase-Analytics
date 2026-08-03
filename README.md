@@ -267,10 +267,9 @@ GET /api/semantic-search?q=癌症保險金&limit=10
 ```text
 GET /api/semantic-search?q=癌症保險金&embedding_provider=local&embedding_model=local_hashing_cjk_v1
 GET /api/semantic-search?q=癌症保險金&embedding_provider=local_bge&embedding_model=BAAI/bge-large-zh-v1.5-local
-GET /api/semantic-search?q=癌症保險金&embedding_provider=huggingface&embedding_model=BAAI/bge-large-zh-v1.5
 ```
 
-`local_bge` 在本機執行 BGE，不需要 token；`huggingface` 會呼叫 Inference API，需要 `EMBEDDING_API_KEY` 或 `HF_TOKEN`。若 query provider 輸出維度與 DB stored embeddings 維度不一致，API 會回傳 400，避免產生錯誤相似度。
+`local_bge` 在本機執行 BGE，不需要 token，且固定使用 `local_files_only=True`。`huggingface` / `hf` 遠端 provider 已停用；即使環境中殘留 Token，API 也會在送出 HTTP request 前回傳 400。若 query provider 輸出維度與 DB stored embeddings 維度不一致，API 同樣會回傳 400。
 
 目前模型：
 
@@ -296,7 +295,7 @@ GET /api/cases/{case_id}/semantic-similar?limit=5
 案件層級語意相似主要讀取已存在 embeddings，可指定：
 
 ```text
-GET /api/cases/{case_id}/semantic-similar?embedding_model=BAAI/bge-large-zh-v1.5
+GET /api/cases/{case_id}/semantic-similar?embedding_provider=local_bge&embedding_model=BAAI/bge-large-zh-v1.5-local
 ```
 
 目前做法是將來源案件的 chunk embeddings 聚合成案件向量，再與候選案件 chunk 比對，回傳相似案件與命中段落。
@@ -311,7 +310,7 @@ EMBEDDING_MODEL=local_hashing_cjk_v1
 EMBEDDING_DIMS=384
 ```
 
-`local` 是正式 DB 目前使用的 hashing baseline；`local_bge` 與 `huggingface` 也已實作。`openai` / AI provider 介面已預留，但尚未實作外部 API 呼叫。
+`local` 是正式 DB 目前使用的 hashing baseline；`local_bge` 是目前唯一啟用的正式語意模型 provider。`huggingface` / `hf` 遠端 API 與 `openai` / `ai` 均不可在目前程式中執行。
 
 已支援本機 BGE provider：
 
@@ -325,16 +324,14 @@ LOCAL_BGE_BATCH_SIZE=4
 
 本機 BGE 使用 `BAAI/bge-large-zh-v1.5` 權重，不需要 API token。選用套件與 CPU / CUDA 安裝方式記錄於 `docs/local_bge_provider.md`。
 
-已支援 Hugging Face provider：
+Hugging Face Inference API 已強制停用：
 
 ```text
-EMBEDDING_PROVIDER=huggingface
-EMBEDDING_MODEL=BAAI/bge-large-zh-v1.5
-EMBEDDING_DIMS=1024
-EMBEDDING_API_KEY=<your Hugging Face token>
+embedding_provider=huggingface -> HTTP 400
+embedding_provider=hf          -> HTTP 400
 ```
 
-`huggingface` 也可使用別名 `hf`，API token 可使用 `EMBEDDING_API_KEY` 或 `HF_TOKEN`。目前正式 DB 仍是 `local_hashing_cjk_v1` embeddings；若要讓語意搜尋改用 Hugging Face 結果，必須用新 provider / model 重建 `chunk_embeddings`。
+後端不再讀取 `EMBEDDING_API_KEY` 或 `HF_TOKEN`。舊的 Hugging Face 1000 筆 trial DB 與報告只作為歷史比較資料，不會觸發新的外部 API 請求。
 
 正式 AI provider 接入前的工程規格已整理在 `docs/ai_embedding_provider_plan.md`。
 
@@ -344,7 +341,7 @@ EMBEDDING_API_KEY=<your Hugging Face token>
 
 ```text
 1. 在 backend/app/services/embedding_service.py 實作新的 provider。
-2. 在 .env 或部署平台 secret 設定 API key，不要提交到 Git。
+2. 通過安全與費用審查後，才新增明確的 opt-in 開關與 secret 管理。
 3. 使用新的 EMBEDDING_PROVIDER / EMBEDDING_MODEL 重建 chunk_embeddings。
 4. 執行 pytest 與 verify_case_db，確認 API 與資料完整性。
 ```
@@ -364,32 +361,26 @@ $env:LOCAL_BGE_DEVICE="cuda"
 .\.venv\Scripts\python.exe .\backend\scripts\build_chunk_embeddings.py --db .\backend\data\insurance_cases_local_bge_trial.db --provider local_bge --model BAAI/bge-large-zh-v1.5-local --dims 1024 --limit 20
 ```
 
-Hugging Face 小批量試跑範例：
+本機 BGE query-to-document trial 查詢範例：
 
 ```powershell
-$env:EMBEDDING_API_KEY="hf_your_token_here"
-py .\backend\scripts\build_chunk_embeddings.py --provider huggingface --model BAAI/bge-large-zh-v1.5 --dims 1024 --limit 20
+.\.venv\Scripts\python.exe .\backend\scripts\run_semantic_query_trial.py --db .\backend\data\insurance_cases_local_bge_trial.db --provider local_bge --model BAAI/bge-large-zh-v1.5-local --query 除外責任
 ```
 
-Hugging Face query-to-document trial 查詢範例：
-
-```powershell
-$env:EMBEDDING_API_KEY = Read-Host "請貼上 Hugging Face token"
-py .\backend\scripts\run_semantic_query_trial.py --db .\backend\data\insurance_cases_hf_trial.db --query 除外責任
-```
-
-注意：這個查詢會呼叫 Hugging Face 產生 query embedding，會消耗少量 API 額度；目前只建議用 `insurance_cases_hf_trial.db` 這類 trial DB 驗證，不要直接切換正式 DB。
+這個查詢只讀取本機模型快取與 trial DB，不會呼叫 Hugging Face Inference API。
 
 15 詞 benchmark v1：
 
 ```powershell
-py .\backend\scripts\run_semantic_query_trial.py `
-  --db .\backend\data\insurance_cases_hf_trial.db `
+.\.venv\Scripts\python.exe .\backend\scripts\run_semantic_query_trial.py `
+  --db .\backend\data\insurance_cases_local_bge_trial.db `
+  --provider local_bge `
+  --model BAAI/bge-large-zh-v1.5-local `
   --query-set benchmark-v1 `
   --limit 5 `
   --include-text `
-  --json-out .\outputs\hf_semantic_benchmark_v1_results.json `
-  --out .\docs\hf_semantic_benchmark_v1_results.md
+  --json-out .\outputs\local_bge_semantic_benchmark_v1_results.json `
+  --out .\outputs\local_bge_semantic_benchmark_v1_results.md
 ```
 
 這個固定查詢集會產生 15 個 queries、共 75 筆 Top 5 結果。標註規則、模板建立與 Precision@5 計算方式請看 `docs/hf_semantic_benchmark_v1_protocol.md`。
