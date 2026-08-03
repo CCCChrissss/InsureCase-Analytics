@@ -68,7 +68,8 @@
 │  ├─ embedding_pipeline.md
 │  ├─ ai_embedding_provider_plan.md
 │  ├─ hf_embedding_trial_comparison.md
-│  └─ hf_semantic_query_trial_1000.md
+│  ├─ hf_semantic_query_trial_1000.md
+│  └─ hf_semantic_relevance_check_1000.md
 ├─ backend/
 │  ├─ schema.sql
 │  ├─ app/
@@ -187,6 +188,7 @@ frontend/dist/
 - `docs/ai_embedding_provider_plan.md`：正式 AI embedding provider 接入規格與 Hugging Face provider 實作狀態，包含 provider 介面、環境變數、API key 管理、batch、retry、費用控制、DB model version、測試與展示說法。
 - `docs/hf_embedding_trial_comparison.md`：Hugging Face `BAAI/bge-large-zh-v1.5` trial embeddings、`local_hashing_cjk_v1` 離線 anchor-based 比較與 query-to-document 試測摘要。
 - `docs/hf_semantic_query_trial_1000.md`：Hugging Face BGE 1000 筆 candidates 的 query-to-document 詳細查詢結果，包含 `除外責任`、`必要性醫療`、`癌症`、`住院`、`失能`。
+- `docs/hf_semantic_relevance_check_1000.md`：Hugging Face BGE 1000 筆 trial Top 25 結果的初版人工 relevance check 表，標記 `相關`、`部分相關`、`待人工確認`。
 
 ### backend
 
@@ -814,6 +816,7 @@ Query parameters：
 - 前端自動化測試。
 - Hugging Face embeddings 尚未對正式 DB 全量重建；目前已完成 trial DB 1000 筆、離線 anchor-based 比較報告，以及 5 個查詢詞的 query-to-document 小樣本試測。
 - 前端語意搜尋頁目前只展示 Hugging Face trial 摘要，不會直接查詢 trial DB 或呼叫 Hugging Face API。
+- relevance check 目前是初版，主要依 query、爭議類型、分數與 metadata 標記，尚未逐筆回看 chunk 原文。
 - OpenAI 或其他外部 AI embedding provider 尚未實作。
 - 實務級向量資料庫或 ANN index。
 
@@ -1268,11 +1271,12 @@ http://127.0.0.1:5173
 - 已新增 `backend/scripts/run_semantic_query_trial.py`，可在指定 trial DB 上用 Hugging Face query embedding 重跑 query-to-document 語意搜尋試測。
 - 已新增 `docs/hf_embedding_trial_comparison.md`，記錄 trial 模型分布、比較方法、可比較查詢詞、略過原因、Top results、100 筆與 1000 筆 query-to-document 小樣本結果與限制。
 - 已新增 `docs/hf_semantic_query_trial_1000.md`，記錄 1000 筆 BGE candidates 下 5 個查詢詞的詳細 Top 5 結果。
+- 已新增 `docs/hf_semantic_relevance_check_1000.md`，針對 5 個查詢詞 Top 5、共 25 筆結果做初版人工 relevance check；目前標記為 18 筆相關、6 筆部分相關、1 筆待人工確認。
 - 已新增 `docs/ai_embedding_provider_plan.md`，規劃正式 AI embedding provider 的環境變數、API key 管理、batch、retry、費用控制、DB model version、測試與 embeddings 重建流程，並記錄 Hugging Face provider 實作狀態。
 - 已補上正式 AI provider 實作前測試保護，包含 fake provider、provider 回傳筆數檢查、向量維度檢查、`token_count` / `norm` 檢查與非有限數值檢查。
 - 已更新前端 `SemanticSearchPage`，提供 Local MVP 與 Hugging Face BGE Trial 模型狀態切換；Local MVP 可直接查正式 DB，Hugging Face Trial 只展示 1000 筆試測摘要，避免誤認正式 DB 已切換。
 
-### 下一步：補語意搜尋 relevance check 或規劃 BGE 全量 trial
+### 下一步：逐筆回看 chunk 原文或規劃 BGE 全量 trial
 
 優先原因：
 
@@ -1280,12 +1284,12 @@ http://127.0.0.1:5173
 - chunking、本機 embedding、前端語意搜尋展示與案件層級語意相似展示已完成。
 - 前端結構已整理，後續可以承接更複雜功能。
 - 跨年度 trial DB 已建立並通過資料品質檢查，正式 DB 也已切換為跨年度資料。
-- Hugging Face query-to-document 1000 筆小樣本已成功，前端也已清楚標示 local MVP 與 BGE trial 的差異；下一步需要補更多人工判讀依據或規劃全量 trial。
+- Hugging Face query-to-document 1000 筆小樣本已成功，前端也已清楚標示 local MVP 與 BGE trial 的差異；目前已有 relevance check 初版，下一步需要逐筆回看 chunk 原文或擴充查詢詞。
 
 建議工作：
 
-1. 若要強化展示可信度：補更多查詢詞與人工 relevance check，讓報告能說明哪些結果是真的相關、哪些只是語意接近。
-2. 若要強化語意品質：評估是否全量重建 Hugging Face trial DB，再決定是否替換正式 DB。
+1. 若要強化展示可信度：逐筆回看 relevance check 中的 chunk 原文，補上更嚴格的人工判斷理由。
+2. 若要強化語意品質：補更多查詢詞與人工 relevance check，再評估是否全量重建 Hugging Face trial DB。
 3. 若要強化資料範圍：試跑 ROC 116 小期間。
 
 ### 第 8 階段：跨年度擴充

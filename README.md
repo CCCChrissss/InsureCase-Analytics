@@ -576,6 +576,7 @@ pnpm build
 - `docs/ai_embedding_provider_plan.md`：正式 AI embedding provider 接入規格，包含環境變數、batch、retry、費用控制、重建與測試策略
 - `docs/hf_embedding_trial_comparison.md`：Hugging Face BGE trial embeddings、local hashing 離線 anchor-based 比較與 query-to-document 小樣本試測報告
 - `docs/hf_semantic_query_trial_1000.md`：Hugging Face BGE 1000 筆 candidates 的 query-to-document 詳細查詢結果
+- `docs/hf_semantic_relevance_check_1000.md`：Hugging Face BGE 1000 筆 trial Top 25 結果的初版人工 relevance check 表
 
 ## Current Limitations
 
@@ -584,6 +585,7 @@ pnpm build
 - 正式 DB 尚未切換為實務級 embedding 模型
 - Hugging Face BGE 目前只完成 trial DB 1000 筆小樣本驗證，尚未全量重建正式 DB
 - 前端目前只展示 Hugging Face trial 摘要，不會直接查詢 trial DB 或呼叫 Hugging Face API
+- relevance check 目前是依 metadata 與爭議類型做初版標記，尚未逐筆回看 chunk 原文
 - ANN 向量索引
 - OCR fallback
 - Docker
@@ -597,9 +599,9 @@ pnpm build
 建議後續開發順序：
 
 ```text
-1. 補更多查詢詞與人工標註的 relevance check，判斷 BGE trial 品質是否足夠
-2. 評估是否將 Hugging Face embeddings 全量重建到 trial DB，再決定是否替換正式 DB
-3. 若要讓前端直接查 BGE，需先設計 trial DB / formal DB 切換方式與後端設定
+1. 逐筆回看 relevance check 中的 chunk 原文，補上更嚴格的人工判斷理由
+2. 補更多查詢詞與人工標註，判斷 BGE trial 品質是否足夠
+3. 評估是否將 Hugging Face embeddings 全量重建到 trial DB，再決定是否替換正式 DB
 4. 試跑 ROC 116 小期間資料
 5. 導入 Docker / CI / 部署設定
 ```
