@@ -98,8 +98,10 @@
 │  ├─ scripts/
 │  │  ├─ build_chunk_embeddings.py
 │  │  ├─ build_case_chunks.py
+│  │  ├─ compare_embedding_models.py
 │  │  ├─ extract_case_summaries.py
 │  │  ├─ import_cases_to_db.py
+│  │  ├─ run_semantic_query_trial.py
 │  │  └─ verify_case_db.py
 │  └─ tests/
 │     ├─ test_api.py
@@ -210,6 +212,7 @@ frontend/dist/
 - `backend/scripts/build_case_chunks.py`：將 `case_texts.normalized_text` 切成可重跑的 `case_chunks`，保留 section hint、字元起訖位置與 chunk 長度，作為後續 embedding 前置資料。
 - `backend/scripts/build_chunk_embeddings.py`：為 `case_chunks` 建立 embedding，支援 `--provider`、`--model`、`--dims` 與 `--limit`，目前可用 provider 為 `local` 與 `huggingface`。
 - `backend/scripts/compare_embedding_models.py`：比較同一批共同 chunks 在 local hashing 與候選 embedding model 下的相似度排序，輸出 Markdown 報告；目前用於 Hugging Face 100 筆 trial DB，不會呼叫外部 API。
+- `backend/scripts/run_semantic_query_trial.py`：在指定 SQLite trial DB 上執行 Hugging Face query-to-document 語意搜尋試測，會用環境變數 token 呼叫 Hugging Face 產生 query embedding，輸出可追溯 JSON，必要時可輸出 Markdown 報告。
 - `backend/scripts/import_cases_to_db.py`：讀取單一或多個 metadata 與文字檔，匯入 SQLite。
 - `backend/scripts/verify_case_db.py`：驗證 SQLite 筆數、搜尋、路徑與 sample case；可用 `--require-chunks` 與 `--require-embeddings` 檢查 chunk 與 embedding 完整性。
 - `backend/scripts/check_data_quality.py`：檢查 metadata 與 SQLite DB 是否含 mojibake 類異常字元。
@@ -807,7 +810,7 @@ Query parameters：
 - API 錯誤回應格式統一。
 - 正式 React Router。
 - 前端自動化測試。
-- Hugging Face embeddings 尚未對正式 DB 全量重建；目前只有 trial DB 100 筆與離線 anchor-based 比較報告。
+- Hugging Face embeddings 尚未對正式 DB 全量重建；目前已完成 trial DB 100 筆、離線 anchor-based 比較報告，以及 `除外責任` query-to-document 小樣本試測。
 - OpenAI 或其他外部 AI embedding provider 尚未實作。
 - 實務級向量資料庫或 ANN index。
 
@@ -1117,6 +1120,8 @@ py -m py_compile .\foi_ods_case_organizer.py
 py -m py_compile .\backend\scripts\import_cases_to_db.py
 py -m py_compile .\backend\scripts\build_case_chunks.py
 py -m py_compile .\backend\scripts\build_chunk_embeddings.py
+py -m py_compile .\backend\scripts\compare_embedding_models.py
+py -m py_compile .\backend\scripts\run_semantic_query_trial.py
 py -m py_compile .\backend\scripts\verify_case_db.py
 py -m py_compile .\backend\scripts\extract_case_summaries.py
 ```
@@ -1257,11 +1262,12 @@ http://127.0.0.1:5173
 - 已新增 Hugging Face provider 小批量接入口，預設模型為 `BAAI/bge-large-zh-v1.5`、維度 1024，支援 `EMBEDDING_API_KEY` / `HF_TOKEN`、batch、retry、timeout 與 fake HTTP 測試。
 - 已完成 Hugging Face `BAAI/bge-large-zh-v1.5` 20 筆與 100 筆 trial DB 試跑，trial DB 中 BGE embeddings 為 100 筆，正式 DB 未切換。
 - 已新增 `backend/scripts/compare_embedding_models.py`，可在不呼叫 Hugging Face API 的情況下，比較共同 chunks 的 local / BGE anchor-based 相似度排序。
-- 已新增 `docs/hf_embedding_trial_comparison.md`，記錄 100 筆 trial 的模型分布、比較方法、可比較查詢詞、略過原因、Top results 與限制。
+- 已新增 `backend/scripts/run_semantic_query_trial.py`，可在指定 trial DB 上用 Hugging Face query embedding 重跑 query-to-document 語意搜尋試測。
+- 已新增 `docs/hf_embedding_trial_comparison.md`，記錄 100 筆 trial 的模型分布、比較方法、可比較查詢詞、略過原因、Top results、query-to-document 小樣本結果與限制。
 - 已新增 `docs/ai_embedding_provider_plan.md`，規劃正式 AI embedding provider 的環境變數、API key 管理、batch、retry、費用控制、DB model version、測試與 embeddings 重建流程，並記錄 Hugging Face provider 實作狀態。
 - 已補上正式 AI provider 實作前測試保護，包含 fake provider、provider 回傳筆數檢查、向量維度檢查、`token_count` / `norm` 檢查與非有限數值檢查。
 
-### 下一步：在 trial DB 做 BGE query-to-document 比較或擴大跨年度資料
+### 下一步：擴大 BGE trial 或整理前端模型切換
 
 優先原因：
 
@@ -1269,10 +1275,11 @@ http://127.0.0.1:5173
 - chunking、本機 embedding、前端語意搜尋展示與案件層級語意相似展示已完成。
 - 前端結構已整理，後續可以承接更複雜功能。
 - 跨年度 trial DB 已建立並通過資料品質檢查，正式 DB 也已切換為跨年度資料。
+- Hugging Face query-to-document 小樣本已成功，但目前只有 100 筆 candidates，尚不足以代表正式搜尋品質。
 
 建議工作：
 
-1. 若要強化語意品質：在 trial DB 上用 `embedding_provider=huggingface` 做少量 query-to-document API 比較，再決定是否擴大到 `--limit 1000` 或全量重建 trial DB。
+1. 若要強化語意品質：先把 Hugging Face trial DB 擴大到 `--limit 1000`，用多個查詢詞比較 query-to-document 品質，再決定是否全量重建 trial DB。
 2. 若要強化資料範圍：試跑 ROC 116 小期間。
 
 ### 第 8 階段：跨年度擴充

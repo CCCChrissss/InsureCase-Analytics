@@ -239,9 +239,44 @@ BGE Top results：
 | 4 | 0.8691 | `114年評字第001443號` | 因果關係認定 | `chunk_f577bc23a0f94771` | 關節永久遺存顯著運動障害之失能標準，惟依系爭事故 病歷資料及股骨幹骨折手術住院紀錄，並無任何髖關節或右膝關節損 傷相關治療之記載，故依據醫理，系爭事故並無造成或有何對於髖關 節或膝關節活動之影響，實無從認定申請人體況為系爭事故所致。又 依現有卷附資料，亦無申請人之失能體況為系爭附約之保險期間內因 其他意外傷害事故所致之佐證，從而，申請人請求相對人依系爭附約 ... |
 | 5 | 0.8559 | `114年評字第005590號` | 失能或豁免保費體況認定 | `chunk_8b9908a41add9515` | 穩定至每週 2~3 次。」依系爭保單條款第 16 條之約定，申請人已符合 1-3「外傷性 癲癇」之標準，應適用第 3 級，惟相對人僅以第 7 級給付。 3、 申請人之主治醫師以其專業及經驗，積極充分治療申請人之外傷性癲 癇病症，已至症狀安定在每週發作次數約 2 至 3 次。由於醫師認定為 已不能期待醫療效果，故在其專業、道德良知下，開立長期處方簽予以 控制。... |
 
-## 5. 初步結論
+## 5. Query-to-Document API 試測
+
+在完成 100 筆 BGE trial embeddings 後，已進一步用真實查詢詞 `除外責任` 呼叫 Hugging Face 產生 query embedding，再與 trial DB 內的 BGE chunk embeddings 做 cosine similarity 排序。
+
+本次試測結果：
+
+- Query：`除外責任`
+- Embedding model：`BAAI/bge-large-zh-v1.5`
+- Trial candidates：`100`
+- Top 5 結果：
+
+| rank | case_number | dispute_type | score | chunk_id |
+| ---: | --- | --- | ---: | --- |
+| 1 | `114年評字第001727號` | 除外責任 | 0.5976 | `chunk_8cd73331844e38b0` |
+| 2 | `114年評字第005701號` | 必要性醫療 | 0.5862 | `chunk_9da755d1f30ecc48` |
+| 3 | `114年評字第001727號` | 除外責任 | 0.5753 | `chunk_04ee3685a9ba68b0` |
+| 4 | `114年評字第001727號` | 除外責任 | 0.5641 | `chunk_a69088cafb471edb` |
+| 5 | `114年評字第005701號` | 必要性醫療 | 0.5626 | `chunk_e8314092ca54863c` |
+
+初步判讀：
+
+- Top 1 命中同爭議類型 `除外責任`。
+- Top 5 中有 3 筆來自 `除外責任`，代表 BGE query-to-document 流程已能把查詢詞拉向相關案件片段。
+- Top 5 中也出現 `必要性醫療`，不必直接視為錯誤；保險評議案件中常同時涉及醫療必要性、承保範圍與除外條款，需要回到 chunk 原文檢查具體關聯。
+- 本結果只代表 100 筆 trial candidates，不代表全量 17254 chunks 的正式搜尋品質。
+
+可重跑指令：
+
+```powershell
+$env:EMBEDDING_API_KEY = Read-Host "請貼上 Hugging Face token"
+py .\backend\scripts\run_semantic_query_trial.py --db .\backend\data\insurance_cases_hf_trial.db --query 除外責任
+```
+
+注意：這個指令會呼叫 Hugging Face API 產生 query embedding，會消耗少量 API 額度。token 只應放在 shell 環境變數，不要寫進 Git、文件或程式碼。
+
+## 6. 初步結論
 
 - Hugging Face provider、1024 維 BGE embeddings 與 SQLite 寫入流程已通過 100 筆 trial 驗證。
 - 本報告只代表 100 筆小樣本的離線 anchor-based 比較，不能宣稱全量搜尋品質已優於 local MVP。
-- 若要做更接近使用者體驗的比較，下一步應讓 API 支援指定 `embedding_model`，並為查詢詞產生對應 BGE query embedding。
+- 已完成第一個真實 query-to-document 小樣本試測；下一步應擴大到更多查詢詞與更多 trial candidates，例如 `--limit 1000`。
 - 正式 DB `backend/data/insurance_cases.db` 目前仍應維持 `local_hashing_cjk_v1`，等品質與成本評估後再決定是否全量重建。
