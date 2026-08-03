@@ -813,6 +813,7 @@ Query parameters：
 - 正式 React Router。
 - 前端自動化測試。
 - Hugging Face embeddings 尚未對正式 DB 全量重建；目前已完成 trial DB 1000 筆、離線 anchor-based 比較報告，以及 5 個查詢詞的 query-to-document 小樣本試測。
+- 前端語意搜尋頁目前只展示 Hugging Face trial 摘要，不會直接查詢 trial DB 或呼叫 Hugging Face API。
 - OpenAI 或其他外部 AI embedding provider 尚未實作。
 - 實務級向量資料庫或 ANN index。
 
@@ -1269,8 +1270,9 @@ http://127.0.0.1:5173
 - 已新增 `docs/hf_semantic_query_trial_1000.md`，記錄 1000 筆 BGE candidates 下 5 個查詢詞的詳細 Top 5 結果。
 - 已新增 `docs/ai_embedding_provider_plan.md`，規劃正式 AI embedding provider 的環境變數、API key 管理、batch、retry、費用控制、DB model version、測試與 embeddings 重建流程，並記錄 Hugging Face provider 實作狀態。
 - 已補上正式 AI provider 實作前測試保護，包含 fake provider、provider 回傳筆數檢查、向量維度檢查、`token_count` / `norm` 檢查與非有限數值檢查。
+- 已更新前端 `SemanticSearchPage`，提供 Local MVP 與 Hugging Face BGE Trial 模型狀態切換；Local MVP 可直接查正式 DB，Hugging Face Trial 只展示 1000 筆試測摘要，避免誤認正式 DB 已切換。
 
-### 下一步：整理前端模型切換與模型限制提示
+### 下一步：補語意搜尋 relevance check 或規劃 BGE 全量 trial
 
 優先原因：
 
@@ -1278,12 +1280,12 @@ http://127.0.0.1:5173
 - chunking、本機 embedding、前端語意搜尋展示與案件層級語意相似展示已完成。
 - 前端結構已整理，後續可以承接更複雜功能。
 - 跨年度 trial DB 已建立並通過資料品質檢查，正式 DB 也已切換為跨年度資料。
-- Hugging Face query-to-document 1000 筆小樣本已成功，但正式 DB 尚未全量重建，也尚未在前端清楚標示模型狀態。
+- Hugging Face query-to-document 1000 筆小樣本已成功，前端也已清楚標示 local MVP 與 BGE trial 的差異；下一步需要補更多人工判讀依據或規劃全量 trial。
 
 建議工作：
 
-1. 若要強化展示可信度：前端語意搜尋頁加入模型切換與模型限制提示，清楚區分 local MVP、Hugging Face trial 與正式 DB 狀態。
-2. 若要強化語意品質：補更多查詢詞與人工 relevance check，再決定是否全量重建 trial DB。
+1. 若要強化展示可信度：補更多查詢詞與人工 relevance check，讓報告能說明哪些結果是真的相關、哪些只是語意接近。
+2. 若要強化語意品質：評估是否全量重建 Hugging Face trial DB，再決定是否替換正式 DB。
 3. 若要強化資料範圍：試跑 ROC 116 小期間。
 
 ### 第 8 階段：跨年度擴充

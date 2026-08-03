@@ -34,6 +34,7 @@
 - Hugging Face embedding provider 小批量接入，可用 fake HTTP 測試驗證，不會在測試中呼叫外部 API
 - Hugging Face BGE 1000 筆 trial embeddings 與 local hashing 離線比較報告
 - Hugging Face BGE query-to-document 小樣本試測腳本與 1000 筆 candidates 查詢報告
+- 前端語意搜尋頁已標示 Local MVP 與 Hugging Face BGE Trial 狀態，避免誤認正式 DB 已切換
 - 前端基本 build 驗證
 - 跨年度匯入前置支援
 - ROC 114 一月小期間跨年度試跑文件
@@ -582,6 +583,7 @@ pnpm build
 
 - 正式 DB 尚未切換為實務級 embedding 模型
 - Hugging Face BGE 目前只完成 trial DB 1000 筆小樣本驗證，尚未全量重建正式 DB
+- 前端目前只展示 Hugging Face trial 摘要，不會直接查詢 trial DB 或呼叫 Hugging Face API
 - ANN 向量索引
 - OCR fallback
 - Docker
@@ -595,9 +597,9 @@ pnpm build
 建議後續開發順序：
 
 ```text
-1. 前端語意搜尋頁加入模型切換與模型限制提示，清楚區分 local MVP 與 Hugging Face trial
+1. 補更多查詢詞與人工標註的 relevance check，判斷 BGE trial 品質是否足夠
 2. 評估是否將 Hugging Face embeddings 全量重建到 trial DB，再決定是否替換正式 DB
-3. 若要強化評測，補更多查詢詞與人工標註的 relevance check
+3. 若要讓前端直接查 BGE，需先設計 trial DB / formal DB 切換方式與後端設定
 4. 試跑 ROC 116 小期間資料
 5. 導入 Docker / CI / 部署設定
 ```
