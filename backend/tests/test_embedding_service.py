@@ -94,6 +94,23 @@ class FakeHuggingFaceClient:
         return response
 
 
+class FakeSentenceTransformerModel:
+    def __init__(self, vectors: list[list[float]], *, dims: int = 1024, error: Exception | None = None) -> None:
+        self.vectors = vectors
+        self.dims = dims
+        self.error = error
+        self.calls = []
+
+    def get_embedding_dimension(self) -> int:
+        return self.dims
+
+    def encode(self, texts: list[str], **kwargs):
+        self.calls.append({"texts": texts, **kwargs})
+        if self.error is not None:
+            raise self.error
+        return self.vectors[: len(texts)]
+
+
 def make_embedding(vector: list[float], *, norm: float = 1.0, token_count: int = 1) -> embedding_service.EmbeddedText:
     return embedding_service.EmbeddedText(vector=vector, norm=norm, token_count=token_count)
 
@@ -132,6 +149,85 @@ def test_create_local_embedding_provider() -> None:
     assert provider.dims == 32
     assert len(embedded.vector) == 32
     assert embedded.token_count > 0
+
+
+def test_create_local_bge_provider_uses_separate_storage_model() -> None:
+    provider = embedding_service.create_embedding_provider(provider_name="local_bge")
+
+    assert provider.provider_name == "local_bge"
+    assert provider.model_name == embedding_service.LOCAL_BGE_MODEL_NAME
+    assert provider.source_model_name == embedding_service.HUGGINGFACE_DEFAULT_MODEL_NAME
+    assert provider.dims == 1024
+
+
+def test_local_bge_provider_embeds_with_fake_model_and_skips_empty_text() -> None:
+    first_vector = [3.0, 4.0, *([0.0] * 1022)]
+    second_vector = [0.0, 5.0, *([0.0] * 1022)]
+    fake_model = FakeSentenceTransformerModel([first_vector, second_vector])
+    loader_calls = []
+
+    def fake_loader(model_name: str, device: str):
+        loader_calls.append((model_name, device))
+        return fake_model
+
+    provider = embedding_service.LocalSentenceTransformerEmbeddingProvider(
+        device="cpu",
+        batch_size=2,
+        model_loader=fake_loader,
+    )
+    embeddings = provider.embed_texts(["癌症保險金", " ", "住院日額"])
+
+    assert len(embeddings) == 3
+    assert embeddings[0].vector[:2] == [0.6, 0.8]
+    assert embeddings[0].norm == 5.0
+    assert embeddings[1].norm == 0.0
+    assert embeddings[1].token_count == 0
+    assert embeddings[2].vector[:2] == [0.0, 1.0]
+    assert loader_calls == [(embedding_service.HUGGINGFACE_DEFAULT_MODEL_NAME, "cpu")]
+    assert fake_model.calls[0]["texts"] == ["癌症保險金", "住院日額"]
+    assert fake_model.calls[0]["normalize_embeddings"] is True
+    assert fake_model.calls[0]["show_progress_bar"] is False
+
+
+def test_local_bge_provider_rejects_model_dimension_mismatch() -> None:
+    fake_model = FakeSentenceTransformerModel([], dims=768)
+    provider = embedding_service.LocalSentenceTransformerEmbeddingProvider(
+        device="cpu",
+        model_loader=lambda *_: fake_model,
+    )
+
+    try:
+        provider.embed_texts(["癌症保險金"])
+    except embedding_service.EmbeddingProviderError as error:
+        assert "returned 768 dimensions" in str(error)
+        assert "expected 1024" in str(error)
+    else:
+        raise AssertionError("Expected EmbeddingProviderError")
+
+
+def test_local_bge_provider_explains_out_of_memory_recovery() -> None:
+    fake_model = FakeSentenceTransformerModel([], error=RuntimeError("CUDA out of memory"))
+    provider = embedding_service.LocalSentenceTransformerEmbeddingProvider(
+        device="cpu",
+        model_loader=lambda *_: fake_model,
+    )
+
+    try:
+        provider.embed_texts(["癌症保險金"])
+    except embedding_service.EmbeddingProviderError as error:
+        assert "LOCAL_BGE_BATCH_SIZE" in str(error)
+        assert "LOCAL_BGE_DEVICE=cpu" in str(error)
+    else:
+        raise AssertionError("Expected EmbeddingProviderError")
+
+
+def test_local_bge_rejects_unknown_device() -> None:
+    try:
+        embedding_service.resolve_local_bge_device("metal")
+    except embedding_service.EmbeddingProviderError as error:
+        assert "auto, cpu, cuda" in str(error)
+    else:
+        raise AssertionError("Expected EmbeddingProviderError")
 
 
 def test_openai_embedding_provider_is_explicitly_not_implemented() -> None:

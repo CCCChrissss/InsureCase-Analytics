@@ -5,12 +5,13 @@ import math
 import re
 import sqlite3
 import struct
+import threading
 import time
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Protocol, Sequence
+from typing import Any, Callable, Iterable, Protocol, Sequence
 
 import requests
 
@@ -23,6 +24,8 @@ from backend.app.config import EMBEDDING_PROVIDER
 from backend.app.config import EMBEDDING_RETRY_BACKOFF_SECONDS
 from backend.app.config import EMBEDDING_TIMEOUT_SECONDS
 from backend.app.config import HUGGINGFACE_API_BASE_URL
+from backend.app.config import LOCAL_BGE_BATCH_SIZE
+from backend.app.config import LOCAL_BGE_DEVICE
 from backend.app.database import connect
 
 LOCAL_PROVIDER_NAME = "local"
@@ -30,11 +33,19 @@ LOCAL_MODEL_NAME = "local_hashing_cjk_v1"
 HUGGINGFACE_PROVIDER_NAME = "huggingface"
 HUGGINGFACE_DEFAULT_MODEL_NAME = "BAAI/bge-large-zh-v1.5"
 HUGGINGFACE_DEFAULT_DIMS = 1024
+LOCAL_BGE_PROVIDER_NAME = "local_bge"
+LOCAL_BGE_MODEL_NAME = "BAAI/bge-large-zh-v1.5-local"
+LOCAL_BGE_SOURCE_MODEL_NAME = HUGGINGFACE_DEFAULT_MODEL_NAME
+LOCAL_BGE_DIMS = HUGGINGFACE_DEFAULT_DIMS
+LOCAL_BGE_PROVIDER_ALIASES = {LOCAL_BGE_PROVIDER_NAME, "local_transformer", "sentence_transformers"}
 RESERVED_AI_PROVIDER_NAMES = {"openai", "ai"}
 MODEL_NAME = EMBEDDING_MODEL
 DEFAULT_DIMS = EMBEDDING_DIMS
 TOKEN_RE = re.compile(r"[A-Za-z0-9_]{2,}")
 CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
+_LOCAL_BGE_MODEL_CACHE: dict[tuple[str, str], Any] = {}
+_LOCAL_BGE_MODEL_CACHE_LOCK = threading.Lock()
+_LOCAL_BGE_INFERENCE_LOCK = threading.Lock()
 
 
 class EmbeddingProviderError(RuntimeError):
@@ -65,6 +76,142 @@ class LocalHashingEmbeddingProvider:
 
     def embed_texts(self, texts: list[str]) -> list[EmbeddedText]:
         return [EmbeddedText(*vectorize_text(text, dims=self.dims)) for text in texts]
+
+
+def resolve_local_bge_device(requested_device: str) -> str:
+    device = requested_device.strip().lower()
+    if device not in {"auto", "cpu", "cuda"}:
+        raise EmbeddingProviderError("LOCAL_BGE_DEVICE must be one of: auto, cpu, cuda.")
+    if device == "cpu":
+        return device
+
+    try:
+        import torch
+    except ImportError as error:
+        raise EmbeddingProviderError(
+            "local_bge requires the optional local AI dependencies. "
+            "Install them with: py -m pip install -r requirements-local-ai.txt"
+        ) from error
+
+    cuda_available = bool(torch.cuda.is_available())
+    if device == "cuda" and not cuda_available:
+        raise EmbeddingProviderError(
+            "LOCAL_BGE_DEVICE=cuda was requested, but PyTorch cannot access CUDA. "
+            "Use LOCAL_BGE_DEVICE=cpu or install a CUDA-enabled PyTorch build."
+        )
+    return "cuda" if cuda_available else "cpu"
+
+
+def load_local_bge_model(model_name: str, device: str) -> Any:
+    cache_key = (model_name, device)
+    with _LOCAL_BGE_MODEL_CACHE_LOCK:
+        cached = _LOCAL_BGE_MODEL_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError as error:
+            raise EmbeddingProviderError(
+                "local_bge requires the optional local AI dependencies. "
+                "Install them with: py -m pip install -r requirements-local-ai.txt"
+            ) from error
+
+        model = SentenceTransformer(model_name, device=device)
+        _LOCAL_BGE_MODEL_CACHE[cache_key] = model
+        return model
+
+
+class LocalSentenceTransformerEmbeddingProvider:
+    provider_name = LOCAL_BGE_PROVIDER_NAME
+
+    def __init__(
+        self,
+        *,
+        model_name: str = LOCAL_BGE_MODEL_NAME,
+        source_model_name: str = LOCAL_BGE_SOURCE_MODEL_NAME,
+        dims: int = LOCAL_BGE_DIMS,
+        device: str = LOCAL_BGE_DEVICE,
+        batch_size: int = LOCAL_BGE_BATCH_SIZE,
+        model_loader: Callable[[str, str], Any] = load_local_bge_model,
+    ) -> None:
+        if model_name != LOCAL_BGE_MODEL_NAME:
+            raise EmbeddingProviderError(
+                f"local_bge currently supports storage model '{LOCAL_BGE_MODEL_NAME}' only."
+            )
+        if dims != LOCAL_BGE_DIMS:
+            raise EmbeddingProviderError(f"local_bge requires {LOCAL_BGE_DIMS} embedding dimensions.")
+        if batch_size <= 0:
+            raise EmbeddingProviderError("LOCAL_BGE_BATCH_SIZE must be greater than 0.")
+
+        self.model_name = model_name
+        self.source_model_name = source_model_name
+        self.dims = dims
+        self.requested_device = device
+        self.batch_size = batch_size
+        self.model_loader = model_loader
+        self._model: Any | None = None
+        self._resolved_device: str | None = None
+
+    @property
+    def resolved_device(self) -> str:
+        if self._resolved_device is None:
+            self._resolved_device = resolve_local_bge_device(self.requested_device)
+        return self._resolved_device
+
+    def _get_model(self) -> Any:
+        if self._model is None:
+            self._model = self.model_loader(self.source_model_name, self.resolved_device)
+            get_dims = getattr(self._model, "get_embedding_dimension", None)
+            if not callable(get_dims):
+                get_dims = getattr(self._model, "get_sentence_embedding_dimension", None)
+            model_dims = get_dims() if callable(get_dims) else None
+            if model_dims is not None and int(model_dims) != self.dims:
+                raise EmbeddingProviderError(
+                    f"Local BGE model returned {model_dims} dimensions, expected {self.dims}."
+                )
+        return self._model
+
+    def embed_texts(self, texts: list[str]) -> list[EmbeddedText]:
+        results = [EmbeddedText(vector=[0.0] * self.dims, norm=0.0, token_count=0) for _ in texts]
+        indexed_texts = [(index, text) for index, text in enumerate(texts) if text and text.strip()]
+        if not indexed_texts:
+            return results
+
+        model = self._get_model()
+        for start in range(0, len(indexed_texts), self.batch_size):
+            batch = indexed_texts[start : start + self.batch_size]
+            try:
+                with _LOCAL_BGE_INFERENCE_LOCK:
+                    encoded = model.encode(
+                        [text for _, text in batch],
+                        batch_size=self.batch_size,
+                        normalize_embeddings=True,
+                        convert_to_numpy=True,
+                        show_progress_bar=False,
+                    )
+            except RuntimeError as error:
+                if "out of memory" in str(error).lower():
+                    raise EmbeddingProviderError(
+                        "Local BGE ran out of memory. Lower LOCAL_BGE_BATCH_SIZE or set LOCAL_BGE_DEVICE=cpu."
+                    ) from error
+                raise
+
+            vectors = encoded.tolist() if hasattr(encoded, "tolist") else encoded
+            if not isinstance(vectors, list) or len(vectors) != len(batch):
+                raise EmbeddingProviderError(
+                    f"Local BGE returned an invalid batch with {len(vectors) if isinstance(vectors, list) else 0} "
+                    f"embeddings for {len(batch)} texts."
+                )
+            for (original_index, text), vector in zip(batch, vectors, strict=True):
+                if not isinstance(vector, list):
+                    raise EmbeddingProviderError("Local BGE returned a non-list embedding vector.")
+                normalized_vector, norm = normalize_external_vector(vector)
+                results[original_index] = EmbeddedText(
+                    vector=normalized_vector,
+                    norm=norm,
+                    token_count=len(tokenize(text)),
+                )
+        return results
 
 
 class HuggingFaceEmbeddingProvider:
@@ -188,6 +335,18 @@ def create_embedding_provider(
             dims=resolved_dims,
         )
 
+    if resolved_provider in LOCAL_BGE_PROVIDER_ALIASES:
+        if resolved_model in {LOCAL_MODEL_NAME, HUGGINGFACE_DEFAULT_MODEL_NAME}:
+            resolved_model = LOCAL_BGE_MODEL_NAME
+        if resolved_dims == DEFAULT_DIMS:
+            resolved_dims = LOCAL_BGE_DIMS
+        return LocalSentenceTransformerEmbeddingProvider(
+            model_name=resolved_model,
+            dims=resolved_dims,
+            device=LOCAL_BGE_DEVICE,
+            batch_size=LOCAL_BGE_BATCH_SIZE,
+        )
+
     if resolved_provider in {HUGGINGFACE_PROVIDER_NAME, "hf"}:
         resolved_model = HUGGINGFACE_DEFAULT_MODEL_NAME if resolved_model == LOCAL_MODEL_NAME else resolved_model
         if resolved_model == HUGGINGFACE_DEFAULT_MODEL_NAME and resolved_dims == DEFAULT_DIMS:
@@ -206,7 +365,16 @@ def create_embedding_provider(
         )
 
     supported = ", ".join(
-        sorted({LOCAL_PROVIDER_NAME, "local_hashing", HUGGINGFACE_PROVIDER_NAME, "hf", *RESERVED_AI_PROVIDER_NAMES})
+        sorted(
+            {
+                LOCAL_PROVIDER_NAME,
+                "local_hashing",
+                *LOCAL_BGE_PROVIDER_ALIASES,
+                HUGGINGFACE_PROVIDER_NAME,
+                "hf",
+                *RESERVED_AI_PROVIDER_NAMES,
+            }
+        )
     )
     raise EmbeddingProviderError(f"Unsupported embedding provider: {resolved_provider}. Known providers: {supported}.")
 
@@ -468,7 +636,7 @@ def build_chunk_embeddings(
             (provider.model_name,),
         ).fetchone()[0]
 
-    return {
+    result = {
         "database": str(db_path),
         "embedding_provider": provider.provider_name,
         "embedding_model": provider.model_name,
@@ -477,6 +645,10 @@ def build_chunk_embeddings(
         "created_at": now_iso(),
         **report,
     }
+    if isinstance(provider, LocalSentenceTransformerEmbeddingProvider):
+        result["embedding_source_model"] = provider.source_model_name
+        result["embedding_device"] = provider.resolved_device
+    return result
 
 
 def semantic_search(

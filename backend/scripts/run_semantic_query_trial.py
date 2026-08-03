@@ -137,7 +137,7 @@ def build_markdown_report(payload: dict[str, Any]) -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run a small Hugging Face query-to-document semantic search trial on a SQLite trial DB."
+        description="Run a query-to-document semantic search trial on a SQLite trial DB."
     )
     parser.add_argument("--db", type=Path, default=DEFAULT_DB_PATH, help="SQLite trial database path.")
     parser.add_argument("--query", action="append", dest="queries", help="Query text. Can be repeated.")

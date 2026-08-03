@@ -111,6 +111,8 @@
 ├─ PROJECT_CONTEXT.md
 ├─ README.md
 ├─ requirements.txt
+├─ requirements-local-ai.txt
+├─ requirements-local-ai-cuda.txt
 ├─ foi_ods_life_mvp_crawler.py
 ├─ foi_ods_pdf_text_pipeline.py
 ├─ foi_ods_case_organizer.py
@@ -264,10 +266,11 @@ GET /api/semantic-search?q=癌症保險金&limit=10
 
 ```text
 GET /api/semantic-search?q=癌症保險金&embedding_provider=local&embedding_model=local_hashing_cjk_v1
+GET /api/semantic-search?q=癌症保險金&embedding_provider=local_bge&embedding_model=BAAI/bge-large-zh-v1.5-local
 GET /api/semantic-search?q=癌症保險金&embedding_provider=huggingface&embedding_model=BAAI/bge-large-zh-v1.5
 ```
 
-注意：指定 Hugging Face provider 時，後端需要 `EMBEDDING_API_KEY` 或 `HF_TOKEN`，並會呼叫 Hugging Face 產生 query embedding。若 query provider 輸出維度與 DB stored embeddings 維度不一致，API 會回傳 400，避免產生錯誤相似度。
+`local_bge` 在本機執行 BGE，不需要 token；`huggingface` 會呼叫 Inference API，需要 `EMBEDDING_API_KEY` 或 `HF_TOKEN`。若 query provider 輸出維度與 DB stored embeddings 維度不一致，API 會回傳 400，避免產生錯誤相似度。
 
 目前模型：
 
@@ -308,7 +311,19 @@ EMBEDDING_MODEL=local_hashing_cjk_v1
 EMBEDDING_DIMS=384
 ```
 
-`local` 是目前可用 provider；`openai` / AI provider 介面已預留，但尚未實作外部 API 呼叫。
+`local` 是正式 DB 目前使用的 hashing baseline；`local_bge` 與 `huggingface` 也已實作。`openai` / AI provider 介面已預留，但尚未實作外部 API 呼叫。
+
+已支援本機 BGE provider：
+
+```text
+EMBEDDING_PROVIDER=local_bge
+EMBEDDING_MODEL=BAAI/bge-large-zh-v1.5-local
+EMBEDDING_DIMS=1024
+LOCAL_BGE_DEVICE=auto
+LOCAL_BGE_BATCH_SIZE=4
+```
+
+本機 BGE 使用 `BAAI/bge-large-zh-v1.5` 權重，不需要 API token。選用套件與 CPU / CUDA 安裝方式記錄於 `docs/local_bge_provider.md`。
 
 已支援 Hugging Face provider：
 
@@ -338,6 +353,15 @@ EMBEDDING_API_KEY=<your Hugging Face token>
 
 ```powershell
 py .\backend\scripts\build_chunk_embeddings.py --provider local --model local_hashing_cjk_v1 --dims 384
+```
+
+本機 BGE 小批量試跑範例：
+
+```powershell
+py -m pip install -r .\requirements-local-ai.txt
+$env:HF_HUB_OFFLINE="1"
+$env:LOCAL_BGE_DEVICE="cpu"
+py .\backend\scripts\build_chunk_embeddings.py --db .\backend\data\insurance_cases_local_bge_trial.db --provider local_bge --model BAAI/bge-large-zh-v1.5-local --dims 1024 --limit 20
 ```
 
 Hugging Face 小批量試跑範例：
@@ -589,6 +613,7 @@ pnpm build
 - `docs/chunking_pipeline.md`：案件文字 chunking 設計、欄位與正式 DB 驗證結果
 - `docs/embedding_pipeline.md`：本機 embedding MVP、語意搜尋 API 與後續升級路線
 - `docs/ai_embedding_provider_plan.md`：正式 AI embedding provider 接入規格，包含環境變數、batch、retry、費用控制、重建與測試策略
+- `docs/local_bge_provider.md`：本機 BGE provider、CPU / CUDA 安裝、離線模型快取、20 chunks trial 與正式切換條件
 - `docs/hf_embedding_trial_comparison.md`：Hugging Face BGE trial embeddings、local hashing 離線 anchor-based 比較與 query-to-document 小樣本試測報告
 - `docs/hf_semantic_query_trial_1000.md`：Hugging Face BGE 1000 筆 candidates 的 query-to-document 詳細查詢結果
 - `docs/hf_semantic_relevance_check_1000.md`：Hugging Face BGE 1000 筆 trial Top 25 人工 relevance check，含 7 筆較不明確結果的 chunk 原文證據核對
@@ -604,6 +629,7 @@ pnpm build
 
 - 正式 DB 尚未切換為實務級 embedding 模型
 - Hugging Face BGE 目前只完成 trial DB 1000 筆小樣本驗證，尚未全量重建正式 DB
+- 本機 BGE 已完成 CPU 20 chunks 與三個查詢詞的離線流程驗證；尚未完成 1000 筆品質 benchmark、GPU 安裝驗證與正式 DB 全量重建
 - 前端目前只展示 Hugging Face trial 摘要，不會直接查詢 trial DB 或呼叫 Hugging Face API
 - 15 詞 benchmark v1 已完成 75 筆第一輪 Codex-assisted 原文標註：Strict Precision@5 為 0.8133、Lenient Precision@5 為 0.9333
 - 第二位標註者空白模板與一致性比較工具已完成；第二位獨立標註、實際一致率計算與爭議標記仲裁尚未完成
@@ -622,10 +648,11 @@ pnpm build
 ```text
 1. 第二位標註者在不查看第一輪答案的情況下，完成 75 筆 `label` 與 `evidence_summary`
 2. 執行標註一致性比較，檢查原始一致率、Cohen's Kappa、混淆矩陣並仲裁所有衝突
-3. 針對 `手術認定`、`豁免保費` 等低 Strict P@5 查詢調整 query 或加入 reranking
-4. 評估是否將 Hugging Face embeddings 全量重建到 trial DB，再決定是否替換正式 DB
-5. 試跑 ROC 116 小期間資料
-6. 導入 Docker / CI / 部署設定
+3. 將本機 BGE trial 從 20 擴充到 100、1000 筆，重跑固定 benchmark 並與 API BGE 比較
+4. 針對 `手術認定`、`豁免保費` 等低 Strict P@5 查詢調整 query 或加入 reranking
+5. 驗證 CUDA PyTorch，評估 CPU / GPU 全量重建時間，再決定是否替換正式 DB
+6. 試跑 ROC 116 小期間資料
+7. 導入 Docker / CI / 部署設定
 ```
 
 ## Project Positioning

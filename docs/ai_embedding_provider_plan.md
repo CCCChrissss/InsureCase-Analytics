@@ -4,7 +4,7 @@
 
 本文件規劃如何將目前的本機 `local_hashing_cjk_v1` 語意搜尋 MVP，升級成可串接正式 AI embedding model 的工程架構。
 
-目前已先完成 Hugging Face provider 的第一版小批量接入口。目標不是立即替換正式展示 DB，而是先定義並落實清楚：
+目前已完成 Hugging Face API provider 與本機 BGE provider 的小批量接入口。目標不是立即替換正式展示 DB，而是先定義並落實清楚：
 
 - provider 介面如何擴充。
 - API key 與敏感資訊如何管理。
@@ -19,6 +19,7 @@
 
 - `backend/app/services/embedding_service.py` 已有 provider factory。
 - `local` provider 已實作，可離線建立 `local_hashing_cjk_v1` embeddings。
+- `local_bge` provider 已實作，可透過 Sentence Transformers 在本機執行 `BAAI/bge-large-zh-v1.5`，不需要 API token；CPU 20 chunks trial 已通過。
 - `huggingface` / `hf` provider 已實作，可透過 Hugging Face Inference API Feature Extraction 取得 embeddings。
 - Hugging Face provider 預設模型為 `BAAI/bge-large-zh-v1.5`，預設維度 1024。
 - Hugging Face provider 支援：
@@ -340,9 +341,10 @@ py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks --
 目前可說：
 
 ```text
-系統目前使用本機 CJK hashing vector 完成語意搜尋 MVP，
-已建立 provider 邊界，且已完成 Hugging Face provider 小批量接入口。
-正式展示 DB 若要切換成 Hugging Face embedding，需要設定 token 並重建 chunk_embeddings，
+系統目前正式 DB 使用本機 CJK hashing vector 完成語意搜尋 MVP，
+已建立 provider 邊界，並完成 Hugging Face API 與本機 BGE 小批量接入口。
+本機 BGE 已在 CPU 完成 20 chunks 離線 trial，不需要 API token；
+正式展示 DB 若要切換，仍需擴大 benchmark 並重建 chunk_embeddings，
 案件搜尋 API 與前端展示流程可大致沿用。
 ```
 
@@ -357,7 +359,8 @@ py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks --
 
 ## 15. 建議實作順序
 
-1. 在 trial DB 上以 `embedding_provider=huggingface` 進行少量 query-to-document API 比較。
-2. 在前端展示目前使用的 model，並提供模型切換。
-3. 若品質與成本可接受，再擴大到 `--limit 1000` 或全量重建 trial DB。
-4. 後續如需 OpenAI 或其他 provider，再在 `embedding_service.py` 新增 provider。
+1. 將本機 BGE trial 從 20 擴大到 100、1000 筆，與既有 API BGE benchmark 比較。
+2. 驗證 CUDA PyTorch，記錄 CPU / GPU 建置時間與記憶體使用。
+3. 在前端展示實際 provider、model 與 device。
+4. 品質與效能可接受後，再考慮全量重建正式 DB。
+5. 後續如需 OpenAI 或其他 provider，再在 `embedding_service.py` 新增 provider。
