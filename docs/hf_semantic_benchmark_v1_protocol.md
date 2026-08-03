@@ -116,3 +116,45 @@ py .\backend\scripts\evaluate_semantic_benchmark.py `
 - Macro / micro Lenient Precision@5：`0.9333`
 
 本輪標註為 Codex-assisted first pass，尚未完成第二位獨立標註者複核，因此應視為初步評測結果，不是最終 ground truth。
+
+## 10. 第二位標註者獨立複核
+
+第二位標註者使用：
+
+`outputs/hf_semantic_benchmark_v1_second_annotations.json`
+
+為維持獨立性，第二位標註者完成前不得查看：
+
+- `docs/hf_semantic_benchmark_v1_annotations.json`
+- `docs/hf_semantic_benchmark_v1_evaluation.md`
+
+第二位標註者需要先填寫檔案最上層的 `annotator`，再逐筆填寫 75 筆 `label` 與 `evidence_summary`。`annotator` 不可與第一輪名稱相同，且每筆證據摘要都必須根據 chunk 原文撰寫。
+
+完成後可先驗證第二份標註並產生個別評測報告：
+
+```powershell
+py .\backend\scripts\evaluate_semantic_benchmark.py `
+  --results .\outputs\hf_semantic_benchmark_v1_results.json `
+  --annotations .\outputs\hf_semantic_benchmark_v1_second_annotations.json `
+  --out .\outputs\hf_semantic_benchmark_v1_second_evaluation.md
+```
+
+比較兩位標註者：
+
+```powershell
+py .\backend\scripts\compare_semantic_annotations.py `
+  --results .\outputs\hf_semantic_benchmark_v1_results.json `
+  --annotations-a .\docs\hf_semantic_benchmark_v1_annotations.json `
+  --annotations-b .\outputs\hf_semantic_benchmark_v1_second_annotations.json `
+  --out .\outputs\hf_semantic_benchmark_v1_agreement.md
+```
+
+比較報告包含：
+
+- 原始一致率。
+- Cohen's Kappa。
+- 三種 label 的混淆矩陣。
+- 15 個查詢詞各自的一致率。
+- 雙方標記與證據摘要不同的待仲裁清單。
+
+一致率或 Kappa 不等於標註正確率。所有衝突都應回查 chunk 與同案件上下文，由雙方討論或第三位標註者仲裁；仲裁完成前不可將任一方標註直接當成最終 ground truth。

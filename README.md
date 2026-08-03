@@ -596,6 +596,7 @@ pnpm build
 - `docs/hf_semantic_benchmark_v1_results.md`：benchmark v1 的 15 詞、75 筆 Hugging Face BGE Top 5 查詢結果
 - `docs/hf_semantic_benchmark_v1_annotations.json`：75 筆 Codex-assisted 第一輪標註與逐筆原文證據摘要
 - `docs/hf_semantic_benchmark_v1_evaluation.md`：第一輪 strict / lenient、macro / micro Precision@5 與逐查詢評測報告
+- 第二位標註者空白模板：`outputs/hf_semantic_benchmark_v1_second_annotations.json`，此本機工作檔不提交 Git
 
 ## Current Limitations
 
@@ -605,7 +606,7 @@ pnpm build
 - Hugging Face BGE 目前只完成 trial DB 1000 筆小樣本驗證，尚未全量重建正式 DB
 - 前端目前只展示 Hugging Face trial 摘要，不會直接查詢 trial DB 或呼叫 Hugging Face API
 - 15 詞 benchmark v1 已完成 75 筆第一輪 Codex-assisted 原文標註：Strict Precision@5 為 0.8133、Lenient Precision@5 為 0.9333
-- 第二位獨立標註者、標註一致性檢查與爭議標記仲裁尚未完成
+- 第二位標註者空白模板與一致性比較工具已完成；第二位獨立標註、實際一致率計算與爭議標記仲裁尚未完成
 - ANN 向量索引
 - OCR fallback
 - Docker
@@ -619,11 +620,12 @@ pnpm build
 建議後續開發順序：
 
 ```text
-1. 由第二位標註者獨立複核 75 筆結果，計算一致率並處理判讀差異
-2. 針對 `手術認定`、`豁免保費` 等低 Strict P@5 查詢調整 query 或加入 reranking
-3. 評估是否將 Hugging Face embeddings 全量重建到 trial DB，再決定是否替換正式 DB
-4. 試跑 ROC 116 小期間資料
-5. 導入 Docker / CI / 部署設定
+1. 第二位標註者在不查看第一輪答案的情況下，完成 75 筆 `label` 與 `evidence_summary`
+2. 執行標註一致性比較，檢查原始一致率、Cohen's Kappa、混淆矩陣並仲裁所有衝突
+3. 針對 `手術認定`、`豁免保費` 等低 Strict P@5 查詢調整 query 或加入 reranking
+4. 評估是否將 Hugging Face embeddings 全量重建到 trial DB，再決定是否替換正式 DB
+5. 試跑 ROC 116 小期間資料
+6. 導入 Docker / CI / 部署設定
 ```
 
 ## Project Positioning
