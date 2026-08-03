@@ -333,5 +333,5 @@ py .\backend\scripts\run_semantic_query_trial.py --db .\backend\data\insurance_c
 
 - Hugging Face provider、1024 維 BGE embeddings 與 SQLite 寫入流程已通過 1000 筆 trial 驗證。
 - 本報告仍只代表 trial DB 小樣本、5 個查詢詞與 25 筆 relevance check，不能宣稱全量搜尋品質已優於 local MVP。
-- 已完成真實 query-to-document 小樣本試測及 7 筆較不明確結果的原文核對；下一步應補更多查詢詞、第二位標註者與固定評測指標。
+- 已完成真實 query-to-document 小樣本試測及 7 筆較不明確結果的原文核對，並建立 `docs/hf_semantic_benchmark_v1_protocol.md` 的 15 詞、75 筆標註與 Precision@5 流程；下一步是在可讀取 token 的 PowerShell 產生結果並完成標註。
 - 正式 DB `backend/data/insurance_cases.db` 目前仍應維持 `local_hashing_cjk_v1`，等品質與成本評估後再決定是否全量重建。

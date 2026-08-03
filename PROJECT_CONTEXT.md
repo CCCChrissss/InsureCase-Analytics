@@ -69,7 +69,8 @@
 │  ├─ ai_embedding_provider_plan.md
 │  ├─ hf_embedding_trial_comparison.md
 │  ├─ hf_semantic_query_trial_1000.md
-│  └─ hf_semantic_relevance_check_1000.md
+│  ├─ hf_semantic_relevance_check_1000.md
+│  └─ hf_semantic_benchmark_v1_protocol.md
 ├─ backend/
 │  ├─ schema.sql
 │  ├─ app/
@@ -102,6 +103,7 @@
 │  │  ├─ build_case_chunks.py
 │  │  ├─ compare_embedding_models.py
 │  │  ├─ extract_case_summaries.py
+│  │  ├─ evaluate_semantic_benchmark.py
 │  │  ├─ import_cases_to_db.py
 │  │  ├─ run_semantic_query_trial.py
 │  │  └─ verify_case_db.py
@@ -113,6 +115,7 @@
 │     ├─ test_embedding_service.py
 │     ├─ test_import_cases_to_db.py
 │     ├─ test_search_service.py
+│     ├─ test_semantic_benchmark.py
 │     ├─ test_similar_case_service.py
 │     └─ test_summary_service.py
 └─ frontend/
@@ -189,6 +192,7 @@ frontend/dist/
 - `docs/hf_embedding_trial_comparison.md`：Hugging Face `BAAI/bge-large-zh-v1.5` trial embeddings、`local_hashing_cjk_v1` 離線 anchor-based 比較與 query-to-document 試測摘要。
 - `docs/hf_semantic_query_trial_1000.md`：Hugging Face BGE 1000 筆 candidates 的 query-to-document 詳細查詢結果，包含 `除外責任`、`必要性醫療`、`癌症`、`住院`、`失能`。
 - `docs/hf_semantic_relevance_check_1000.md`：Hugging Face BGE 1000 筆 trial Top 25 人工 relevance check，並對 7 筆較不明確結果保留 chunk 原文證據摘要與最終標記。
+- `docs/hf_semantic_benchmark_v1_protocol.md`：將 BGE trial 擴充為 15 詞、75 筆 Top 5 結果的固定 benchmark，定義人工標註規則、strict / lenient Precision@5、執行方式與限制。
 
 ### backend
 
@@ -216,7 +220,8 @@ frontend/dist/
 - `backend/scripts/build_case_chunks.py`：將 `case_texts.normalized_text` 切成可重跑的 `case_chunks`，保留 section hint、字元起訖位置與 chunk 長度，作為後續 embedding 前置資料。
 - `backend/scripts/build_chunk_embeddings.py`：為 `case_chunks` 建立 embedding，支援 `--provider`、`--model`、`--dims` 與 `--limit`，目前可用 provider 為 `local` 與 `huggingface`。
 - `backend/scripts/compare_embedding_models.py`：比較同一批共同 chunks 在 local hashing 與候選 embedding model 下的相似度排序，輸出 Markdown 報告；目前用於 Hugging Face trial DB，不會呼叫外部 API。
-- `backend/scripts/run_semantic_query_trial.py`：在指定 SQLite trial DB 上執行 Hugging Face query-to-document 語意搜尋試測，會用環境變數 token 呼叫 Hugging Face 產生 query embedding，輸出可追溯 JSON，必要時可輸出 Markdown 報告。
+- `backend/scripts/run_semantic_query_trial.py`：在指定 SQLite trial DB 上執行 Hugging Face query-to-document 語意搜尋試測，支援重複 `--query`、固定 `--query-set benchmark-v1`、JSON 與 Markdown 輸出；會用環境變數 token 呼叫 Hugging Face 產生 query embedding，但不修改 DB。
+- `backend/scripts/evaluate_semantic_benchmark.py`：由 query trial JSON 產生人工標註模板，驗證每筆 label 與 evidence summary 完整性，並輸出 strict / lenient、macro / micro Precision@5 與逐筆證據報告。
 - `backend/scripts/import_cases_to_db.py`：讀取單一或多個 metadata 與文字檔，匯入 SQLite。
 - `backend/scripts/verify_case_db.py`：驗證 SQLite 筆數、搜尋、路徑與 sample case；可用 `--require-chunks` 與 `--require-embeddings` 檢查 chunk 與 embedding 完整性。
 - `backend/scripts/check_data_quality.py`：檢查 metadata 與 SQLite DB 是否含 mojibake 類異常字元。
@@ -227,6 +232,7 @@ frontend/dist/
 - `backend/tests/test_embedding_service.py`：本機 embedding、provider factory、預留 AI provider 錯誤、非法維度、fake provider、fake Hugging Face HTTP client、provider 輸出驗證、embedding 寫入、語意搜尋排序、provider/model 維度不一致防呆與案件層級語意相似測試。
 - `backend/tests/test_import_cases_to_db.py`：SQLite 匯入腳本測試，包含多 metadata 匯入與 metadata 目錄解析。
 - `backend/tests/test_search_service.py`：搜尋 fallback 單元測試，覆蓋 normalized text、案號與爭議類型 fallback。
+- `backend/tests/test_semantic_benchmark.py`：固定 15 詞查詢集、參數互斥、標註模板、Precision@5 計算與證據必填驗證。
 - `backend/tests/test_similar_case_service.py`：相似案件 service 單元測試。
 - `backend/tests/test_summary_service.py`：摘要擷取與 summary service 測試，包含 FOI 標題格式變異的 regression tests。
 
@@ -816,7 +822,8 @@ Query parameters：
 - 前端自動化測試。
 - Hugging Face embeddings 尚未對正式 DB 全量重建；目前已完成 trial DB 1000 筆、離線 anchor-based 比較報告，以及 5 個查詢詞的 query-to-document 小樣本試測。
 - 前端語意搜尋頁目前只展示 Hugging Face trial 摘要，不會直接查詢 trial DB 或呼叫 Hugging Face API。
-- relevance check 已完成 Top 25 初版標記，並回查其中 7 筆較不明確結果的 chunk 原文；尚未擴充查詢詞、第二位標註者與正式評測指標。
+- 15 詞 benchmark v1、75 筆標註模板與 Precision@5 工具已完成；尚待在有 Hugging Face token 的 PowerShell 產生結果並完成原文標註。
+- 第二位標註者與標註一致性檢查尚未完成。
 - OpenAI 或其他外部 AI embedding provider 尚未實作。
 - 實務級向量資料庫或 ANN index。
 
@@ -1128,6 +1135,7 @@ py -m py_compile .\backend\scripts\build_case_chunks.py
 py -m py_compile .\backend\scripts\build_chunk_embeddings.py
 py -m py_compile .\backend\scripts\compare_embedding_models.py
 py -m py_compile .\backend\scripts\run_semantic_query_trial.py
+py -m py_compile .\backend\scripts\evaluate_semantic_benchmark.py
 py -m py_compile .\backend\scripts\verify_case_db.py
 py -m py_compile .\backend\scripts\extract_case_summaries.py
 ```
@@ -1268,15 +1276,17 @@ http://127.0.0.1:5173
 - 已新增 Hugging Face provider 小批量接入口，預設模型為 `BAAI/bge-large-zh-v1.5`、維度 1024，支援 `EMBEDDING_API_KEY` / `HF_TOKEN`、batch、retry、timeout 與 fake HTTP 測試。
 - 已完成 Hugging Face `BAAI/bge-large-zh-v1.5` 20 筆、100 筆與 1000 筆 trial DB 試跑，trial DB 中 BGE embeddings 為 1000 筆，正式 DB 未切換。
 - 已新增 `backend/scripts/compare_embedding_models.py`，可在不呼叫 Hugging Face API 的情況下，比較共同 chunks 的 local / BGE anchor-based 相似度排序。
-- 已新增 `backend/scripts/run_semantic_query_trial.py`，可在指定 trial DB 上用 Hugging Face query embedding 重跑 query-to-document 語意搜尋試測。
+- 已更新 `backend/scripts/run_semantic_query_trial.py`，可用固定 `benchmark-v1` 一次執行 15 個 Hugging Face query，並分別輸出 JSON 與 Markdown。
+- 已新增 `backend/scripts/evaluate_semantic_benchmark.py`，可建立 75 筆標註模板、驗證 label 與 evidence summary，並計算 strict / lenient、macro / micro Precision@5。
 - 已新增 `docs/hf_embedding_trial_comparison.md`，記錄 trial 模型分布、比較方法、可比較查詢詞、略過原因、Top results、100 筆與 1000 筆 query-to-document 小樣本結果與限制。
 - 已新增 `docs/hf_semantic_query_trial_1000.md`，記錄 1000 筆 BGE candidates 下 5 個查詢詞的詳細 Top 5 結果。
 - 已更新 `docs/hf_semantic_relevance_check_1000.md`，針對 5 個查詢詞 Top 5、共 25 筆結果做人工 relevance check，並回查 7 筆較不明確結果的 chunk 原文；最終為 24 筆相關、1 筆部分相關、0 筆待確認。
+- 已新增 `docs/hf_semantic_benchmark_v1_protocol.md`，定義 15 個固定查詢詞、75 筆原文標註、指標與驗證條件；真實查詢結果尚待在可讀取 token 的 PowerShell 產生。
 - 已新增 `docs/ai_embedding_provider_plan.md`，規劃正式 AI embedding provider 的環境變數、API key 管理、batch、retry、費用控制、DB model version、測試與 embeddings 重建流程，並記錄 Hugging Face provider 實作狀態。
 - 已補上正式 AI provider 實作前測試保護，包含 fake provider、provider 回傳筆數檢查、向量維度檢查、`token_count` / `norm` 檢查與非有限數值檢查。
 - 已更新前端 `SemanticSearchPage`，提供 Local MVP 與 Hugging Face BGE Trial 模型狀態切換；Local MVP 可直接查正式 DB，Hugging Face Trial 只展示 1000 筆試測摘要，避免誤認正式 DB 已切換。
 
-### 下一步：擴充查詢詞、雙人標註或規劃 BGE 全量 trial
+### 下一步：執行 benchmark v1、完成標註或規劃 BGE 全量 trial
 
 優先原因：
 
@@ -1284,13 +1294,14 @@ http://127.0.0.1:5173
 - chunking、本機 embedding、前端語意搜尋展示與案件層級語意相似展示已完成。
 - 前端結構已整理，後續可以承接更複雜功能。
 - 跨年度 trial DB 已建立並通過資料品質檢查，正式 DB 也已切換為跨年度資料。
-- Hugging Face query-to-document 1000 筆小樣本已成功，前端也已清楚標示 local MVP 與 BGE trial 的差異；目前已有 Top 25 relevance check 與 7 筆原文核對，下一步需要擴充查詢詞與標註規模。
+- Hugging Face query-to-document 1000 筆小樣本已成功，目前也已具備 15 詞 benchmark v1 與 Precision@5 工具；下一步需要用 token 產生 75 筆結果並完成原文標註。
 
 建議工作：
 
-1. 若要強化展示可信度：加入第二位標註者，記錄判讀差異並固定 relevance 規則。
-2. 若要強化語意品質：補更多查詢詞與人工 relevance check，計算 Precision@5，再評估是否全量重建 Hugging Face trial DB。
-3. 若要強化資料範圍：試跑 ROC 116 小期間。
+1. 在有 Hugging Face token 的 PowerShell 執行 `benchmark-v1`，產生 15 詞、75 筆 Top 5 結果。
+2. 逐筆填寫 label 與 evidence summary，產生 strict / lenient Precision@5 報告。
+3. 加入第二位標註者，記錄判讀差異，再評估是否全量重建 Hugging Face trial DB。
+4. 若要強化資料範圍：試跑 ROC 116 小期間。
 
 ### 第 8 階段：跨年度擴充
 

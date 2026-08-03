@@ -356,6 +356,20 @@ py .\backend\scripts\run_semantic_query_trial.py --db .\backend\data\insurance_c
 
 注意：這個查詢會呼叫 Hugging Face 產生 query embedding，會消耗少量 API 額度；目前只建議用 `insurance_cases_hf_trial.db` 這類 trial DB 驗證，不要直接切換正式 DB。
 
+15 詞 benchmark v1：
+
+```powershell
+py .\backend\scripts\run_semantic_query_trial.py `
+  --db .\backend\data\insurance_cases_hf_trial.db `
+  --query-set benchmark-v1 `
+  --limit 5 `
+  --include-text `
+  --json-out .\outputs\hf_semantic_benchmark_v1_results.json `
+  --out .\docs\hf_semantic_benchmark_v1_results.md
+```
+
+這個固定查詢集會產生 15 個 queries、共 75 筆 Top 5 結果。標註規則、模板建立與 Precision@5 計算方式請看 `docs/hf_semantic_benchmark_v1_protocol.md`。
+
 ### Quality Report
 
 分析驗證 API 回傳 ROC 114 摘要與相似案件品質檢查結果：
@@ -526,6 +540,7 @@ py -m py_compile .\backend\scripts\build_case_chunks.py
 py -m py_compile .\backend\scripts\build_chunk_embeddings.py
 py -m py_compile .\backend\scripts\compare_embedding_models.py
 py -m py_compile .\backend\scripts\run_semantic_query_trial.py
+py -m py_compile .\backend\scripts\evaluate_semantic_benchmark.py
 py -m py_compile .\backend\scripts\verify_case_db.py
 py -m py_compile .\backend\scripts\extract_case_summaries.py
 ```
@@ -577,6 +592,7 @@ pnpm build
 - `docs/hf_embedding_trial_comparison.md`：Hugging Face BGE trial embeddings、local hashing 離線 anchor-based 比較與 query-to-document 小樣本試測報告
 - `docs/hf_semantic_query_trial_1000.md`：Hugging Face BGE 1000 筆 candidates 的 query-to-document 詳細查詢結果
 - `docs/hf_semantic_relevance_check_1000.md`：Hugging Face BGE 1000 筆 trial Top 25 人工 relevance check，含 7 筆較不明確結果的 chunk 原文證據核對
+- `docs/hf_semantic_benchmark_v1_protocol.md`：15 詞、75 筆結果的固定 benchmark、人工標註規則與 Precision@5 驗證流程
 
 ## Current Limitations
 
@@ -585,7 +601,8 @@ pnpm build
 - 正式 DB 尚未切換為實務級 embedding 模型
 - Hugging Face BGE 目前只完成 trial DB 1000 筆小樣本驗證，尚未全量重建正式 DB
 - 前端目前只展示 Hugging Face trial 摘要，不會直接查詢 trial DB 或呼叫 Hugging Face API
-- relevance check 已完成 Top 25 初版標記，並回查其中 7 筆較不明確結果的 chunk 原文；尚未擴充查詢詞、第二位標註者與正式評測指標
+- 15 詞 benchmark v1、標註模板與 Precision@5 工具已完成；尚待在有 Hugging Face token 的 PowerShell 產生 75 筆結果並完成原文標註
+- 第二位標註者與標註一致性檢查尚未完成
 - ANN 向量索引
 - OCR fallback
 - Docker
@@ -599,11 +616,12 @@ pnpm build
 建議後續開發順序：
 
 ```text
-1. 補更多查詢詞與人工標註，判斷 BGE trial 品質是否足夠
-2. 加入第二位標註者與固定 relevance 規則，計算 Precision@5
-3. 評估是否將 Hugging Face embeddings 全量重建到 trial DB，再決定是否替換正式 DB
-4. 試跑 ROC 116 小期間資料
-5. 導入 Docker / CI / 部署設定
+1. 在有 Hugging Face token 的 PowerShell 跑 benchmark v1，產生 15 詞、75 筆結果
+2. 逐筆完成 label 與 evidence summary，產生 strict / lenient Precision@5 報告
+3. 加入第二位標註者並比較判讀差異
+4. 評估是否將 Hugging Face embeddings 全量重建到 trial DB，再決定是否替換正式 DB
+5. 試跑 ROC 116 小期間資料
+6. 導入 Docker / CI / 部署設定
 ```
 
 ## Project Positioning

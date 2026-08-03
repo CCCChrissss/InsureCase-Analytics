@@ -19,6 +19,25 @@ DEFAULT_DB_PATH = PROJECT_ROOT / "backend" / "data" / "insurance_cases_hf_trial.
 DEFAULT_PROVIDER = "huggingface"
 DEFAULT_MODEL = "BAAI/bge-large-zh-v1.5"
 DEFAULT_QUERY = "除外責任"
+BENCHMARK_QUERY_SETS = {
+    "benchmark-v1": (
+        "除外責任",
+        "必要性醫療",
+        "癌症",
+        "住院",
+        "失能",
+        "承保範圍",
+        "違反告知義務",
+        "理賠金額",
+        "手術認定",
+        "投保前疾病",
+        "保單停效",
+        "意外事故",
+        "條款怎麼解釋",
+        "業務招攬",
+        "豁免保費",
+    )
+}
 
 
 def resolve_project_path(value: str | Path) -> Path:
@@ -65,6 +84,14 @@ def compact_semantic_result(result: dict[str, Any], *, include_text: bool) -> di
     }
 
 
+def resolve_queries(explicit_queries: list[str] | None, query_set: str | None) -> list[str]:
+    if explicit_queries and query_set:
+        raise ValueError("Use either --query or --query-set, not both.")
+    if query_set:
+        return list(BENCHMARK_QUERY_SETS[query_set])
+    return explicit_queries or [DEFAULT_QUERY]
+
+
 def build_markdown_report(payload: dict[str, Any]) -> str:
     lines = [
         "# Hugging Face Semantic Query Trial",
@@ -73,6 +100,7 @@ def build_markdown_report(payload: dict[str, Any]) -> str:
         f"- Database: `{payload['database']}`",
         f"- Embedding provider: `{payload['embedding_provider']}`",
         f"- Embedding model: `{payload['embedding_model']}`",
+        f"- Query set: `{payload['query_set']}`",
         "",
         "This report uses Hugging Face to generate a query embedding, then compares it with stored trial chunk embeddings.",
         "It consumes API quota and does not modify the source database.",
@@ -113,12 +141,19 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--db", type=Path, default=DEFAULT_DB_PATH, help="SQLite trial database path.")
     parser.add_argument("--query", action="append", dest="queries", help="Query text. Can be repeated.")
+    parser.add_argument(
+        "--query-set",
+        choices=sorted(BENCHMARK_QUERY_SETS),
+        default=None,
+        help="Run a predefined query benchmark set.",
+    )
     parser.add_argument("--provider", default=DEFAULT_PROVIDER, help="Embedding provider name.")
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Embedding model name.")
     parser.add_argument("--limit", type=int, default=5, help="Top result count per query.")
     parser.add_argument("--min-score", type=float, default=0.0, help="Minimum cosine similarity score.")
     parser.add_argument("--include-text", action="store_true", help="Include truncated chunk text in JSON output.")
     parser.add_argument("--out", type=Path, default=None, help="Optional Markdown report output path.")
+    parser.add_argument("--json-out", type=Path, default=None, help="Optional JSON result output path.")
     return parser.parse_args()
 
 
@@ -129,6 +164,11 @@ def main() -> None:
         raise SystemExit(f"Trial DB not found: {db_path}")
     if args.limit <= 0:
         raise SystemExit("--limit must be greater than 0.")
+
+    try:
+        queries = resolve_queries(args.queries, args.query_set)
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
 
     provider = args.provider.strip().lower()
     if provider in {"huggingface", "hf"} and not (
@@ -152,7 +192,7 @@ def main() -> None:
                 ),
                 include_text=args.include_text,
             )
-            for query in (args.queries or [DEFAULT_QUERY])
+            for query in queries
         ]
     finally:
         embedding_service.connect = original_connect
@@ -162,9 +202,16 @@ def main() -> None:
         "database": str(db_path),
         "embedding_provider": args.provider,
         "embedding_model": args.model,
+        "query_set": args.query_set or ("custom" if args.queries else "default"),
         "queries": query_results,
     }
-    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    json_output = json.dumps(payload, ensure_ascii=False, indent=2)
+    print(json_output)
+
+    if args.json_out:
+        json_out_path = resolve_project_path(args.json_out)
+        json_out_path.parent.mkdir(parents=True, exist_ok=True)
+        json_out_path.write_text(f"{json_output}\n", encoding="utf-8")
 
     if args.out:
         out_path = resolve_project_path(args.out)
