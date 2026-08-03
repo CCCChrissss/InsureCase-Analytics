@@ -302,9 +302,9 @@ py .\backend\scripts\run_semantic_query_trial.py --db .\backend\data\insurance_c
 - `癌症` 與 `失能` 查詢較容易跨到其他爭議類型，這不一定是錯誤，因為評議案件分類是法律爭點，query embedding 抓到的是文字語意與事實描述。
 - 目前可以說明 BGE trial 已具備可展示的語意搜尋雛形，但仍不能宣稱正式 DB 已切換或全量品質已驗證。
 
-## 7. 人工 Relevance Check 初版
+## 7. 人工 Relevance Check 與原文核對
 
-為了避免只依賴模型分數，本專案已針對 `docs/hf_semantic_query_trial_1000.md` 的 5 個查詢詞 Top 5 結果建立初版人工 relevance check 表。
+為了避免只依賴模型分數，本專案已針對 `docs/hf_semantic_query_trial_1000.md` 的 5 個查詢詞 Top 5 結果建立人工 relevance check，並回查初版中 7 筆較不明確結果的 chunk 原文。
 
 評估文件：`docs/hf_semantic_relevance_check_1000.md`
 
@@ -314,24 +314,24 @@ py .\backend\scripts\run_semantic_query_trial.py --db .\backend\data\insurance_c
 - 每個查詢取 Top 5，共 25 筆
 - 標記類型：`相關`、`部分相關`、`待人工確認`
 
-初版統計：
+原文核對後統計：
 
 | 標記 | 筆數 | 比例 |
 | --- | ---: | ---: |
-| 相關 | 18 | 72% |
-| 部分相關 | 6 | 24% |
-| 待人工確認 | 1 | 4% |
+| 相關 | 24 | 96% |
+| 部分相關 | 1 | 4% |
+| 待人工確認 | 0 | 0% |
 
 判讀：
 
 - `必要性醫療` 的 Top 5 全部標為相關，是目前最穩定的查詢詞。
-- `除外責任` 與 `住院` 多數結果相關，少數跨到承保範圍，屬於合理相鄰爭點。
-- `癌症` 與 `失能` 較容易跨類型，代表 BGE 可能抓到疾病或體況事實，但不一定完全貼合評議案件的爭議類型分類。
-- 這份 relevance check 是初版，下一步應逐筆回看 chunk 原文，補上更嚴格的人工判斷依據。
+- `除外責任` 的承保範圍結果談到非承保範圍，但未直接引用除外條款，因此維持部分相關。
+- `癌症`、`住院` 與 `失能` 的跨類型結果經回查原文後，都直接討論查詢概念，反映 embedding 找到的是案件事實與條款語意，不只依賴 metadata 分類。
+- 每筆原文核對都保留 chunk ID 與證據摘要；但目前仍是 5 個查詢詞、25 筆結果的小樣本，不代表全量品質。
 
 ## 8. 初步結論
 
 - Hugging Face provider、1024 維 BGE embeddings 與 SQLite 寫入流程已通過 1000 筆 trial 驗證。
-- 本報告仍只代表 trial DB 小樣本、5 個查詢詞與 25 筆 relevance check 初版，不能宣稱全量搜尋品質已優於 local MVP。
-- 已完成真實 query-to-document 小樣本試測與初版人工 relevance check；下一步應逐筆回看 chunk 原文或補更多查詢詞。
+- 本報告仍只代表 trial DB 小樣本、5 個查詢詞與 25 筆 relevance check，不能宣稱全量搜尋品質已優於 local MVP。
+- 已完成真實 query-to-document 小樣本試測及 7 筆較不明確結果的原文核對；下一步應補更多查詢詞、第二位標註者與固定評測指標。
 - 正式 DB `backend/data/insurance_cases.db` 目前仍應維持 `local_hashing_cjk_v1`，等品質與成本評估後再決定是否全量重建。
