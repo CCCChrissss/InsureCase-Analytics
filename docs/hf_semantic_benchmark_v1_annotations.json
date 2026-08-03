@@ -1,0 +1,96 @@
+{
+  "query_set": "benchmark-v1",
+  "embedding_model": "BAAI/bge-large-zh-v1.5",
+  "annotator": "Codex-assisted first pass; requires independent human review",
+  "annotations": [
+    {"query": "除外責任", "chunk_id": "chunk_c3d1a2f73e93c32f", "label": "relevant", "evidence_summary": "原文直接將治療是否落入除外責任列為案件爭點。"},
+    {"query": "除外責任", "chunk_id": "chunk_2f43c1043766f313", "label": "relevant", "evidence_summary": "原文討論投保前腰椎疾病、意外事故及醫療除外責任的適用。"},
+    {"query": "除外責任", "chunk_id": "chunk_baf8570f604d4a6e", "label": "partially_relevant", "evidence_summary": "原文討論外來事故與非承保範圍，但未直接引用除外條款。"},
+    {"query": "除外責任", "chunk_id": "chunk_8cd73331844e38b0", "label": "relevant", "evidence_summary": "原文討論故意自殺行為及傷害保險除外責任的成立。"},
+    {"query": "除外責任", "chunk_id": "chunk_e8c8f73eb7b52cb3", "label": "relevant", "evidence_summary": "原文明確記載腰椎疾患醫療除外責任聲明及後續理賠爭議。"},
+
+    {"query": "必要性醫療", "chunk_id": "chunk_42802fd93ce4c514", "label": "relevant", "evidence_summary": "原文直接由醫療顧問判斷手術使用醫材是否具有必要性。"},
+    {"query": "必要性醫療", "chunk_id": "chunk_b226333ef285e8e5", "label": "relevant", "evidence_summary": "原文直接解釋住院治療必要性的契約判斷標準。"},
+    {"query": "必要性醫療", "chunk_id": "chunk_393f852d7899a6ef", "label": "relevant", "evidence_summary": "原文直接判斷長期住院是否符合一般醫療常規及住院必要性。"},
+    {"query": "必要性醫療", "chunk_id": "chunk_0f33ee16d28a5116", "label": "relevant", "evidence_summary": "原文直接比較門診注射與住院治療，判斷住院是否必要。"},
+    {"query": "必要性醫療", "chunk_id": "chunk_bd7d984272c355f0", "label": "relevant", "evidence_summary": "原文直接判斷子宮手術自費醫材是否符合一般醫療常規與必要性。"},
+
+    {"query": "癌症", "chunk_id": "chunk_f346f0851368873d", "label": "relevant", "evidence_summary": "原文引用癌症定義、首次罹癌及癌症給付條款，判斷惡性腫瘤診斷時點。"},
+    {"query": "癌症", "chunk_id": "chunk_40166aac122d74b0", "label": "relevant", "evidence_summary": "原文直接討論癌症門診醫療保險金及癌症治療療程。"},
+    {"query": "癌症", "chunk_id": "chunk_da0848c8438b5f26", "label": "relevant", "evidence_summary": "原文直接記載癌症門診理賠與癌症治療次數爭議。"},
+    {"query": "癌症", "chunk_id": "chunk_26b1e4c2eb606fb9", "label": "relevant", "evidence_summary": "原文直接引用癌症附約的住院、手術、療養與門診給付條款。"},
+    {"query": "癌症", "chunk_id": "chunk_d699fe801808be6d", "label": "relevant", "evidence_summary": "原文直接判斷乳房原位癌的癌症手術及住院醫療保險金。"},
+
+    {"query": "住院", "chunk_id": "chunk_b226333ef285e8e5", "label": "relevant", "evidence_summary": "原文直接解釋辦理住院及住院必要性的契約要件。"},
+    {"query": "住院", "chunk_id": "chunk_c56b283dabd96855", "label": "relevant", "evidence_summary": "原文直接比較門診治療與住院治療並爭執住院必要性。"},
+    {"query": "住院", "chunk_id": "chunk_393f852d7899a6ef", "label": "relevant", "evidence_summary": "原文直接判斷住院是否必要及是否應給付住院保險金。"},
+    {"query": "住院", "chunk_id": "chunk_8532466a84e5bbcc", "label": "relevant", "evidence_summary": "原文引用住院定義並判斷療程是否符合住院給付條件。"},
+    {"query": "住院", "chunk_id": "chunk_94eb305c76d7cabc", "label": "relevant", "evidence_summary": "原文直接引用住院定義、住院醫療日額及保險範圍條款。"},
+
+    {"query": "失能", "chunk_id": "chunk_04d0d6b184cb96c7", "label": "relevant", "evidence_summary": "原文直接判斷失能表項次、失能給付及先天疾病承保範圍。"},
+    {"query": "失能", "chunk_id": "chunk_d55cc4219b1d0200", "label": "relevant", "evidence_summary": "原文直接比較不同失能等級及對應失能保險金。"},
+    {"query": "失能", "chunk_id": "chunk_11d51cd1ba4466af", "label": "relevant", "evidence_summary": "原文直接判斷關節障害是否達失能標準及與事故的因果關係。"},
+    {"query": "失能", "chunk_id": "chunk_a3a79c72ea2db929", "label": "relevant", "evidence_summary": "原文直接引用失能給付條款及新舊失能等級表。"},
+    {"query": "失能", "chunk_id": "chunk_48aefbe7c270fc1e", "label": "relevant", "evidence_summary": "原文直接討論意外傷害所致失能與給付比例。"},
+
+    {"query": "承保範圍", "chunk_id": "chunk_04658cda5091e103", "label": "not_relevant", "evidence_summary": "原文是房屋貸款擔保物火災險與保證責任條款，不是人壽保險給付承保範圍。"},
+    {"query": "承保範圍", "chunk_id": "chunk_aecc581fabb986e2", "label": "relevant", "evidence_summary": "原文直接引用傷害定義及附約保險範圍條款。"},
+    {"query": "承保範圍", "chunk_id": "chunk_ee42bf1c3404a46f", "label": "relevant", "evidence_summary": "原文列舉住院醫療可給付的費用與輔助器項目，直接界定給付範圍。"},
+    {"query": "承保範圍", "chunk_id": "chunk_8c912fc58ab22cb7", "label": "relevant", "evidence_summary": "原文直接定義特定重大傷病及重大傷病範圍。"},
+    {"query": "承保範圍", "chunk_id": "chunk_75157a74de69e574", "label": "relevant", "evidence_summary": "原文直接引用住院、手術及事故發生時投保計畫的給付範圍。"},
+
+    {"query": "違反告知義務", "chunk_id": "chunk_b397036b3fed6fbf", "label": "not_relevant", "evidence_summary": "原文討論金融服務業對消費者的商品說明與風險揭露，不是要保人的據實告知義務。"},
+    {"query": "違反告知義務", "chunk_id": "chunk_0ffdefb366285451", "label": "relevant", "evidence_summary": "原文直接討論不實說明、危險估計及保險人解除契約。"},
+    {"query": "違反告知義務", "chunk_id": "chunk_f662a5bc219149da", "label": "relevant", "evidence_summary": "原文直接引用告知義務與附約解除條款。"},
+    {"query": "違反告知義務", "chunk_id": "chunk_e0b17ab192476cb8", "label": "not_relevant", "evidence_summary": "原文是貸款催收紀錄、還款與損害賠償判斷，沒有投保告知義務。"},
+    {"query": "違反告知義務", "chunk_id": "chunk_8b836fc359fe620a", "label": "relevant", "evidence_summary": "原文直接引用保險法第64條並判斷要保人不實告知與解除契約。"},
+
+    {"query": "理賠金額", "chunk_id": "chunk_465eb1132048ca58", "label": "relevant", "evidence_summary": "原文直接爭執門診手術限額及實際理賠金額差異。"},
+    {"query": "理賠金額", "chunk_id": "chunk_3e8624809b05f1eb", "label": "relevant", "evidence_summary": "原文直接說明住院雜費限額及日額給付的金額計算方式。"},
+    {"query": "理賠金額", "chunk_id": "chunk_bdaaea97c9fd0f40", "label": "partially_relevant", "evidence_summary": "原文爭執三劑療程僅給付一劑，會影響理賠數量，但主爭點是醫療必要性。"},
+    {"query": "理賠金額", "chunk_id": "chunk_af4d58ee9c190353", "label": "partially_relevant", "evidence_summary": "原文討論保險金給付期限與遲延利息，與理賠金額相關但不是金額核算主題。"},
+    {"query": "理賠金額", "chunk_id": "chunk_ac0f07ae446d367e", "label": "relevant", "evidence_summary": "原文直接列出爭議中的住院日額、療養保險金及請求合計金額。"},
+
+    {"query": "手術認定", "chunk_id": "chunk_cfea82e8412f9564", "label": "partially_relevant", "evidence_summary": "原文列出減重與疝氣手術，但主要判斷是否落入除外責任而非手術定義。"},
+    {"query": "手術認定", "chunk_id": "chunk_82c4bc85734497ef", "label": "partially_relevant", "evidence_summary": "原文討論微創手術使用醫材的必要性，不是治療是否構成手術。"},
+    {"query": "手術認定", "chunk_id": "chunk_e26e05dbcbf90871", "label": "partially_relevant", "evidence_summary": "原文描述多次手術及再次開刀需求，主爭點仍是住院與醫療必要性。"},
+    {"query": "手術認定", "chunk_id": "chunk_d6bd470e707db4a1", "label": "relevant", "evidence_summary": "原文直接爭執非健保標準或非傳統手術是否可依保單給付。"},
+    {"query": "手術認定", "chunk_id": "chunk_83d6e2e0b1a35380", "label": "relevant", "evidence_summary": "原文直接判斷治療是否屬健保支付標準所列手術及是否確有施作。"},
+
+    {"query": "投保前疾病", "chunk_id": "chunk_427a3243ae7a4a1e", "label": "relevant", "evidence_summary": "原文直接解釋投保時已在疾病中的可見徵象及知悉標準。"},
+    {"query": "投保前疾病", "chunk_id": "chunk_b75321f9211790a7", "label": "relevant", "evidence_summary": "原文直接判斷疾病是在投保前存在或持續有效30日後才發生。"},
+    {"query": "投保前疾病", "chunk_id": "chunk_007807aa380a3ad3", "label": "relevant", "evidence_summary": "原文直接討論出生即有的先天遺傳疾病及投保前就醫紀錄。"},
+    {"query": "投保前疾病", "chunk_id": "chunk_fbd5afbf2d5bd045", "label": "relevant", "evidence_summary": "原文直接列出投保前兩個月及五年內的疾病就醫史與未告知情形。"},
+    {"query": "投保前疾病", "chunk_id": "chunk_a9bc0c4204ad23fa", "label": "relevant", "evidence_summary": "原文直接討論投保時未告知的痛風、高血脂及核保影響。"},
+
+    {"query": "保單停效", "chunk_id": "chunk_3a4e02f7b6ba9dd7", "label": "relevant", "evidence_summary": "原文直接記載保單停效期間、復效申請及保險事故時點。"},
+    {"query": "保單停效", "chunk_id": "chunk_5e30ef319186a18d", "label": "relevant", "evidence_summary": "原文直接列出多張保單停效日期與復效保費。"},
+    {"query": "保單停效", "chunk_id": "chunk_949fcacddada340d", "label": "relevant", "evidence_summary": "原文直接描述保單停效風險、補繳資金及復效過程。"},
+    {"query": "保單停效", "chunk_id": "chunk_37f782e0d18b3538", "label": "relevant", "evidence_summary": "原文直接判斷停效、寬限期及停效期間事故風險。"},
+    {"query": "保單停效", "chunk_id": "chunk_faed3bd7df97c2c1", "label": "relevant", "evidence_summary": "原文直接判斷事故發生於保單停效期間而不負保險責任。"},
+
+    {"query": "意外事故", "chunk_id": "chunk_dc353fa1684e4f01", "label": "relevant", "evidence_summary": "原文直接定義意外事故的外來性、偶發性與不可預見性。"},
+    {"query": "意外事故", "chunk_id": "chunk_ed07dc87fab5db49", "label": "relevant", "evidence_summary": "原文直接引用意外身故條款並解釋外來突發事故。"},
+    {"query": "意外事故", "chunk_id": "chunk_baf8570f604d4a6e", "label": "relevant", "evidence_summary": "原文直接判斷外來事故、內在疾病原因及傷害因果關係。"},
+    {"query": "意外事故", "chunk_id": "chunk_c70581b2c8422315", "label": "relevant", "evidence_summary": "原文直接說明意外傷害事故的舉證責任。"},
+    {"query": "意外事故", "chunk_id": "chunk_074895a28282a5b7", "label": "relevant", "evidence_summary": "原文直接主張死亡符合非疾病引起之外來突發事故定義。"},
+
+    {"query": "條款怎麼解釋", "chunk_id": "chunk_561db011aa693ba8", "label": "relevant", "evidence_summary": "原文直接引用保險法第54條及有利被保險人的契約解釋原則。"},
+    {"query": "條款怎麼解釋", "chunk_id": "chunk_42bde65bc41a1298", "label": "relevant", "evidence_summary": "原文完整說明文義解釋、契約真意及疑義有利被保險人原則。"},
+    {"query": "條款怎麼解釋", "chunk_id": "chunk_5b2ead69e14c395c", "label": "relevant", "evidence_summary": "原文直接說明不得拘泥文字及契約文字已明確時的解釋方法。"},
+    {"query": "條款怎麼解釋", "chunk_id": "chunk_87f1b00d7f31176e", "label": "relevant", "evidence_summary": "原文直接討論保險契約解釋應考量本質、機能、誠信與公平。"},
+    {"query": "條款怎麼解釋", "chunk_id": "chunk_f8055b4ee7b9969a", "label": "relevant", "evidence_summary": "原文直接列出通觀契約全文與探求立約真意的解釋方法。"},
+
+    {"query": "業務招攬", "chunk_id": "chunk_63266b51a61a9f23", "label": "partially_relevant", "evidence_summary": "原文是業務員介紹理賠代辦與不當職務行為，涉及業務員管理但不是投保招攬。"},
+    {"query": "業務招攬", "chunk_id": "chunk_1a4031f7833a1e62", "label": "relevant", "evidence_summary": "原文直接判斷業務員招攬時是否完整說明商品及是否有不當招攬。"},
+    {"query": "業務招攬", "chunk_id": "chunk_4460f5d00256c6c0", "label": "relevant", "evidence_summary": "原文直接引用投保前適合度與充分瞭解客戶的招攬義務。"},
+    {"query": "業務招攬", "chunk_id": "chunk_b8550f74d5c19229", "label": "relevant", "evidence_summary": "原文直接判斷商品內容、風險、費用與未保證獲利是否充分說明。"},
+    {"query": "業務招攬", "chunk_id": "chunk_2750370a637766dd", "label": "partially_relevant", "evidence_summary": "原文僅交代由保經業務員招攬，案件主爭點是保單生效日而非招攬瑕疵。"},
+
+    {"query": "豁免保費", "chunk_id": "chunk_1db92ffee03e3bfd", "label": "partially_relevant", "evidence_summary": "原文是減額繳清後不再繳費，概念接近但不是失能等事由的豁免保費附約。"},
+    {"query": "豁免保費", "chunk_id": "chunk_1b80b1d8acfcadf1", "label": "not_relevant", "evidence_summary": "原文討論團體健康險退款、住院給付與遲延利息，沒有豁免保費。"},
+    {"query": "豁免保費", "chunk_id": "chunk_e3bde04c0a48e329", "label": "relevant", "evidence_summary": "主文直接確認豁免保險費健康保險附約契約關係存在。"},
+    {"query": "豁免保費", "chunk_id": "chunk_cc1a1d72b7ab5942", "label": "not_relevant", "evidence_summary": "原文計算投資型保單扣費、寬限期與停效，沒有豁免保費給付。"},
+    {"query": "豁免保費", "chunk_id": "chunk_57cd9369f48a7c9b", "label": "relevant", "evidence_summary": "原文直接討論豁免保費附約因未據實告知而被解除的契約效力。"}
+  ]
+}

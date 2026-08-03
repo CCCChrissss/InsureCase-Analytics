@@ -593,6 +593,9 @@ pnpm build
 - `docs/hf_semantic_query_trial_1000.md`：Hugging Face BGE 1000 筆 candidates 的 query-to-document 詳細查詢結果
 - `docs/hf_semantic_relevance_check_1000.md`：Hugging Face BGE 1000 筆 trial Top 25 人工 relevance check，含 7 筆較不明確結果的 chunk 原文證據核對
 - `docs/hf_semantic_benchmark_v1_protocol.md`：15 詞、75 筆結果的固定 benchmark、人工標註規則與 Precision@5 驗證流程
+- `docs/hf_semantic_benchmark_v1_results.md`：benchmark v1 的 15 詞、75 筆 Hugging Face BGE Top 5 查詢結果
+- `docs/hf_semantic_benchmark_v1_annotations.json`：75 筆 Codex-assisted 第一輪標註與逐筆原文證據摘要
+- `docs/hf_semantic_benchmark_v1_evaluation.md`：第一輪 strict / lenient、macro / micro Precision@5 與逐查詢評測報告
 
 ## Current Limitations
 
@@ -601,8 +604,8 @@ pnpm build
 - 正式 DB 尚未切換為實務級 embedding 模型
 - Hugging Face BGE 目前只完成 trial DB 1000 筆小樣本驗證，尚未全量重建正式 DB
 - 前端目前只展示 Hugging Face trial 摘要，不會直接查詢 trial DB 或呼叫 Hugging Face API
-- 15 詞 benchmark v1、標註模板與 Precision@5 工具已完成；尚待在有 Hugging Face token 的 PowerShell 產生 75 筆結果並完成原文標註
-- 第二位標註者與標註一致性檢查尚未完成
+- 15 詞 benchmark v1 已完成 75 筆第一輪 Codex-assisted 原文標註：Strict Precision@5 為 0.8133、Lenient Precision@5 為 0.9333
+- 第二位獨立標註者、標註一致性檢查與爭議標記仲裁尚未完成
 - ANN 向量索引
 - OCR fallback
 - Docker
@@ -616,12 +619,11 @@ pnpm build
 建議後續開發順序：
 
 ```text
-1. 在有 Hugging Face token 的 PowerShell 跑 benchmark v1，產生 15 詞、75 筆結果
-2. 逐筆完成 label 與 evidence summary，產生 strict / lenient Precision@5 報告
-3. 加入第二位標註者並比較判讀差異
-4. 評估是否將 Hugging Face embeddings 全量重建到 trial DB，再決定是否替換正式 DB
-5. 試跑 ROC 116 小期間資料
-6. 導入 Docker / CI / 部署設定
+1. 由第二位標註者獨立複核 75 筆結果，計算一致率並處理判讀差異
+2. 針對 `手術認定`、`豁免保費` 等低 Strict P@5 查詢調整 query 或加入 reranking
+3. 評估是否將 Hugging Face embeddings 全量重建到 trial DB，再決定是否替換正式 DB
+4. 試跑 ROC 116 小期間資料
+5. 導入 Docker / CI / 部署設定
 ```
 
 ## Project Positioning

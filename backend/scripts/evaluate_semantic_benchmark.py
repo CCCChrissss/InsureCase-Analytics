@@ -201,32 +201,38 @@ def markdown_cell(value: object) -> str:
 def build_markdown_report(evaluation: dict[str, Any]) -> str:
     totals = evaluation["totals"]
     top_k = evaluation["top_k"]
+    perfect_queries = [item["query"] for item in evaluation["queries"] if item["strict_precision_at_k"] == 1.0]
+    lowest_precision = min(item["strict_precision_at_k"] for item in evaluation["queries"])
+    lowest_queries = [
+        item["query"] for item in evaluation["queries"] if item["strict_precision_at_k"] == lowest_precision
+    ]
+    precision_gap = evaluation["macro_lenient_precision_at_k"] - evaluation["macro_strict_precision_at_k"]
     lines = [
-        "# Hugging Face Semantic Benchmark v1 Evaluation",
+        "# Hugging Face 語意搜尋 Benchmark v1 評測報告",
         "",
-        f"- Query set: `{evaluation['query_set']}`",
-        f"- Embedding model: `{evaluation['embedding_model']}`",
-        f"- Annotator: `{evaluation['annotator'] or 'not specified'}`",
-        f"- Queries: `{evaluation['query_count']}`",
-        f"- Results: `{evaluation['total_results']}`",
+        f"- 查詢集：`{evaluation['query_set']}`",
+        f"- Embedding model：`{evaluation['embedding_model']}`",
+        f"- 標註者：`{evaluation['annotator'] or '未填寫'}`",
+        f"- 查詢數：`{evaluation['query_count']}`",
+        f"- 判讀結果數：`{evaluation['total_results']}`",
         "",
-        "## Metric Definitions",
+        "## 指標定義",
         "",
-        f"- Strict Precision@{top_k}: only `relevant` counts as correct.",
-        f"- Lenient Precision@{top_k}: `relevant` and `partially_relevant` count as correct.",
-        "- The metric is chunk-level. Multiple chunks from the same case are counted separately; `unique_cases` exposes that duplication.",
+        f"- Strict Precision@{top_k}：只有 `relevant` 計為命中。",
+        f"- Lenient Precision@{top_k}：`relevant` 與 `partially_relevant` 都計為命中。",
+        "- 本指標以 chunk 為單位；同一案件的多個 chunks 會分別計分，`unique_cases` 用來揭露重複案件。",
         "",
-        "## Overall Results",
+        "## 整體結果",
         "",
-        f"| relevant | partially_relevant | not_relevant | micro strict P@{top_k} | micro lenient P@{top_k} | macro strict P@{top_k} | macro lenient P@{top_k} |",
+        f"| 相關 | 部分相關 | 不相關 | micro strict P@{top_k} | micro lenient P@{top_k} | macro strict P@{top_k} | macro lenient P@{top_k} |",
         "| ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
         f"| {totals['relevant']} | {totals['partially_relevant']} | {totals['not_relevant']} | "
         f"{evaluation['micro_strict_precision_at_k']:.4f} | {evaluation['micro_lenient_precision_at_k']:.4f} | "
         f"{evaluation['macro_strict_precision_at_k']:.4f} | {evaluation['macro_lenient_precision_at_k']:.4f} |",
         "",
-        "## Per-Query Results",
+        "## 各查詢結果",
         "",
-        f"| query | relevant | partial | not relevant | strict P@{top_k} | lenient P@{top_k} | unique cases |",
+        f"| 查詢詞 | 相關 | 部分相關 | 不相關 | strict P@{top_k} | lenient P@{top_k} | 不重複案件數 |",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for item in evaluation["queries"]:
@@ -239,9 +245,15 @@ def build_markdown_report(evaluation: dict[str, Any]) -> str:
     lines.extend(
         [
             "",
-            "## Detailed Judgements",
+            "## 結果觀察",
             "",
-            "| query | rank | score | case_number | dispute_type | chunk_id | label | evidence summary |",
+            f"- Strict P@{top_k} 為 1.0 的查詢：{'、'.join(perfect_queries)}。",
+            f"- 最低 Strict P@{top_k} 為 {lowest_precision:.4f}，查詢：{'、'.join(lowest_queries)}。",
+            f"- Macro lenient 與 strict 的差距為 {precision_gap:.4f}，代表部分結果屬於合理相鄰概念，但未直接命中主要查詢概念。",
+            "",
+            "## 逐筆判讀",
+            "",
+            "| 查詢詞 | 排名 | 分數 | 案號 | 爭議類型 | chunk_id | 標記 | 原文證據摘要 |",
             "| --- | ---: | ---: | --- | --- | --- | --- | --- |",
         ]
     )
@@ -255,15 +267,31 @@ def build_markdown_report(evaluation: dict[str, Any]) -> str:
     lines.extend(
         [
             "",
-            "## Limitations",
+            "## 限制",
             "",
-            "- This evaluates only the stored trial candidate pool, not the complete production database.",
-            "- A single annotator can introduce subjective bias; a second independent annotation pass is recommended.",
-            "- Precision@5 measures ranking relevance, not legal correctness or the correctness of an insurance decision.",
+            "- 本次只評估 trial DB 已儲存的候選資料，不是正式資料庫全量結果。",
+            "- 第一輪為 Codex-assisted 標註，仍可能有主觀偏差，應由第二位標註者獨立複核。",
+            "- Precision@5 衡量搜尋排名相關性，不代表法律判斷或保險評議結論正確。",
             "",
         ]
     )
     return "\n".join(lines)
+
+
+def compact_evaluation_summary(evaluation: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "query_set": evaluation["query_set"],
+        "embedding_model": evaluation["embedding_model"],
+        "annotator": evaluation["annotator"],
+        "top_k": evaluation["top_k"],
+        "query_count": evaluation["query_count"],
+        "total_results": evaluation["total_results"],
+        "totals": evaluation["totals"],
+        "micro_strict_precision_at_k": evaluation["micro_strict_precision_at_k"],
+        "micro_lenient_precision_at_k": evaluation["micro_lenient_precision_at_k"],
+        "macro_strict_precision_at_k": evaluation["macro_strict_precision_at_k"],
+        "macro_lenient_precision_at_k": evaluation["macro_lenient_precision_at_k"],
+    }
 
 
 def parse_args() -> argparse.Namespace:
@@ -294,11 +322,11 @@ def main() -> None:
 
     annotation_payload = load_json(resolve_project_path(args.annotations))
     evaluation = evaluate_results(result_payload, annotation_payload, expected_top_k=args.top_k)
-    print(json.dumps(evaluation, ensure_ascii=False, indent=2))
     if args.out:
         out_path = resolve_project_path(args.out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(build_markdown_report(evaluation), encoding="utf-8")
+    print(json.dumps(compact_evaluation_summary(evaluation), ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

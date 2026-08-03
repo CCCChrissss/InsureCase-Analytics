@@ -106,8 +106,10 @@ def test_evaluate_results_calculates_strict_and_lenient_precision() -> None:
     assert evaluation["macro_strict_precision_at_k"] == 0.5
     assert evaluation["macro_lenient_precision_at_k"] == 0.75
     assert evaluation["queries"][0]["unique_cases"] == 1
-    assert "Detailed Judgements" in evaluate_semantic_benchmark.build_markdown_report(evaluation)
+    assert "逐筆判讀" in evaluate_semantic_benchmark.build_markdown_report(evaluation)
     assert "strict P@2" in evaluate_semantic_benchmark.build_markdown_report(evaluation)
+    assert "details" not in evaluate_semantic_benchmark.compact_evaluation_summary(evaluation)
+    assert evaluate_semantic_benchmark.compact_evaluation_summary(evaluation)["total_results"] == 4
 
 
 def test_evaluate_results_requires_evidence_summary() -> None:

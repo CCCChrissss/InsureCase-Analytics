@@ -70,7 +70,10 @@
 │  ├─ hf_embedding_trial_comparison.md
 │  ├─ hf_semantic_query_trial_1000.md
 │  ├─ hf_semantic_relevance_check_1000.md
-│  └─ hf_semantic_benchmark_v1_protocol.md
+│  ├─ hf_semantic_benchmark_v1_protocol.md
+│  ├─ hf_semantic_benchmark_v1_results.md
+│  ├─ hf_semantic_benchmark_v1_annotations.json
+│  └─ hf_semantic_benchmark_v1_evaluation.md
 ├─ backend/
 │  ├─ schema.sql
 │  ├─ app/
@@ -193,6 +196,9 @@ frontend/dist/
 - `docs/hf_semantic_query_trial_1000.md`：Hugging Face BGE 1000 筆 candidates 的 query-to-document 詳細查詢結果，包含 `除外責任`、`必要性醫療`、`癌症`、`住院`、`失能`。
 - `docs/hf_semantic_relevance_check_1000.md`：Hugging Face BGE 1000 筆 trial Top 25 人工 relevance check，並對 7 筆較不明確結果保留 chunk 原文證據摘要與最終標記。
 - `docs/hf_semantic_benchmark_v1_protocol.md`：將 BGE trial 擴充為 15 詞、75 筆 Top 5 結果的固定 benchmark，定義人工標註規則、strict / lenient Precision@5、執行方式與限制。
+- `docs/hf_semantic_benchmark_v1_results.md`：15 個固定查詢詞對 1000 筆 BGE candidates 執行 Top 5 搜尋的 75 筆結果。
+- `docs/hf_semantic_benchmark_v1_annotations.json`：75 筆 Codex-assisted 第一輪 relevance 標註與原文證據摘要，可由評測器驗證完整性。
+- `docs/hf_semantic_benchmark_v1_evaluation.md`：第一輪評測報告；61 筆相關、9 筆部分相關、5 筆不相關，Strict P@5 0.8133、Lenient P@5 0.9333。
 
 ### backend
 
@@ -822,8 +828,8 @@ Query parameters：
 - 前端自動化測試。
 - Hugging Face embeddings 尚未對正式 DB 全量重建；目前已完成 trial DB 1000 筆、離線 anchor-based 比較報告，以及 5 個查詢詞的 query-to-document 小樣本試測。
 - 前端語意搜尋頁目前只展示 Hugging Face trial 摘要，不會直接查詢 trial DB 或呼叫 Hugging Face API。
-- 15 詞 benchmark v1、75 筆標註模板與 Precision@5 工具已完成；尚待在有 Hugging Face token 的 PowerShell 產生結果並完成原文標註。
-- 第二位標註者與標註一致性檢查尚未完成。
+- 15 詞 benchmark v1 已完成 75 筆 Codex-assisted 第一輪原文標註與 Precision@5 報告。
+- 第二位獨立標註者、標註一致性檢查與爭議標記仲裁尚未完成。
 - OpenAI 或其他外部 AI embedding provider 尚未實作。
 - 實務級向量資料庫或 ANN index。
 
@@ -1281,12 +1287,12 @@ http://127.0.0.1:5173
 - 已新增 `docs/hf_embedding_trial_comparison.md`，記錄 trial 模型分布、比較方法、可比較查詢詞、略過原因、Top results、100 筆與 1000 筆 query-to-document 小樣本結果與限制。
 - 已新增 `docs/hf_semantic_query_trial_1000.md`，記錄 1000 筆 BGE candidates 下 5 個查詢詞的詳細 Top 5 結果。
 - 已更新 `docs/hf_semantic_relevance_check_1000.md`，針對 5 個查詢詞 Top 5、共 25 筆結果做人工 relevance check，並回查 7 筆較不明確結果的 chunk 原文；最終為 24 筆相關、1 筆部分相關、0 筆待確認。
-- 已新增 `docs/hf_semantic_benchmark_v1_protocol.md`，定義 15 個固定查詢詞、75 筆原文標註、指標與驗證條件；真實查詢結果尚待在可讀取 token 的 PowerShell 產生。
+- 已完成 `docs/hf_semantic_benchmark_v1_results.md`、`docs/hf_semantic_benchmark_v1_annotations.json` 與 `docs/hf_semantic_benchmark_v1_evaluation.md`；第一輪共 61 筆相關、9 筆部分相關、5 筆不相關，Strict P@5 0.8133、Lenient P@5 0.9333。
 - 已新增 `docs/ai_embedding_provider_plan.md`，規劃正式 AI embedding provider 的環境變數、API key 管理、batch、retry、費用控制、DB model version、測試與 embeddings 重建流程，並記錄 Hugging Face provider 實作狀態。
 - 已補上正式 AI provider 實作前測試保護，包含 fake provider、provider 回傳筆數檢查、向量維度檢查、`token_count` / `norm` 檢查與非有限數值檢查。
 - 已更新前端 `SemanticSearchPage`，提供 Local MVP 與 Hugging Face BGE Trial 模型狀態切換；Local MVP 可直接查正式 DB，Hugging Face Trial 只展示 1000 筆試測摘要，避免誤認正式 DB 已切換。
 
-### 下一步：執行 benchmark v1、完成標註或規劃 BGE 全量 trial
+### 下一步：獨立複核 benchmark v1 或規劃 BGE 全量 trial
 
 優先原因：
 
@@ -1294,13 +1300,13 @@ http://127.0.0.1:5173
 - chunking、本機 embedding、前端語意搜尋展示與案件層級語意相似展示已完成。
 - 前端結構已整理，後續可以承接更複雜功能。
 - 跨年度 trial DB 已建立並通過資料品質檢查，正式 DB 也已切換為跨年度資料。
-- Hugging Face query-to-document 1000 筆小樣本已成功，目前也已具備 15 詞 benchmark v1 與 Precision@5 工具；下一步需要用 token 產生 75 筆結果並完成原文標註。
+- Hugging Face query-to-document benchmark v1 已完成 15 詞、75 筆第一輪標註與 Precision@5；下一步需要第二位獨立標註者複核，避免把單次 Codex-assisted 判讀當成最終 ground truth。
 
 建議工作：
 
-1. 在有 Hugging Face token 的 PowerShell 執行 `benchmark-v1`，產生 15 詞、75 筆 Top 5 結果。
-2. 逐筆填寫 label 與 evidence summary，產生 strict / lenient Precision@5 報告。
-3. 加入第二位標註者，記錄判讀差異，再評估是否全量重建 Hugging Face trial DB。
+1. 由第二位標註者獨立複核 75 筆結果，計算一致率並仲裁差異。
+2. 針對 `手術認定` 與 `豁免保費` 等低 Strict P@5 查詢改善 query 或加入 reranking。
+3. 再評估是否全量重建 Hugging Face trial DB。
 4. 若要強化資料範圍：試跑 ROC 116 小期間。
 
 ### 第 8 階段：跨年度擴充

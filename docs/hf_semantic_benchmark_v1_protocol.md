@@ -103,3 +103,16 @@ py .\backend\scripts\evaluate_semantic_benchmark.py `
 - candidates 只有 trial DB 中的 1000 筆 BGE embeddings，不是正式 DB 全量 17254 chunks。
 - 第一輪人工標註仍可能有單人主觀偏差，正式報告建議由第二位標註者獨立複核。
 - Precision@5 只能衡量搜尋結果與查詢的相關性，不能代表保險評議結論或法律判斷正確。
+
+## 9. 第一輪執行結果
+
+- 查詢結果：`docs/hf_semantic_benchmark_v1_results.md`
+- 第一輪標註：`docs/hf_semantic_benchmark_v1_annotations.json`
+- 評測報告：`docs/hf_semantic_benchmark_v1_evaluation.md`
+- 相關：`61`
+- 部分相關：`9`
+- 不相關：`5`
+- Macro / micro Strict Precision@5：`0.8133`
+- Macro / micro Lenient Precision@5：`0.9333`
+
+本輪標註為 Codex-assisted first pass，尚未完成第二位獨立標註者複核，因此應視為初步評測結果，不是最終 ground truth。
