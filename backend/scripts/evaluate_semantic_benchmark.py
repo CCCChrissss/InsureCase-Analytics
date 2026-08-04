@@ -208,7 +208,7 @@ def build_markdown_report(evaluation: dict[str, Any]) -> str:
     ]
     precision_gap = evaluation["macro_lenient_precision_at_k"] - evaluation["macro_strict_precision_at_k"]
     lines = [
-        "# Hugging Face 語意搜尋 Benchmark v1 評測報告",
+        "# 語意搜尋 Benchmark v1 評測報告",
         "",
         f"- 查詢集：`{evaluation['query_set']}`",
         f"- Embedding model：`{evaluation['embedding_model']}`",
