@@ -111,6 +111,15 @@ export type SemanticSearchResponse = {
   total_candidates: number;
 };
 
+export type QuerySuggestionResponse = {
+  available: boolean;
+  original_query: string;
+  suggested_query: string | null;
+  rule_id: string | null;
+  explanation: string | null;
+  auto_apply: boolean;
+};
+
 export type SemanticSimilarChunk = {
   chunk_id: string;
   section_hint: string | null;

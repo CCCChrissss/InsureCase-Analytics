@@ -7,6 +7,7 @@ import {
   Database,
   FileText,
   FlaskConical,
+  Lightbulb,
   Search,
   Sigma,
 } from "lucide-react";
@@ -14,7 +15,7 @@ import {
 import { apiGet, apiPath } from "../api/client";
 import { AsyncBlock, Metric, PageHeader, PanelHeader } from "../components/ui";
 import { useAsyncData } from "../hooks/useAsyncData";
-import type { SemanticSearchResponse } from "../types";
+import type { QuerySuggestionResponse, SemanticSearchResponse } from "../types";
 
 type SemanticModelMode = "local" | "local_bge_trial";
 
@@ -58,6 +59,7 @@ function scorePercent(score: number) {
 
 export function SemanticSearchPage({ onOpenCase }: { onOpenCase: (caseId: string) => void }) {
   const [query, setQuery] = React.useState("除外責任");
+  const [sourceQuery, setSourceQuery] = React.useState("除外責任");
   const [submittedQuery, setSubmittedQuery] = React.useState("除外責任");
   const [limit, setLimit] = React.useState(10);
   const [modelMode, setModelMode] = React.useState<SemanticModelMode>("local");
@@ -77,7 +79,19 @@ export function SemanticSearchPage({ onOpenCase }: { onOpenCase: (caseId: string
         : Promise.resolve<SemanticSearchResponse | null>(null),
     [submittedQuery, limit, isLocalMode]
   );
+  const suggestions = useAsyncData(
+    () =>
+      isLocalMode
+        ? apiGet<QuerySuggestionResponse>(apiPath("/query-suggestions", { q: sourceQuery }))
+        : Promise.resolve<QuerySuggestionResponse | null>(null),
+    [sourceQuery, isLocalMode]
+  );
   const data = results.data;
+  const suggestion =
+    !suggestions.loading && suggestions.data?.original_query === sourceQuery
+      ? suggestions.data
+      : null;
+  const hasSuggestion = Boolean(suggestion?.available && suggestion.suggested_query);
 
   return (
     <section className="page">
@@ -132,7 +146,9 @@ export function SemanticSearchPage({ onOpenCase }: { onOpenCase: (caseId: string
             className="semantic-search-form"
             onSubmit={(event) => {
               event.preventDefault();
-              setSubmittedQuery(query.trim() || "除外責任");
+              const nextQuery = query.trim() || "除外責任";
+              setSourceQuery(nextQuery);
+              setSubmittedQuery(nextQuery);
             }}
           >
             <label>
@@ -156,6 +172,49 @@ export function SemanticSearchPage({ onOpenCase }: { onOpenCase: (caseId: string
               <span>搜尋</span>
             </button>
           </form>
+
+          {suggestions.error && (
+            <div className="query-suggestion-error">
+              查詢建議暫時無法載入，目前仍使用原查詢。
+            </div>
+          )}
+
+          {hasSuggestion && suggestion?.suggested_query && (
+            <section className="query-suggestion-panel" aria-label="查詢建議">
+              <div className="query-suggestion-heading">
+                <Lightbulb size={19} />
+                <div>
+                  <strong>查詢建議</strong>
+                  <span>{suggestion.explanation}</span>
+                </div>
+              </div>
+              <div className="query-suggestion-options" role="group" aria-label="選擇實際搜尋查詢">
+                <button
+                  type="button"
+                  className={submittedQuery === sourceQuery ? "active" : ""}
+                  aria-pressed={submittedQuery === sourceQuery}
+                  onClick={() => setSubmittedQuery(sourceQuery)}
+                >
+                  <span>原查詢</span>
+                  <strong>{sourceQuery}</strong>
+                </button>
+                <button
+                  type="button"
+                  className={submittedQuery === suggestion.suggested_query ? "active" : ""}
+                  aria-pressed={submittedQuery === suggestion.suggested_query}
+                  onClick={() => setSubmittedQuery(suggestion.suggested_query ?? sourceQuery)}
+                >
+                  <span>建議查詢</span>
+                  <strong>{suggestion.suggested_query}</strong>
+                </button>
+              </div>
+              <div className="query-suggestion-current">
+                <span>目前執行</span>
+                <strong>{submittedQuery}</strong>
+                <code>{suggestion.rule_id}</code>
+              </div>
+            </section>
+          )}
 
           <AsyncBlock loading={results.loading} error={results.error}>
             {data && (

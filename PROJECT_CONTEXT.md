@@ -292,11 +292,11 @@ frontend/dist/
 - `frontend/src/main.tsx`：React app 掛載入口。
 - `frontend/src/App.tsx`：主版面、側邊欄導覽與 route state 管理。
 - `frontend/src/api/client.ts`：API base URL、`apiGet`、`apiGetOptional`。
-- `frontend/src/types.ts`：前端 API response 型別。
+- `frontend/src/types.ts`：前端 API response 型別，包含查詢建議回應。
 - `frontend/src/hooks/useAsyncData.ts`：共用非同步資料載入 hook。
 - `frontend/src/components/CaseDetailView.tsx`：案件詳情、摘要、相似案件區塊。
 - `frontend/src/components/ui.tsx`：PageHeader、PanelHeader、Metric、AsyncBlock、EmptyState。
-- `frontend/src/pages/`：Dashboard、案件管理、全文搜尋、語意搜尋、統計分析、分析驗證頁。
+- `frontend/src/pages/`：Dashboard、案件管理、全文搜尋、語意搜尋、統計分析、分析驗證頁；語意搜尋頁已接入可選查詢建議。
 - `frontend/src/styles.css`：前端全域樣式與 responsive layout。
 - `frontend/src/vite-env.d.ts`：Vite TypeScript 型別宣告。
 
@@ -830,6 +830,7 @@ Query parameters：
 - 全文搜尋頁。
 - 全文搜尋頁，展示 query、命中數、match_source、fallback 說明、snippet 與案件來源。
 - 語意搜尋頁，展示 query、embedding 模型、候選 chunk 數、分析流程、模型限制、命中 chunk、score、score bar、section hint 與案件來源。
+- 語意搜尋頁已接入查詢建議 API；有核准建議時顯示原查詢、建議查詢、理由、規則編號與目前實際執行查詢，由使用者自行切換。
 - 案件詳情頁語意相似案件區塊，展示相似案件、分數與實際命中 chunk。
 - 統計分析頁仍保留 direct route，但不作為主導覽項目。
 - 分析驗證頁。
@@ -870,7 +871,7 @@ Query parameters：
 - 前端自動化測試。
 - Hugging Face embeddings 尚未對正式 DB 全量重建；目前已完成 trial DB 1000 筆、離線 anchor-based 比較報告，以及 5 個查詢詞的 query-to-document 小樣本試測。
 - 本機 BGE 已完成 RTX 4050 CUDA 1000 chunks embeddings、15 詞／75 結果離線 benchmark 與 AI 輔助標註評測；尚未完成第二位獨立人工標註、歷史 API BGE 排名比較或正式 DB 全量重建。
-- 選擇性查詢建議 service、response schema 與 API endpoint 已完成，但尚未建立前端操作介面。
+- 選擇性查詢建議 service、response schema、API endpoint 與前端操作介面已完成；目前只支援 4 個核准短查詢，尚未擴充同義詞或模糊觸發。
 - 前端語意搜尋頁目前展示 Local BGE trial 摘要，不會直接查詢 trial DB 或呼叫外部 embedding API。
 - 15 詞 benchmark v1 已完成 75 筆 Codex-assisted 第一輪原文標註與 Precision@5 報告。
 - 第二位標註者空白模板與一致性比較工具已完成；第二位獨立標註、實際一致率計算與爭議標記仲裁尚未完成。
@@ -1307,6 +1308,7 @@ http://127.0.0.1:5173
 - 案件詳情可看到相似案件。
 - 搜尋頁可查「癌症」，並顯示搜尋摘要、match source、fallback 說明與 snippet。
 - 語意搜尋頁可查「癌症保險金」，並顯示 embedding 模型、候選 chunk、cosine score、score bar、section hint、命中段落與本機 MVP 限制。
+- 語意搜尋頁查詢「豁免保費」時會顯示可選建議與理由；預設執行原查詢，選擇建議後結果區的實際查詢詞會同步更新。
 - 側邊欄不再顯示統計主入口。
 - 分析驗證頁可看到摘要品質、相似度規則、抽樣案件與已知例外。
 - 瀏覽器 console 無 error。
@@ -1403,16 +1405,25 @@ http://127.0.0.1:5173
 2. 已新增唯讀 `GET /api/query-suggestions`，只呼叫現有 service，不執行搜尋，也不修改原查詢。
 3. 已新增 API tests，覆蓋 4 個核准詞、未核准詞、兩個退步案例、空白輸入與 `auto_apply = false`。
 
-### 下一步：前端加入可選查詢建議
+### 已完成：前端加入可選查詢建議
+
+已完成工作：
+
+1. 語意搜尋送出原查詢後會同步讀取查詢建議 API。
+2. 有建議時顯示原查詢、建議查詢、理由、規則編號與清楚的二選一控制。
+3. 預設維持原查詢；只有使用者明確選擇後才以建議查詢重新搜尋。
+4. 已以桌面 1440×900 與手機 390×844 實際驗證，沒有水平溢出、按鈕重疊或 console error。
+
+### 下一步：完整本機 BGE trial DB 建置與驗證
 
 建議工作：
 
-1. 在語意搜尋輸入送出前呼叫查詢建議 API。
-2. 有建議時顯示原查詢、建議查詢與理由，提供清楚的選擇控制。
-3. 預設維持原查詢；只有使用者明確選擇後才以建議查詢搜尋。
-4. 前端畫面同時保留實際執行查詢，避免展示時誤認系統自動改寫。
+1. 先檢查目前 1000 筆 BGE trial DB 的可續跑行為與剩餘 chunk 數，不修改正式 DB。
+2. 在 RTX 4050 以本機模型快取完成 17254 chunks 的 BGE embeddings，全程不呼叫外部 API。
+3. 驗證 BGE embedding 數量、維度、缺漏、模型名稱與資料庫檔案大小。
+4. 重跑固定 15 詞 benchmark，記錄全量 candidates 的 Precision@5、查詢時間與排名變化。
 5. 第二位標註者的獨立判讀與一致率仍是正式品質宣稱前的必要工作。
-6. 評估 GPU 全量建置時間後，再決定是否切換正式 DB。
+6. 全量 trial 通過後，再決定是否讓正式 API 與前端切換至 BGE DB。
 
 ### 第 8 階段：跨年度擴充
 

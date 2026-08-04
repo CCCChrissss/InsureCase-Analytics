@@ -365,6 +365,109 @@ button {
   background: #ffffff;
 }
 
+.query-suggestion-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #b8cfca;
+  border-radius: 6px;
+  background: #f7fbfa;
+}
+
+.query-suggestion-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.query-suggestion-heading svg {
+  flex: 0 0 auto;
+  color: #2f6f73;
+}
+
+.query-suggestion-heading div {
+  display: grid;
+  gap: 3px;
+}
+
+.query-suggestion-heading strong {
+  color: #18393b;
+}
+
+.query-suggestion-heading span {
+  color: #53645f;
+  font-size: 0.9rem;
+}
+
+.query-suggestion-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.query-suggestion-options button {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  min-height: 70px;
+  padding: 10px 12px;
+  border: 1px solid #cbd8d5;
+  border-radius: 6px;
+  color: #45524f;
+  background: #ffffff;
+  text-align: left;
+}
+
+.query-suggestion-options button.active {
+  border-color: #2f6f73;
+  background: #eaf4f2;
+  box-shadow: inset 0 0 0 1px #2f6f73;
+}
+
+.query-suggestion-options span {
+  color: #64736f;
+  font-size: 0.82rem;
+}
+
+.query-suggestion-options strong,
+.query-suggestion-current strong {
+  overflow-wrap: anywhere;
+  color: #18393b;
+}
+
+.query-suggestion-current {
+  display: flex;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+  padding-top: 10px;
+  border-top: 1px solid #d8e5e2;
+}
+
+.query-suggestion-current span,
+.query-suggestion-current code {
+  color: #64736f;
+  font-size: 0.82rem;
+}
+
+.query-suggestion-current strong {
+  min-width: 0;
+}
+
+.query-suggestion-current code {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.query-suggestion-error {
+  padding: 10px 12px;
+  border: 1px solid #ead8a8;
+  border-radius: 6px;
+  color: #624a1c;
+  background: #fffaf0;
+  font-size: 0.9rem;
+}
+
 .case-list,
 .search-results,
 .table-list {
@@ -1162,6 +1265,20 @@ button {
   .search-form,
   .semantic-search-form {
     grid-template-columns: 1fr;
+  }
+
+  .query-suggestion-options {
+    grid-template-columns: 1fr;
+  }
+
+  .query-suggestion-current {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .query-suggestion-current code {
+    margin-left: 0;
+    white-space: normal;
   }
 
   .semantic-result-card {
