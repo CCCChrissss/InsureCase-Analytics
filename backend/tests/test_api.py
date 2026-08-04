@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
@@ -115,6 +116,53 @@ def test_search_cancer() -> None:
         "like_fallback_error",
         "like_fallback_empty_fts5",
     }
+
+
+@pytest.mark.parametrize(
+    ("query", "expected_suggestion"),
+    (
+        ("違反告知義務", "要保人隱匿病史保險公司解除契約"),
+        ("手術認定", "醫療處置是否符合保單手術定義"),
+        ("業務招攬", "業務員招攬過程未充分說明保單"),
+        ("豁免保費", "被保險人失能或罹癌後免繳保險費"),
+    ),
+)
+def test_query_suggestions_returns_approved_suggestion(
+    query: str,
+    expected_suggestion: str,
+) -> None:
+    response = client.get("/api/query-suggestions", params={"q": query})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["available"] is True
+    assert data["original_query"] == query
+    assert data["suggested_query"] == expected_suggestion
+    assert data["rule_id"]
+    assert data["explanation"]
+    assert data["auto_apply"] is False
+
+
+@pytest.mark.parametrize("query", ("癌症", "除外責任", "理賠金額"))
+def test_query_suggestions_returns_unavailable_for_unapproved_query(query: str) -> None:
+    response = client.get("/api/query-suggestions", params={"q": query})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "available": False,
+        "original_query": query,
+        "suggested_query": None,
+        "rule_id": None,
+        "explanation": None,
+        "auto_apply": False,
+    }
+
+
+def test_query_suggestions_rejects_blank_query() -> None:
+    response = client.get("/api/query-suggestions", params={"q": "   "})
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Query must not be blank."
 
 
 def test_case_summary_not_found() -> None:

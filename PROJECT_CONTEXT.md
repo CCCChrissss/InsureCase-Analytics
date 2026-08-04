@@ -97,6 +97,7 @@
 │  │  │  ├─ health.py
 │  │  │  ├─ cases.py
 │  │  │  ├─ quality.py
+│  │  │  ├─ query_suggestions.py
 │  │  │  ├─ search.py
 │  │  │  ├─ semantic_search.py
 │  │  │  ├─ similar_cases.py
@@ -237,6 +238,7 @@ frontend/dist/
 - `backend/app/routers/health.py`：健康檢查 API。
 - `backend/app/routers/cases.py`：案件列表、案件詳情、爭議類型、PDF 讀取 API。
 - `backend/app/routers/quality.py`：分析驗證 API，回傳 ROC 114 摘要與相似案件品質檢查結果。
+- `backend/app/routers/query_suggestions.py`：唯讀查詢建議 API；區分有建議與無建議，拒絕空白輸入，且不會自動執行建議查詢。
 - `backend/app/routers/search.py`：全文搜尋 API。
 - `backend/app/routers/semantic_search.py`：chunk embedding 語意搜尋 API，支援 `embedding_model` / `embedding_provider` 可選參數。
 - `backend/app/routers/similar_cases.py`：相似案件 API；案件層級語意相似 API 支援 `embedding_model` / `embedding_provider` 可選參數。
@@ -652,6 +654,25 @@ Query parameters：
 - FTS5 與 LIKE fallback 的查詢範圍皆包含案號、爭議類型與 normalized text。
 - 回傳 snippet 與 `match_source`。
 
+### Query Suggestions
+
+```text
+GET /api/query-suggestions
+```
+
+用途：查詢指定短詞是否有經離線實驗核准的可選改寫建議。
+
+Query parameters：
+
+- `q`：必填，不可為空字串或只有空白。
+
+回傳行為：
+
+- 命中 4 個核准詞時回傳 `available = true`、原查詢、建議查詢、規則編號與理由。
+- 未命中時回傳 HTTP 200 與 `available = false`，建議相關欄位為 `null`。
+- `auto_apply` 固定為 `false`，API 不執行全文搜尋或語意搜尋，也不取代原查詢。
+- 空字串或只有空白時回傳 HTTP 422。
+
 ### Semantic Search
 
 ```text
@@ -795,7 +816,7 @@ Query parameters：
 - 規則式相似案件 API。
 - 分析驗證 API。
 - 案件總覽與爭議類型 API，支援年度篩選。
-- 4 個已驗證低分短查詢的選擇性建議 service；目前不自動套用，也尚未接 API。
+- 4 個已驗證低分短查詢的選擇性建議 service 與唯讀 API；目前不自動套用，也尚未接前端。
 - 後端 pytest 測試。
 - 案件詳情展示鏈 API 測試，覆蓋詳情、PDF、摘要、規則式相似案件與語意相似案件。
 - OpenAPI docs 可由 FastAPI 自動產生。
@@ -849,7 +870,7 @@ Query parameters：
 - 前端自動化測試。
 - Hugging Face embeddings 尚未對正式 DB 全量重建；目前已完成 trial DB 1000 筆、離線 anchor-based 比較報告，以及 5 個查詢詞的 query-to-document 小樣本試測。
 - 本機 BGE 已完成 RTX 4050 CUDA 1000 chunks embeddings、15 詞／75 結果離線 benchmark 與 AI 輔助標註評測；尚未完成第二位獨立人工標註、歷史 API BGE 排名比較或正式 DB 全量重建。
-- 選擇性查詢建議 service 已完成，但尚未建立 response schema、API endpoint 與前端操作介面。
+- 選擇性查詢建議 service、response schema 與 API endpoint 已完成，但尚未建立前端操作介面。
 - 前端語意搜尋頁目前展示 Local BGE trial 摘要，不會直接查詢 trial DB 或呼叫外部 embedding API。
 - 15 詞 benchmark v1 已完成 75 筆 Codex-assisted 第一輪原文標註與 Precision@5 報告。
 - 第二位標註者空白模板與一致性比較工具已完成；第二位獨立標註、實際一致率計算與爭議標記仲裁尚未完成。
@@ -1294,7 +1315,7 @@ http://127.0.0.1:5173
 
 2026-08-04 已完成以下檢查：
 
-- `.\.venv\Scripts\python.exe -m pytest`：99 passed。
+- `.\.venv\Scripts\python.exe -m pytest`：107 passed。
 - `py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks --require-embeddings`：passed，`cases = 2992`、`case_chunks = 17254`、`chunk_embeddings = 17254`。
 - embedding、案件篩選、統計總覽與模型比較腳本的 `py_compile`：通過。
 - `pnpm build`：TypeScript 與 Vite production build 通過。
@@ -1374,14 +1395,22 @@ http://127.0.0.1:5173
 2. 以 service 單元測試驗證觸發、非觸發、原文保留、建議理由與 `auto_apply = false`，未接入正式搜尋 API。
 3. 服務規則已由測試核對上一階段 15 詞離線實驗資料，避免核准內容漂移。
 
-### 下一步：建立可選查詢建議 API
+### 已完成：建立可選查詢建議 API
+
+已完成工作：
+
+1. 已在 Pydantic schema 定義可選建議回應，明確區分「有建議」與「無建議」。
+2. 已新增唯讀 `GET /api/query-suggestions`，只呼叫現有 service，不執行搜尋，也不修改原查詢。
+3. 已新增 API tests，覆蓋 4 個核准詞、未核准詞、兩個退步案例、空白輸入與 `auto_apply = false`。
+
+### 下一步：前端加入可選查詢建議
 
 建議工作：
 
-1. 在 Pydantic schema 定義可選建議回應，明確區分「有建議」與「無建議」。
-2. 新增唯讀 query suggestion endpoint，只呼叫現有 service，不執行語意搜尋，也不修改原查詢。
-3. 新增 API tests，覆蓋核准詞、未核准詞、空白輸入與回應欄位。
-4. API 穩定後再接前端選擇控制，由使用者自行決定要搜尋原查詢或建議查詢。
+1. 在語意搜尋輸入送出前呼叫查詢建議 API。
+2. 有建議時顯示原查詢、建議查詢與理由，提供清楚的選擇控制。
+3. 預設維持原查詢；只有使用者明確選擇後才以建議查詢搜尋。
+4. 前端畫面同時保留實際執行查詢，避免展示時誤認系統自動改寫。
 5. 第二位標註者的獨立判讀與一致率仍是正式品質宣稱前的必要工作。
 6. 評估 GPU 全量建置時間後，再決定是否切換正式 DB。
 

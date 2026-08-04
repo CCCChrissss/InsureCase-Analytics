@@ -103,6 +103,15 @@ class SemanticSearchResponse(BaseModel):
     total_candidates: int
 
 
+class QuerySuggestionResponse(BaseModel):
+    available: bool
+    original_query: str
+    suggested_query: str | None
+    rule_id: str | None
+    explanation: str | None
+    auto_apply: bool
+
+
 class SemanticSimilarChunk(BaseModel):
     chunk_id: str
     section_hint: str | None
