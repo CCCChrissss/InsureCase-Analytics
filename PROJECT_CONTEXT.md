@@ -75,6 +75,7 @@
 │  ├─ local_bge_semantic_benchmark_v1_neutral_guide.md
 │  ├─ local_bge_semantic_benchmark_v1_annotations.json
 │  ├─ local_bge_semantic_benchmark_v1_evaluation.md
+│  ├─ local_bge_low_precision_query_analysis.md
 │  ├─ hf_embedding_trial_comparison.md
 │  ├─ hf_semantic_query_trial_1000.md
 │  ├─ hf_semantic_relevance_check_1000.md
@@ -211,6 +212,7 @@ frontend/dist/
 - `docs/local_bge_semantic_benchmark_v1_neutral_guide.md`：本機 BGE 15 詞、75 題的中立判讀指南；只提供概念邊界、段落焦點、自行檢查問題與易混淆概念，不提供標籤、模型分數或可直接貼用的證據摘要。
 - `docs/local_bge_semantic_benchmark_v1_annotations.json`：本機 BGE 75 筆完成版 AI 輔助標註快照，包含共同標註方法、label 與 evidence summary；來源工作檔位於 Git 忽略的 `outputs/`。
 - `docs/local_bge_semantic_benchmark_v1_evaluation.md`：本機 BGE 15 詞、75 筆 AI 輔助標註的完整評測報告，包含逐查詢與逐筆判讀結果。
+- `docs/local_bge_low_precision_query_analysis.md`：針對四個低 Strict P@5 查詢執行 12 組、60 筆本機 BGE 對照試驗，記錄 query 改寫、逐筆 AI 輔助判讀、Precision@5 與實作建議。
 - `docs/hf_embedding_trial_comparison.md`：Hugging Face `BAAI/bge-large-zh-v1.5` trial embeddings、`local_hashing_cjk_v1` 離線 anchor-based 比較與 query-to-document 試測摘要。
 - `docs/hf_semantic_query_trial_1000.md`：Hugging Face BGE 1000 筆 candidates 的 query-to-document 詳細查詢結果，包含 `除外責任`、`必要性醫療`、`癌症`、`住院`、`失能`。
 - `docs/hf_semantic_relevance_check_1000.md`：Hugging Face BGE 1000 筆 trial Top 25 人工 relevance check，並對 7 筆較不明確結果保留 chunk 原文證據摘要與最終標記。
@@ -1330,6 +1332,7 @@ http://127.0.0.1:5173
 - 已新增 `backend/scripts/annotate_semantic_benchmark.py`，可在終端機逐筆閱讀本機 BGE benchmark 命中內容與相鄰 chunks，並安全續作 75 筆人工標註。
 - 已新增 `docs/local_bge_semantic_benchmark_v1_neutral_guide.md`，涵蓋 15 個查詢詞與 75 題中立提示。
 - 已完成本機 BGE 75/75 AI 輔助標註，並建立 `docs/local_bge_semantic_benchmark_v1_annotations.json` 與 `docs/local_bge_semantic_benchmark_v1_evaluation.md`；第 1 至 23 題由使用者在 Codex 逐題解說後輸入，第 24 至 75 題由 Codex 批次補齊。結果為 61 筆相關、6 筆部分相關、8 筆不相關，Strict P@5 0.8133、Lenient P@5 0.8933，不得表述為獨立人工盲標。
+- 已完成四個低分查詢的改寫對照試驗，共 12 個查詢版本、60 筆 Top 5 AI 輔助判讀。最佳改寫的 Strict P@5 為：違反告知義務 `0.6 -> 1.0`、手術認定 `0.6 -> 1.0`、業務招攬 `0.6 -> 0.8`、豁免保費 `0.0 -> 1.0`；同時確認並非所有加長查詢都有效，暫不將固定改寫硬編碼進 production API。
 - 已新增 `docs/hf_embedding_trial_comparison.md`，記錄 trial 模型分布、比較方法、可比較查詢詞、略過原因、Top results、100 筆與 1000 筆 query-to-document 小樣本結果與限制。
 - 已新增 `docs/hf_semantic_query_trial_1000.md`，記錄 1000 筆 BGE candidates 下 5 個查詢詞的詳細 Top 5 結果。
 - 已更新 `docs/hf_semantic_relevance_check_1000.md`，針對 5 個查詢詞 Top 5、共 25 筆結果做人工 relevance check，並回查 7 筆較不明確結果的 chunk 原文；最終為 24 筆相關、1 筆部分相關、0 筆待確認。
@@ -1339,7 +1342,7 @@ http://127.0.0.1:5173
 - 已更新前端 `SemanticSearchPage`，提供 Local Hashing MVP 與 Local BGE Trial 模型狀態切換；Local Hashing MVP 可直接查正式 DB，Local BGE Trial 只展示 1000 筆完全離線試測摘要，避免誤認正式 DB 已切換。
 - 已完成迭代後 Code Review：移除舊遠端 Hugging Face HTTP provider、response parser、retry / timeout 設定與專用 fake HTTP 測試；移除隱藏統計頁、重複統計 endpoints、未使用的 `recharts` 與未引用的資料庫初始化函式。
 
-### 下一步：驗證並改善本機 BGE benchmark
+### 下一步：建立可解釋的離線查詢建議試驗
 
 優先原因：
 
@@ -1347,15 +1350,16 @@ http://127.0.0.1:5173
 - chunking、本機 embedding、前端語意搜尋展示與案件層級語意相似展示已完成。
 - 前端結構已整理，後續可以承接更複雜功能。
 - 跨年度 trial DB 已建立並通過資料品質檢查，正式 DB 也已切換為跨年度資料。
-- 本機 BGE 1000-candidate 的 75 筆 AI 輔助標註與評測已完成，可開始檢查低分查詢並做初步模型比較。
+- 本機 BGE 1000-candidate 的 75 筆 AI 輔助標註與評測已完成。
+- 四個低分查詢的改寫試驗已證明，補足主體、行為、條件或法律效果可改善短查詢，但錯誤加長也可能引入保險文件高頻詞而降低精準度。
 - 目前結果不是獨立人工盲標；若要作為專題的正式品質證據，仍需第二位未接觸既有答案的標註者獨立判讀。
 
 建議工作：
 
-1. 針對 `豁免保費`、`違反告知義務`、`手術認定`、`業務招攬` 等低 Strict P@5 查詢檢查 query 定義、候選內容與誤命中原因。
-2. 與歷史 Hugging Face API BGE benchmark 依查詢詞、排名及 Precision@5 做初步比較，並揭露兩份標註皆受 AI 輔助的限制。
-3. 由第二位未接觸既有答案的標註者獨立完成 75 筆判讀，再執行一致率、Cohen's Kappa 與衝突清單。
-4. 仲裁衝突後形成正式 benchmark 標籤，再評估 query 改寫或加入 reranking。
+1. 定義不修改 production API 的離線查詢建議規則，清楚記錄觸發條件、原查詢與建議查詢。
+2. 將自然語句改寫擴充到 benchmark v1 的 15 個查詢，檢查高分查詢是否因改寫退步，避免只針對四個低分詞過度調整。
+3. 由第二位未接觸既有答案的標註者獨立完成原查詢與建議查詢判讀，再執行一致率、Cohen's Kappa 與衝突清單。
+4. 仲裁衝突後再評估於 API 增加可選的 query suggestion / rewrite；回應必須揭露原查詢與實際 embedding 查詢。
 5. 評估 GPU 全量建置時間後，再決定是否切換正式 DB。
 
 ### 第 8 階段：跨年度擴充
