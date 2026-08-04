@@ -95,14 +95,19 @@ def load_context_chunks(db_path: Path, annotation: dict[str, Any], *, context_si
     if not db_path.is_file():
         return []
 
-    case_id = str(annotation.get("case_id", "")).strip()
-    chunk_index = int(annotation.get("chunk_index", 0))
-    if not case_id:
+    chunk_id = str(annotation.get("chunk_id", "")).strip()
+    if not chunk_id:
         return []
 
     uri = f"{db_path.resolve().as_uri()}?mode=ro"
     with sqlite3.connect(uri, uri=True) as connection:
         connection.row_factory = sqlite3.Row
+        target = connection.execute(
+            "SELECT case_id, chunk_index FROM case_chunks WHERE chunk_id = ?;",
+            (chunk_id,),
+        ).fetchone()
+        if target is None:
+            return []
         rows = connection.execute(
             """
             SELECT chunk_id, chunk_index, section_hint, chunk_text
@@ -110,7 +115,11 @@ def load_context_chunks(db_path: Path, annotation: dict[str, Any], *, context_si
             WHERE case_id = ? AND chunk_index BETWEEN ? AND ?
             ORDER BY chunk_index;
             """,
-            (case_id, max(0, chunk_index - context_size), chunk_index + context_size),
+            (
+                target["case_id"],
+                max(0, target["chunk_index"] - context_size),
+                target["chunk_index"] + context_size,
+            ),
         ).fetchall()
     return [dict(row) for row in rows]
 

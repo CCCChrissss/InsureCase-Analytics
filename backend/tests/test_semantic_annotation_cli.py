@@ -96,7 +96,9 @@ def test_load_context_chunks_reads_adjacent_chunks_without_writing(tmp_path: Pat
             ],
         )
 
-    rows = annotate_semantic_benchmark.load_context_chunks(db_path, make_annotation(), context_size=1)
+    annotation = make_annotation()
+    annotation.pop("chunk_index")
+    rows = annotate_semantic_benchmark.load_context_chunks(db_path, annotation, context_size=1)
 
     assert [row["chunk_id"] for row in rows] == ["chunk_previous", "chunk_current", "chunk_next"]
     assert not list(tmp_path.glob("trial.db-journal"))
