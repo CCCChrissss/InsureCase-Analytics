@@ -107,6 +107,7 @@
 │  │     ├─ case_service.py
 │  │     ├─ embedding_service.py
 │  │     ├─ quality_service.py
+│  │     ├─ query_suggestion_service.py
 │  │     ├─ search_service.py
 │  │     ├─ similar_case_service.py
 │  │     ├─ statistics_service.py
@@ -131,6 +132,7 @@
 │     ├─ test_data_quality.py
 │     ├─ test_embedding_service.py
 │     ├─ test_import_cases_to_db.py
+│     ├─ test_query_suggestion_service.py
 │     ├─ test_search_service.py
 │     ├─ test_semantic_annotation_agreement.py
 │     ├─ test_semantic_benchmark.py
@@ -243,6 +245,7 @@ frontend/dist/
 - `backend/app/services/case_service.py`：案件查詢、篩選、分頁、PDF path resolver。
 - `backend/app/services/embedding_service.py`：embedding provider 介面、本機 CJK hashing、本機 Sentence Transformers BGE、chunk embedding 建置、chunk 語意搜尋與案件層級語意相似；目前只啟用 `local` 與 `local_bge`，遠端 Hugging Face HTTP 實作已移除，本機 BGE 強制只讀本機模型快取。
 - `backend/app/services/quality_service.py`：ROC 114 分析驗證報告資料。
+- `backend/app/services/query_suggestion_service.py`：選擇性查詢建議服務；目前只收錄 4 個已在離線實驗改善的短查詢，以精確詞彙觸發，回傳原查詢、建議查詢、規則編號與理由，並固定標示不自動套用。
 - `backend/app/services/search_service.py`：FTS5 搜尋、LIKE fallback、snippet 產生；FTS5 報錯或 0 筆時會進 LIKE fallback，且 fallback 會查案號、爭議類型與 normalized text。
 - `backend/app/services/similar_case_service.py`：規則式相似案件計分。
 - `backend/app/services/statistics_service.py`：案件總數、爭議類型數、年度與日期範圍總覽，支援可選年度條件。
@@ -265,6 +268,7 @@ frontend/dist/
 - `backend/tests/test_data_quality.py`：資料品質檢查測試。
 - `backend/tests/test_embedding_service.py`：本機 hashing、本機 BGE fake model、provider factory、遠端 aliases 拒絕、維度與記憶體錯誤、embedding 寫入、搜尋排序及案件層級語意相似測試。
 - `backend/tests/test_import_cases_to_db.py`：SQLite 匯入腳本測試，包含多 metadata 匯入與 metadata 目錄解析。
+- `backend/tests/test_query_suggestion_service.py`：選擇性查詢建議服務測試，覆蓋 4 個核准詞、實驗規則一致性、未核准詞拒絕與前後空白處理。
 - `backend/tests/test_search_service.py`：搜尋 fallback 單元測試，覆蓋 normalized text、案號與爭議類型 fallback。
 - `backend/tests/test_semantic_annotation_cli.py`：人工標註 CLI 單元測試，覆蓋快捷鍵、續作篩選、標註驗證、原子儲存、SQLite 唯讀脈絡查詢與互動流程。
 - `backend/tests/test_semantic_annotation_agreement.py`：雙標註一致性測試，覆蓋完全一致、部分衝突、標註者名稱重複、結果鍵值不符與 Kappa 無法定義情境。
@@ -791,6 +795,7 @@ Query parameters：
 - 規則式相似案件 API。
 - 分析驗證 API。
 - 案件總覽與爭議類型 API，支援年度篩選。
+- 4 個已驗證低分短查詢的選擇性建議 service；目前不自動套用，也尚未接 API。
 - 後端 pytest 測試。
 - 案件詳情展示鏈 API 測試，覆蓋詳情、PDF、摘要、規則式相似案件與語意相似案件。
 - OpenAPI docs 可由 FastAPI 自動產生。
@@ -844,6 +849,7 @@ Query parameters：
 - 前端自動化測試。
 - Hugging Face embeddings 尚未對正式 DB 全量重建；目前已完成 trial DB 1000 筆、離線 anchor-based 比較報告，以及 5 個查詢詞的 query-to-document 小樣本試測。
 - 本機 BGE 已完成 RTX 4050 CUDA 1000 chunks embeddings、15 詞／75 結果離線 benchmark 與 AI 輔助標註評測；尚未完成第二位獨立人工標註、歷史 API BGE 排名比較或正式 DB 全量重建。
+- 選擇性查詢建議 service 已完成，但尚未建立 response schema、API endpoint 與前端操作介面。
 - 前端語意搜尋頁目前展示 Local BGE trial 摘要，不會直接查詢 trial DB 或呼叫外部 embedding API。
 - 15 詞 benchmark v1 已完成 75 筆 Codex-assisted 第一輪原文標註與 Precision@5 報告。
 - 第二位標註者空白模板與一致性比較工具已完成；第二位獨立標註、實際一致率計算與爭議標記仲裁尚未完成。
@@ -1288,7 +1294,7 @@ http://127.0.0.1:5173
 
 2026-08-04 已完成以下檢查：
 
-- `.\.venv\Scripts\python.exe -m pytest`：88 passed。
+- `.\.venv\Scripts\python.exe -m pytest`：99 passed。
 - `py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks --require-embeddings`：passed，`cases = 2992`、`case_chunks = 17254`、`chunk_embeddings = 17254`。
 - embedding、案件篩選、統計總覽與模型比較腳本的 `py_compile`：通過。
 - `pnpm build`：TypeScript 與 Vite production build 通過。
@@ -1349,7 +1355,7 @@ http://127.0.0.1:5173
 - 已更新前端 `SemanticSearchPage`，提供 Local Hashing MVP 與 Local BGE Trial 模型狀態切換；Local Hashing MVP 可直接查正式 DB，Local BGE Trial 只展示 1000 筆完全離線試測摘要，避免誤認正式 DB 已切換。
 - 已完成迭代後 Code Review：移除舊遠端 Hugging Face HTTP provider、response parser、retry / timeout 設定與專用 fake HTTP 測試；移除隱藏統計頁、重複統計 endpoints、未使用的 `recharts` 與未引用的資料庫初始化函式。
 
-### 下一步：建立低分短查詢的可選建議原型
+### 已完成：低分短查詢的可選建議服務核心
 
 優先原因：
 
@@ -1359,16 +1365,25 @@ http://127.0.0.1:5173
 - 跨年度 trial DB 已建立並通過資料品質檢查，正式 DB 也已切換為跨年度資料。
 - 本機 BGE 1000-candidate 的 75 筆 AI 輔助標註與評測已完成。
 - 15 詞離線建議試驗已完成，確認全查詢自動改寫會讓 `除外責任` 與 `理賠金額` 明顯退步。
-- 原本四個低分查詢 `違反告知義務`、`手術認定`、`業務招攬`、`豁免保費` 的建議均改善，可進入可選建議原型。
+- 原本四個低分查詢 `違反告知義務`、`手術認定`、`業務招攬`、`豁免保費` 的建議均改善，已建立可選建議服務核心。
 - 目前結果不是獨立人工盲標；若要作為專題的正式品質證據，仍需第二位未接觸既有答案的標註者獨立判讀。
+
+已完成工作：
+
+1. 將四個已驗證改善的低分短查詢整理成獨立建議規則，不包含兩個退步案例。
+2. 以 service 單元測試驗證觸發、非觸發、原文保留、建議理由與 `auto_apply = false`，未接入正式搜尋 API。
+3. 服務規則已由測試核對上一階段 15 詞離線實驗資料，避免核准內容漂移。
+
+### 下一步：建立可選查詢建議 API
 
 建議工作：
 
-1. 將四個已驗證改善的低分短查詢整理成獨立建議規則，不包含兩個退步案例。
-2. 先以 service 單元測試與離線輸出驗證觸發、非觸發、原文保留及建議理由，不接入正式搜尋 API。
-3. 由第二位未接觸既有答案的標註者獨立完成原查詢與建議查詢判讀，再執行一致率、Cohen's Kappa 與衝突清單。
-4. 仲裁衝突後再評估於 API 增加可選的 query suggestion；回應必須揭露原查詢、建議查詢與規則編號，且不得預設取代原查詢。
-5. 評估 GPU 全量建置時間後，再決定是否切換正式 DB。
+1. 在 Pydantic schema 定義可選建議回應，明確區分「有建議」與「無建議」。
+2. 新增唯讀 query suggestion endpoint，只呼叫現有 service，不執行語意搜尋，也不修改原查詢。
+3. 新增 API tests，覆蓋核准詞、未核准詞、空白輸入與回應欄位。
+4. API 穩定後再接前端選擇控制，由使用者自行決定要搜尋原查詢或建議查詢。
+5. 第二位標註者的獨立判讀與一致率仍是正式品質宣稱前的必要工作。
+6. 評估 GPU 全量建置時間後，再決定是否切換正式 DB。
 
 ### 第 8 階段：跨年度擴充
 
