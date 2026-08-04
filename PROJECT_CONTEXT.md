@@ -76,6 +76,7 @@
 │  ├─ local_bge_semantic_benchmark_v1_annotations.json
 │  ├─ local_bge_semantic_benchmark_v1_evaluation.md
 │  ├─ local_bge_low_precision_query_analysis.md
+│  ├─ local_bge_query_suggestion_experiment_v1.md
 │  ├─ hf_embedding_trial_comparison.md
 │  ├─ hf_semantic_query_trial_1000.md
 │  ├─ hf_semantic_relevance_check_1000.md
@@ -119,6 +120,7 @@
 │  │  ├─ extract_case_summaries.py
 │  │  ├─ evaluate_semantic_benchmark.py
 │  │  ├─ import_cases_to_db.py
+│  │  ├─ run_semantic_query_suggestion_trial.py
 │  │  ├─ run_semantic_query_trial.py
 │  │  └─ verify_case_db.py
 │  └─ tests/
@@ -132,6 +134,7 @@
 │     ├─ test_search_service.py
 │     ├─ test_semantic_annotation_agreement.py
 │     ├─ test_semantic_benchmark.py
+│     ├─ test_semantic_query_suggestions.py
 │     ├─ test_similar_case_service.py
 │     └─ test_summary_service.py
 └─ frontend/
@@ -213,6 +216,7 @@ frontend/dist/
 - `docs/local_bge_semantic_benchmark_v1_annotations.json`：本機 BGE 75 筆完成版 AI 輔助標註快照，包含共同標註方法、label 與 evidence summary；來源工作檔位於 Git 忽略的 `outputs/`。
 - `docs/local_bge_semantic_benchmark_v1_evaluation.md`：本機 BGE 15 詞、75 筆 AI 輔助標註的完整評測報告，包含逐查詢與逐筆判讀結果。
 - `docs/local_bge_low_precision_query_analysis.md`：針對四個低 Strict P@5 查詢執行 12 組、60 筆本機 BGE 對照試驗，記錄 query 改寫、逐筆 AI 輔助判讀、Precision@5 與實作建議。
+- `docs/local_bge_query_suggestion_experiment_v1.md`：15 個 benchmark 查詢的離線建議試驗，包含改寫規則、75 筆 AI 輔助判讀、逐查詢 Precision@5、退步案例與工程決策。
 - `docs/hf_embedding_trial_comparison.md`：Hugging Face `BAAI/bge-large-zh-v1.5` trial embeddings、`local_hashing_cjk_v1` 離線 anchor-based 比較與 query-to-document 試測摘要。
 - `docs/hf_semantic_query_trial_1000.md`：Hugging Face BGE 1000 筆 candidates 的 query-to-document 詳細查詢結果，包含 `除外責任`、`必要性醫療`、`癌症`、`住院`、`失能`。
 - `docs/hf_semantic_relevance_check_1000.md`：Hugging Face BGE 1000 筆 trial Top 25 人工 relevance check，並對 7 筆較不明確結果保留 chunk 原文證據摘要與最終標記。
@@ -250,6 +254,7 @@ frontend/dist/
 - `backend/scripts/compare_embedding_models.py`：比較同一批共同 chunks 在 local hashing 與候選 embedding model 下的相似度排序，預設使用本機 BGE trial DB 並輸出至 `outputs/`，不會呼叫外部 API。
 - `backend/scripts/compare_semantic_annotations.py`：驗證並比較兩份完整 benchmark 標註，計算原始一致率、Cohen's Kappa、混淆矩陣與各查詢一致率，並輸出待仲裁衝突清單。
 - `backend/scripts/run_semantic_query_trial.py`：在指定 SQLite trial DB 上執行 query-to-document 語意搜尋試測，預設使用本機 BGE，支援重複 `--query`、固定 `benchmark-v1`、JSON 與 Markdown 輸出；查詢不修改 DB，也不使用外部 API。
+- `backend/scripts/run_semantic_query_suggestion_trial.py`：為 benchmark v1 的 15 個短查詢執行固定、可解釋的離線建議試驗；只使用本機 BGE、以唯讀模式開啟 trial DB，輸出原查詢、建議查詢、規則編號、原因與 Top 5。
 - `backend/scripts/evaluate_semantic_benchmark.py`：由 query trial JSON 產生人工標註模板，驗證每筆 label 與 evidence summary 完整性，並輸出 strict / lenient、macro / micro Precision@5 與逐筆證據報告。
 - `backend/scripts/import_cases_to_db.py`：讀取單一或多個 metadata 與文字檔，匯入 SQLite。
 - `backend/scripts/verify_case_db.py`：驗證 SQLite 筆數、搜尋、路徑與 sample case；可用 `--require-chunks` 與 `--require-embeddings` 檢查 chunk 與 embedding 完整性。
@@ -264,6 +269,7 @@ frontend/dist/
 - `backend/tests/test_semantic_annotation_cli.py`：人工標註 CLI 單元測試，覆蓋快捷鍵、續作篩選、標註驗證、原子儲存、SQLite 唯讀脈絡查詢與互動流程。
 - `backend/tests/test_semantic_annotation_agreement.py`：雙標註一致性測試，覆蓋完全一致、部分衝突、標註者名稱重複、結果鍵值不符與 Kappa 無法定義情境。
 - `backend/tests/test_semantic_benchmark.py`：固定 15 詞查詢集、參數互斥、標註模板、Precision@5 計算與證據必填驗證。
+- `backend/tests/test_semantic_query_suggestions.py`：查詢建議 15 詞覆蓋與順序、規則完整性、SQLite 唯讀連線及本機 BGE provider/model 固定行為測試。
 - `backend/tests/test_similar_case_service.py`：相似案件 service 單元測試。
 - `backend/tests/test_summary_service.py`：摘要擷取與 summary service 測試，包含 FOI 標題格式變異的 regression tests。
 
@@ -1280,9 +1286,9 @@ http://127.0.0.1:5173
 
 ### 最近一次本機穩定檢查
 
-2026-08-03 已完成以下檢查：
+2026-08-04 已完成以下檢查：
 
-- `.\.venv\Scripts\python.exe -m pytest`：84 passed。
+- `.\.venv\Scripts\python.exe -m pytest`：88 passed。
 - `py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks --require-embeddings`：passed，`cases = 2992`、`case_chunks = 17254`、`chunk_embeddings = 17254`。
 - embedding、案件篩選、統計總覽與模型比較腳本的 `py_compile`：通過。
 - `pnpm build`：TypeScript 與 Vite production build 通過。
@@ -1333,6 +1339,7 @@ http://127.0.0.1:5173
 - 已新增 `docs/local_bge_semantic_benchmark_v1_neutral_guide.md`，涵蓋 15 個查詢詞與 75 題中立提示。
 - 已完成本機 BGE 75/75 AI 輔助標註，並建立 `docs/local_bge_semantic_benchmark_v1_annotations.json` 與 `docs/local_bge_semantic_benchmark_v1_evaluation.md`；第 1 至 23 題由使用者在 Codex 逐題解說後輸入，第 24 至 75 題由 Codex 批次補齊。結果為 61 筆相關、6 筆部分相關、8 筆不相關，Strict P@5 0.8133、Lenient P@5 0.8933，不得表述為獨立人工盲標。
 - 已完成四個低分查詢的改寫對照試驗，共 12 個查詢版本、60 筆 Top 5 AI 輔助判讀。最佳改寫的 Strict P@5 為：違反告知義務 `0.6 -> 1.0`、手術認定 `0.6 -> 1.0`、業務招攬 `0.6 -> 0.8`、豁免保費 `0.0 -> 1.0`；同時確認並非所有加長查詢都有效，暫不將固定改寫硬編碼進 production API。
+- 已將可解釋查詢建議擴充至 benchmark v1 全部 15 詞，完成 75 筆建議查詢 Top 5 AI 輔助判讀。整體 Strict P@5 `0.8133 -> 0.8800`、Lenient P@5 `0.8933 -> 0.9333`，共有 6 組改善、7 組持平、2 組退步；`除外責任` 與 `理賠金額` 的建議造成明顯退步，因此不採全自動改寫。
 - 已新增 `docs/hf_embedding_trial_comparison.md`，記錄 trial 模型分布、比較方法、可比較查詢詞、略過原因、Top results、100 筆與 1000 筆 query-to-document 小樣本結果與限制。
 - 已新增 `docs/hf_semantic_query_trial_1000.md`，記錄 1000 筆 BGE candidates 下 5 個查詢詞的詳細 Top 5 結果。
 - 已更新 `docs/hf_semantic_relevance_check_1000.md`，針對 5 個查詢詞 Top 5、共 25 筆結果做人工 relevance check，並回查 7 筆較不明確結果的 chunk 原文；最終為 24 筆相關、1 筆部分相關、0 筆待確認。
@@ -1342,7 +1349,7 @@ http://127.0.0.1:5173
 - 已更新前端 `SemanticSearchPage`，提供 Local Hashing MVP 與 Local BGE Trial 模型狀態切換；Local Hashing MVP 可直接查正式 DB，Local BGE Trial 只展示 1000 筆完全離線試測摘要，避免誤認正式 DB 已切換。
 - 已完成迭代後 Code Review：移除舊遠端 Hugging Face HTTP provider、response parser、retry / timeout 設定與專用 fake HTTP 測試；移除隱藏統計頁、重複統計 endpoints、未使用的 `recharts` 與未引用的資料庫初始化函式。
 
-### 下一步：建立可解釋的離線查詢建議試驗
+### 下一步：建立低分短查詢的可選建議原型
 
 優先原因：
 
@@ -1351,15 +1358,16 @@ http://127.0.0.1:5173
 - 前端結構已整理，後續可以承接更複雜功能。
 - 跨年度 trial DB 已建立並通過資料品質檢查，正式 DB 也已切換為跨年度資料。
 - 本機 BGE 1000-candidate 的 75 筆 AI 輔助標註與評測已完成。
-- 四個低分查詢的改寫試驗已證明，補足主體、行為、條件或法律效果可改善短查詢，但錯誤加長也可能引入保險文件高頻詞而降低精準度。
+- 15 詞離線建議試驗已完成，確認全查詢自動改寫會讓 `除外責任` 與 `理賠金額` 明顯退步。
+- 原本四個低分查詢 `違反告知義務`、`手術認定`、`業務招攬`、`豁免保費` 的建議均改善，可進入可選建議原型。
 - 目前結果不是獨立人工盲標；若要作為專題的正式品質證據，仍需第二位未接觸既有答案的標註者獨立判讀。
 
 建議工作：
 
-1. 定義不修改 production API 的離線查詢建議規則，清楚記錄觸發條件、原查詢與建議查詢。
-2. 將自然語句改寫擴充到 benchmark v1 的 15 個查詢，檢查高分查詢是否因改寫退步，避免只針對四個低分詞過度調整。
+1. 將四個已驗證改善的低分短查詢整理成獨立建議規則，不包含兩個退步案例。
+2. 先以 service 單元測試與離線輸出驗證觸發、非觸發、原文保留及建議理由，不接入正式搜尋 API。
 3. 由第二位未接觸既有答案的標註者獨立完成原查詢與建議查詢判讀，再執行一致率、Cohen's Kappa 與衝突清單。
-4. 仲裁衝突後再評估於 API 增加可選的 query suggestion / rewrite；回應必須揭露原查詢與實際 embedding 查詢。
+4. 仲裁衝突後再評估於 API 增加可選的 query suggestion；回應必須揭露原查詢、建議查詢與規則編號，且不得預設取代原查詢。
 5. 評估 GPU 全量建置時間後，再決定是否切換正式 DB。
 
 ### 第 8 階段：跨年度擴充
