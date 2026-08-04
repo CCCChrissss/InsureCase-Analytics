@@ -62,6 +62,17 @@ py .\backend\scripts\build_chunk_embeddings.py --db .\backend\data\insurance_cas
 py .\backend\scripts\build_chunk_embeddings.py --provider local --model local_hashing_cjk_v1 --dims 384 --limit 100
 ```
 
+可續跑批次建置：
+
+```powershell
+py .\backend\scripts\build_chunk_embeddings.py --provider local --model local_hashing_cjk_v1 --dims 384 --resume --limit 100 --write-batch-size 25
+```
+
+- 未使用 `--resume` 時，`--limit` 仍代表依固定順序選取前 N 個 chunks，既有同模型資料會被重新計算。
+- 使用 `--resume` 時，只選取尚未有指定 `embedding_model` 的 chunks，`--limit` 代表本次最多新增幾筆。
+- `--write-batch-size` 預設為 100；每批完成後立即 commit，中斷後可再次用 `--resume` 接續。
+- `LOCAL_BGE_BATCH_SIZE` 控制模型每次 GPU 推論筆數，`--write-batch-size` 控制 SQLite 提交筆數，兩者用途不同。
+
 provider 狀態：
 
 - `local`：目前正式 DB 使用的 provider。
@@ -81,15 +92,34 @@ $env:LOCAL_BGE_DEVICE="cuda"
 
 注意：上述指令會寫入指定 DB 的 `chunk_embeddings`。正式試跑前建議先複製 DB 或使用 trial DB，避免直接改正式展示資料。
 
+從既有 trial DB 接續新增 100 筆：
+
+```powershell
+$env:HF_HUB_OFFLINE="1"
+$env:LOCAL_BGE_DEVICE="cuda"
+$env:LOCAL_BGE_BATCH_SIZE="4"
+
+.\.venv\Scripts\python.exe .\backend\scripts\build_chunk_embeddings.py `
+  --db .\backend\data\insurance_cases_local_bge_trial.db `
+  --provider local_bge `
+  --model BAAI/bge-large-zh-v1.5-local `
+  --dims 1024 `
+  --resume `
+  --limit 100 `
+  --write-batch-size 25
+```
+
 目前已完成 trial DB 小樣本驗證：
 
 - `--limit 20`：成功。
 - `--limit 100`：成功。
 - `--limit 1000`：成功。
 - Trial DB：`backend/data/insurance_cases_local_bge_trial.db`。
-- BGE embeddings：`BAAI/bge-large-zh-v1.5-local`，1024 維，1000 筆。
+- BGE embeddings：`BAAI/bge-large-zh-v1.5-local`，1024 維，1100 筆。
 - Local embeddings：`local_hashing_cjk_v1`，384 維，17254 筆仍保留。
 - 離線 benchmark 報告：`docs/local_bge_semantic_query_trial_1000.md`。
+- 2026-08-04 resume smoke test：從 1000 新增 100 筆，4 個 SQLite batches 全部成功，耗時約 23.6 秒，空向量 0，剩餘 16154 筆。
+- 與 smoke test 前備份逐筆比較：原有 1000 筆 embedding、norm 與 `created_at` 變更數均為 0。
 
 ## 驗證方式
 

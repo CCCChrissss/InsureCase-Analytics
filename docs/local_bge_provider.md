@@ -131,7 +131,43 @@ $env:LOCAL_BGE_BATCH_SIZE="2"
 trial DB 同時保留：
 
 - `local_hashing_cjk_v1`：17254 筆、384 維
-- `BAAI/bge-large-zh-v1.5-local`：1000 筆、1024 維
+- `BAAI/bge-large-zh-v1.5-local`：1100 筆、1024 維
+
+## 5.1 可續跑批次建置
+
+2026-08-04 起，`build_chunk_embeddings.py` 支援只處理缺漏 chunks：
+
+```powershell
+$env:HF_HUB_OFFLINE="1"
+$env:LOCAL_BGE_DEVICE="cuda"
+$env:LOCAL_BGE_BATCH_SIZE="4"
+
+.\.venv\Scripts\python.exe .\backend\scripts\build_chunk_embeddings.py `
+  --db .\backend\data\insurance_cases_local_bge_trial.db `
+  --provider local_bge `
+  --model BAAI/bge-large-zh-v1.5-local `
+  --dims 1024 `
+  --resume `
+  --limit 100 `
+  --write-batch-size 25
+```
+
+- `--resume`：跳過已存在 `BAAI/bge-large-zh-v1.5-local` 的 chunks。
+- `--limit 100`：在 resume 模式下最多新增 100 筆，不是重算前 100 筆。
+- `--write-batch-size 25`：每 25 筆 commit 一次；中斷後已完成批次仍保留。
+- `LOCAL_BGE_BATCH_SIZE=4`：模型內部 GPU 推論 batch，與 SQLite write batch 不同。
+
+100 筆 resume smoke test 實測：
+
+- existing embeddings：`1000`
+- selected / processed / embedded：`100 / 100 / 100`
+- completed write batches：`4`
+- total embeddings：`1100`
+- remaining chunks：`16154`
+- empty embeddings：`0`
+- device：`cuda`
+- wall time：約 `23.6` 秒，包含模型載入
+- 原有 1000 筆 embedding、norm、`created_at` 逐筆比較變更數：`0`
 
 ## 6. 本機查詢 trial
 

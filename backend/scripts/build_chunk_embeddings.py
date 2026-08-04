@@ -34,8 +34,32 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--model", default=MODEL_NAME, help="Embedding model name stored in chunk_embeddings.")
     parser.add_argument("--dims", type=int, default=DEFAULT_DIMS, help="Embedding vector dimensions.")
-    parser.add_argument("--limit", type=int, default=None, help="Optional chunk limit for trial runs.")
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Optional selected chunk limit. With --resume, limits newly embedded missing chunks.",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Only embed chunks that do not already have the selected embedding model.",
+    )
+    parser.add_argument(
+        "--write-batch-size",
+        type=int,
+        default=100,
+        help="SQLite commit batch size. Completed batches remain available for later --resume runs.",
+    )
     return parser.parse_args()
+
+
+def print_progress(progress: dict) -> None:
+    print(
+        json.dumps({"event": "embedding_batch", **progress}, ensure_ascii=False),
+        file=sys.stderr,
+        flush=True,
+    )
 
 
 def main() -> None:
@@ -46,6 +70,9 @@ def main() -> None:
         model_name=args.model,
         dims=args.dims,
         limit=args.limit,
+        resume=args.resume,
+        write_batch_size=args.write_batch_size,
+        progress_callback=print_progress,
     )
     print(json.dumps(report, ensure_ascii=False, indent=2))
     if report["empty_chunk_count"]:

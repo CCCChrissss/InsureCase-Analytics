@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from backend.app.services import embedding_service
 
 
@@ -309,6 +311,129 @@ def test_build_chunk_embeddings_writes_one_embedding_per_chunk(tmp_path: Path) -
     assert report["embedding_dims"] == 64
     assert report["total_embeddings_in_table"] == 2
     assert report["empty_chunk_count"] == 0
+
+
+def test_build_chunk_embeddings_resume_only_writes_missing_chunks(tmp_path: Path) -> None:
+    db_path = tmp_path / "insurance_cases.db"
+    with make_connection(db_path) as connection:
+        connection.executescript((Path(__file__).resolve().parents[1] / "schema.sql").read_text(encoding="utf-8"))
+        insert_case_with_chunks(
+            connection,
+            case_id="case_resume",
+            case_number="115年評字第000002號",
+            dispute_type="理賠爭議",
+            chunks=["第一段。", "第二段。", "第三段。"],
+        )
+
+    first_report = embedding_service.build_chunk_embeddings(
+        db_path,
+        dims=64,
+        limit=1,
+        write_batch_size=1,
+    )
+    with make_connection(db_path) as connection:
+        first_row_before = connection.execute(
+            """
+            SELECT embedding, created_at
+            FROM chunk_embeddings
+            WHERE chunk_id = 'case_resume_chunk_0'
+              AND embedding_model = 'local_hashing_cjk_v1';
+            """
+        ).fetchone()
+
+    progress = []
+    second_report = embedding_service.build_chunk_embeddings(
+        db_path,
+        dims=64,
+        limit=1,
+        resume=True,
+        write_batch_size=1,
+        progress_callback=progress.append,
+    )
+    with make_connection(db_path) as connection:
+        first_row_after = connection.execute(
+            """
+            SELECT embedding, created_at
+            FROM chunk_embeddings
+            WHERE chunk_id = 'case_resume_chunk_0'
+              AND embedding_model = 'local_hashing_cjk_v1';
+            """
+        ).fetchone()
+
+    assert first_report["total_embeddings_in_table"] == 1
+    assert first_report["remaining_chunks"] == 2
+    assert second_report["existing_embeddings_before"] == 1
+    assert second_report["selected_chunks"] == 1
+    assert second_report["processed_chunks"] == 1
+    assert second_report["total_embeddings_in_table"] == 2
+    assert second_report["remaining_chunks"] == 1
+    assert second_report["resume"] is True
+    assert first_row_after["embedding"] == first_row_before["embedding"]
+    assert first_row_after["created_at"] == first_row_before["created_at"]
+    assert progress == [
+        {
+            "batch": 1,
+            "batch_chunks": 1,
+            "processed_chunks": 1,
+            "selected_chunks": 1,
+            "total_embeddings_in_table": 2,
+        }
+    ]
+
+
+def test_build_chunk_embeddings_commits_completed_batches_before_failure(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "insurance_cases.db"
+    with make_connection(db_path) as connection:
+        connection.executescript((Path(__file__).resolve().parents[1] / "schema.sql").read_text(encoding="utf-8"))
+        insert_case_with_chunks(
+            connection,
+            case_id="case_partial",
+            case_number="115年評字第000003號",
+            dispute_type="理賠爭議",
+            chunks=["第一段。", "第二段。"],
+        )
+
+    class FailingProvider:
+        provider_name = "fake"
+        model_name = "fake_model_v1"
+        dims = 3
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def embed_texts(self, texts: list[str]) -> list[embedding_service.EmbeddedText]:
+            self.calls += 1
+            if self.calls == 2:
+                raise RuntimeError("simulated provider failure")
+            return [make_embedding([1.0, 0.0, 0.0]) for _ in texts]
+
+    provider = FailingProvider()
+    monkeypatch.setattr(embedding_service, "create_embedding_provider", lambda **_: provider)
+
+    with pytest.raises(RuntimeError, match="simulated provider failure"):
+        embedding_service.build_chunk_embeddings(
+            db_path,
+            provider_name=provider.provider_name,
+            model_name=provider.model_name,
+            dims=provider.dims,
+            write_batch_size=1,
+        )
+
+    with make_connection(db_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT chunk_id
+            FROM chunk_embeddings
+            WHERE embedding_model = ?
+            ORDER BY chunk_id;
+            """,
+            (provider.model_name,),
+        ).fetchall()
+
+    assert [row["chunk_id"] for row in rows] == ["case_partial_chunk_0"]
 
 
 def test_replace_chunk_embeddings_accepts_fake_provider_output(tmp_path: Path, monkeypatch) -> None:

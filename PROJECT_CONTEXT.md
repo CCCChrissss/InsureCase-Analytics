@@ -128,6 +128,7 @@
 │  └─ tests/
 │     ├─ test_semantic_annotation_cli.py
 │     ├─ test_api.py
+│     ├─ test_build_chunk_embeddings.py
 │     ├─ test_build_case_chunks.py
 │     ├─ test_cross_year_pipeline_defaults.py
 │     ├─ test_data_quality.py
@@ -245,7 +246,7 @@ frontend/dist/
 - `backend/app/routers/statistics.py`：首頁與案件篩選使用的輕量總覽 API，支援可選 `roc_year`。
 - `backend/app/routers/summaries.py`：案件摘要 API。
 - `backend/app/services/case_service.py`：案件查詢、篩選、分頁、PDF path resolver。
-- `backend/app/services/embedding_service.py`：embedding provider 介面、本機 CJK hashing、本機 Sentence Transformers BGE、chunk embedding 建置、chunk 語意搜尋與案件層級語意相似；目前只啟用 `local` 與 `local_bge`，遠端 Hugging Face HTTP 實作已移除，本機 BGE 強制只讀本機模型快取。
+- `backend/app/services/embedding_service.py`：embedding provider 介面、本機 CJK hashing、本機 Sentence Transformers BGE、可續跑分批 chunk embedding 建置、chunk 語意搜尋與案件層級語意相似；目前只啟用 `local` 與 `local_bge`，遠端 Hugging Face HTTP 實作已移除，本機 BGE 強制只讀本機模型快取。
 - `backend/app/services/quality_service.py`：ROC 114 分析驗證報告資料。
 - `backend/app/services/query_suggestion_service.py`：選擇性查詢建議服務；目前只收錄 4 個已在離線實驗改善的短查詢，以精確詞彙觸發，回傳原查詢、建議查詢、規則編號與理由，並固定標示不自動套用。
 - `backend/app/services/search_service.py`：FTS5 搜尋、LIKE fallback、snippet 產生；FTS5 報錯或 0 筆時會進 LIKE fallback，且 fallback 會查案號、爭議類型與 normalized text。
@@ -255,7 +256,7 @@ frontend/dist/
 - `backend/scripts/extract_case_summaries.py`：從 normalized text 產生規則式摘要並寫入 `case_summaries`；已支援「二、申請人主張」與非固定序號的「判斷理由」標題。
 - `backend/scripts/annotate_semantic_benchmark.py`：本機互動式人工標註工具，逐筆顯示 benchmark 命中內容與相鄰 chunks，支援相關／部分相關／不相關、略過、離開、指定查詢與指定序號；每筆完成後即原子寫入 UTF-8 JSON，不呼叫外部 API。
 - `backend/scripts/build_case_chunks.py`：將 `case_texts.normalized_text` 切成可重跑的 `case_chunks`，保留 section hint、字元起訖位置與 chunk 長度，作為後續 embedding 前置資料。
-- `backend/scripts/build_chunk_embeddings.py`：為 `case_chunks` 建立 embedding，支援 `--provider`、`--model`、`--dims` 與 `--limit`，目前啟用 provider 為 `local` 與 `local_bge`。
+- `backend/scripts/build_chunk_embeddings.py`：為 `case_chunks` 建立 embedding，支援 `--provider`、`--model`、`--dims`、`--limit`、`--resume` 與 `--write-batch-size`；resume 模式只處理指定模型的缺漏 chunks，每批 commit 並輸出進度，目前啟用 provider 為 `local` 與 `local_bge`。
 - `backend/scripts/compare_embedding_models.py`：比較同一批共同 chunks 在 local hashing 與候選 embedding model 下的相似度排序，預設使用本機 BGE trial DB 並輸出至 `outputs/`，不會呼叫外部 API。
 - `backend/scripts/compare_semantic_annotations.py`：驗證並比較兩份完整 benchmark 標註，計算原始一致率、Cohen's Kappa、混淆矩陣與各查詢一致率，並輸出待仲裁衝突清單。
 - `backend/scripts/run_semantic_query_trial.py`：在指定 SQLite trial DB 上執行 query-to-document 語意搜尋試測，預設使用本機 BGE，支援重複 `--query`、固定 `benchmark-v1`、JSON 與 Markdown 輸出；查詢不修改 DB，也不使用外部 API。
@@ -266,6 +267,7 @@ frontend/dist/
 - `backend/scripts/check_data_quality.py`：檢查 metadata 與 SQLite DB 是否含 mojibake 類異常字元。
 - `backend/tests/test_api.py`：API smoke tests，覆蓋 health、statistics、cases、case detail、PDF、search、summary、similar、semantic-similar、semantic model params 與 quality。
 - `backend/tests/test_build_case_chunks.py`：chunking 邏輯、section hint 與 SQLite 寫入測試。
+- `backend/tests/test_build_chunk_embeddings.py`：embedding build CLI 測試，覆蓋 resume / write batch 參數與 stderr 批次進度輸出。
 - `backend/tests/test_cross_year_pipeline_defaults.py`：跨年度 pipeline 預設輸出路徑測試。
 - `backend/tests/test_data_quality.py`：資料品質檢查測試。
 - `backend/tests/test_embedding_service.py`：本機 hashing、本機 BGE fake model、provider factory、遠端 aliases 拒絕、維度與記憶體錯誤、embedding 寫入、搜尋排序及案件層級語意相似測試。
@@ -870,7 +872,7 @@ Query parameters：
 - 正式 React Router。
 - 前端自動化測試。
 - Hugging Face embeddings 尚未對正式 DB 全量重建；目前已完成 trial DB 1000 筆、離線 anchor-based 比較報告，以及 5 個查詢詞的 query-to-document 小樣本試測。
-- 本機 BGE 已完成 RTX 4050 CUDA 1000 chunks embeddings、15 詞／75 結果離線 benchmark 與 AI 輔助標註評測；尚未完成第二位獨立人工標註、歷史 API BGE 排名比較或正式 DB 全量重建。
+- 本機 BGE 已完成 RTX 4050 CUDA 1100 chunks embeddings；其中前 1000 筆已完成 15 詞／75 結果離線 benchmark 與 AI 輔助標註評測，另以 resume pipeline 新增 100 筆並確認原有向量未變；尚未完成第二位獨立人工標註、歷史 API BGE 排名比較或 trial DB 全量建置。
 - 選擇性查詢建議 service、response schema、API endpoint 與前端操作介面已完成；目前只支援 4 個核准短查詢，尚未擴充同義詞或模糊觸發。
 - 前端語意搜尋頁目前展示 Local BGE trial 摘要，不會直接查詢 trial DB 或呼叫外部 embedding API。
 - 15 詞 benchmark v1 已完成 75 筆 Codex-assisted 第一輪原文標註與 Precision@5 報告。
@@ -1317,12 +1319,13 @@ http://127.0.0.1:5173
 
 2026-08-04 已完成以下檢查：
 
-- `.\.venv\Scripts\python.exe -m pytest`：107 passed。
+- `.\.venv\Scripts\python.exe -m pytest`：111 passed。
 - `py .\backend\scripts\verify_case_db.py --expected-count 2992 --require-chunks --require-embeddings`：passed，`cases = 2992`、`case_chunks = 17254`、`chunk_embeddings = 17254`。
 - embedding、案件篩選、統計總覽與模型比較腳本的 `py_compile`：通過。
 - `pnpm build`：TypeScript 與 Vite production build 通過。
 - `compare_embedding_models.py --query 癌症 --top 1 --json`：預設使用本機 BGE trial DB，完成 1000 個共同 chunks 離線比較。
 - 正式執行程式未包含 Hugging Face router URL、Bearer header、Token 讀取或遠端 embedding HTTP client。
+- `build_chunk_embeddings.py --resume --limit 100 --write-batch-size 25`：本機 CUDA trial 從 1000 增至 1100 筆，4 batches 成功、空向量 0、剩餘 16154；原有 1000 筆 embedding、norm 與 `created_at` 逐筆變更數為 0。
 
 注意：語意搜尋頁第一次載入會計算 17254 筆 chunk embedding 相似度，可能短暫顯示「載入中」；等待數秒後會顯示結果。
 
@@ -1414,12 +1417,12 @@ http://127.0.0.1:5173
 3. 預設維持原查詢；只有使用者明確選擇後才以建議查詢重新搜尋。
 4. 已以桌面 1440×900 與手機 390×844 實際驗證，沒有水平溢出、按鈕重疊或 console error。
 
-### 下一步：完整本機 BGE trial DB 建置與驗證
+### 下一步：完成本機 BGE trial DB 全量建置與驗證
 
 建議工作：
 
-1. 先檢查目前 1000 筆 BGE trial DB 的可續跑行為與剩餘 chunk 數，不修改正式 DB。
-2. 在 RTX 4050 以本機模型快取完成 17254 chunks 的 BGE embeddings，全程不呼叫外部 API。
+1. 已新增可續跑與分批 commit pipeline，並完成 100 筆 smoke test；BGE 目前為 1100 筆，尚缺 16154 筆，原有 1000 筆逐筆比較變更數為 0。
+2. 經使用者確認後，在 RTX 4050 以本機模型快取完成剩餘 16154 chunks 的 BGE embeddings，全程不呼叫外部 API。
 3. 驗證 BGE embedding 數量、維度、缺漏、模型名稱與資料庫檔案大小。
 4. 重跑固定 15 詞 benchmark，記錄全量 candidates 的 Precision@5、查詢時間與排名變化。
 5. 第二位標註者的獨立判讀與一致率仍是正式品質宣稱前的必要工作。

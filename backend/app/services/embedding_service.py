@@ -374,9 +374,14 @@ def replace_chunk_embeddings(
     dims: int = DEFAULT_DIMS,
     provider_name: str | None = None,
     created_at: str | None = None,
+    provider: EmbeddingProvider | None = None,
 ) -> dict[str, Any]:
     timestamp = created_at or now_iso()
-    provider = create_embedding_provider(provider_name=provider_name, model_name=model_name, dims=dims)
+    provider = provider or create_embedding_provider(
+        provider_name=provider_name,
+        model_name=model_name,
+        dims=dims,
+    )
     payloads: list[tuple[Any, ...]] = []
     empty_chunk_ids: list[str] = []
 
@@ -429,14 +434,38 @@ def replace_chunk_embeddings(
     }
 
 
-def list_chunks_for_embedding(connection: sqlite3.Connection, limit: int | None = None) -> list[sqlite3.Row]:
-    sql = """
-        SELECT chunk_id, chunk_text
-        FROM case_chunks
-        ORDER BY case_id, chunk_index;
-    """
-    rows = connection.execute(sql).fetchall()
-    return rows[:limit] if limit is not None else rows
+def list_chunks_for_embedding(
+    connection: sqlite3.Connection,
+    limit: int | None = None,
+    *,
+    missing_embedding_model: str | None = None,
+) -> list[sqlite3.Row]:
+    if limit is not None and limit <= 0:
+        raise ValueError("limit must be greater than 0.")
+
+    params: list[Any] = []
+    if missing_embedding_model is None:
+        sql = """
+            SELECT c.chunk_id, c.chunk_text
+            FROM case_chunks AS c
+        """
+    else:
+        sql = """
+            SELECT c.chunk_id, c.chunk_text
+            FROM case_chunks AS c
+            LEFT JOIN chunk_embeddings AS e
+              ON e.chunk_id = c.chunk_id
+             AND e.embedding_model = ?
+            WHERE e.chunk_id IS NULL
+        """
+        params.append(missing_embedding_model)
+
+    sql += " ORDER BY c.case_id, c.chunk_index"
+    if limit is not None:
+        sql += " LIMIT ?"
+        params.append(limit)
+
+    return connection.execute(f"{sql};", params).fetchall()
 
 
 def build_chunk_embeddings(
@@ -446,25 +475,91 @@ def build_chunk_embeddings(
     dims: int = DEFAULT_DIMS,
     provider_name: str | None = None,
     limit: int | None = None,
+    resume: bool = False,
+    write_batch_size: int | None = None,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
+    if write_batch_size is not None and write_batch_size <= 0:
+        raise ValueError("write_batch_size must be greater than 0.")
+
     with sqlite3.connect(db_path) as connection:
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON;")
         initialize_schema(connection)
-        rows = list_chunks_for_embedding(connection, limit)
         provider = create_embedding_provider(provider_name=provider_name, model_name=model_name, dims=dims)
-        report = replace_chunk_embeddings(
-            connection,
-            rows,
-            model_name=provider.model_name,
-            dims=provider.dims,
-            provider_name=provider.provider_name,
+        existing_embeddings_before = int(
+            connection.execute(
+                "SELECT COUNT(*) FROM chunk_embeddings WHERE embedding_model = ?;",
+                (provider.model_name,),
+            ).fetchone()[0]
         )
+        rows = list_chunks_for_embedding(
+            connection,
+            limit,
+            missing_embedding_model=provider.model_name if resume else None,
+        )
+        effective_batch_size = write_batch_size or max(len(rows), 1)
+        processed_chunks = 0
+        embedded_chunks = 0
+        empty_chunk_count = 0
+        empty_chunk_ids: list[str] = []
+        batches_completed = 0
+
+        for batch_index, start in enumerate(range(0, len(rows), effective_batch_size), start=1):
+            batch_rows = rows[start : start + effective_batch_size]
+            try:
+                batch_report = replace_chunk_embeddings(
+                    connection,
+                    batch_rows,
+                    model_name=provider.model_name,
+                    dims=provider.dims,
+                    provider_name=provider.provider_name,
+                    provider=provider,
+                )
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+
+            processed_chunks += int(batch_report["processed_chunks"])
+            embedded_chunks += int(batch_report["embedded_chunks"])
+            empty_chunk_count += int(batch_report["empty_chunk_count"])
+            empty_chunk_ids.extend(batch_report["empty_chunk_ids"])
+            batches_completed = batch_index
+
+            if progress_callback is not None:
+                total_embeddings = int(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM chunk_embeddings WHERE embedding_model = ?;",
+                        (provider.model_name,),
+                    ).fetchone()[0]
+                )
+                progress_callback(
+                    {
+                        "batch": batch_index,
+                        "batch_chunks": len(batch_rows),
+                        "processed_chunks": processed_chunks,
+                        "selected_chunks": len(rows),
+                        "total_embeddings_in_table": total_embeddings,
+                    }
+                )
+
         total_embeddings = connection.execute(
             """
             SELECT COUNT(*)
             FROM chunk_embeddings
             WHERE embedding_model = ?;
+            """,
+            (provider.model_name,),
+        ).fetchone()[0]
+        remaining_chunks = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM case_chunks AS c
+            LEFT JOIN chunk_embeddings AS e
+              ON e.chunk_id = c.chunk_id
+             AND e.embedding_model = ?
+            WHERE e.chunk_id IS NULL;
             """,
             (provider.model_name,),
         ).fetchone()[0]
@@ -475,8 +570,17 @@ def build_chunk_embeddings(
         "embedding_model": provider.model_name,
         "embedding_dims": provider.dims,
         "total_embeddings_in_table": int(total_embeddings),
+        "existing_embeddings_before": existing_embeddings_before,
+        "selected_chunks": len(rows),
+        "remaining_chunks": int(remaining_chunks),
+        "resume": resume,
+        "write_batch_size": write_batch_size,
+        "batches_completed": batches_completed,
         "created_at": now_iso(),
-        **report,
+        "processed_chunks": processed_chunks,
+        "embedded_chunks": embedded_chunks,
+        "empty_chunk_count": empty_chunk_count,
+        "empty_chunk_ids": empty_chunk_ids[:20],
     }
     if isinstance(provider, LocalSentenceTransformerEmbeddingProvider):
         result["embedding_source_model"] = provider.source_model_name
