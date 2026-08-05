@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import re
 from typing import Any
 
 from backend.app.database import connect
@@ -18,6 +19,32 @@ def make_snippet(text: str | None, query: str, radius: int = 70) -> str | None:
     prefix = "..." if start > 0 else ""
     suffix = "..." if end < len(text) else ""
     return f"{prefix}{text[start:end].strip()}{suffix}"
+
+
+def classify_decision_result(metadata_value: str | None, holding: str | None) -> str | None:
+    cleaned_holding = re.sub(r"\s+", "", holding or "")
+    if cleaned_holding:
+        favorable = bool(
+            re.search(
+                r"應(?:再)?給付|應恢復|確認.*契約.*存在|評議申請為有理由|請求為有理由",
+                cleaned_holding,
+            )
+        )
+        rejected = bool(re.search(r"尚難為?有利|無理由|駁回", cleaned_holding))
+        inadmissible = "不予受理" in cleaned_holding or "不受理" in cleaned_holding
+        if favorable and (rejected or inadmissible):
+            return "部分有理由"
+        if favorable:
+            return "有理由"
+        if inadmissible and not rejected:
+            return "不受理"
+        if rejected:
+            return "無理由"
+
+    cleaned_metadata = (metadata_value or "").strip()
+    if cleaned_metadata and cleaned_metadata != "全部":
+        return cleaned_metadata
+    return None
 
 
 def search_with_like(
@@ -43,9 +70,11 @@ def search_with_like(
     rows = connection.execute(
         """
         SELECT cases.case_id, cases.case_number, cases.decision_date,
-               cases.dispute_type, case_texts.normalized_text
+               cases.dispute_type, cases.decision_result, case_summaries.holding,
+               case_texts.normalized_text
         FROM case_texts
         JOIN cases ON cases.case_id = case_texts.case_id
+        LEFT JOIN case_summaries ON case_summaries.case_id = cases.case_id
         WHERE cases.case_number LIKE ?
            OR cases.dispute_type LIKE ?
            OR case_texts.normalized_text LIKE ?
@@ -75,10 +104,12 @@ def search_cases(query: str, *, page: int = 1, page_size: int = 20) -> dict[str,
             rows = connection.execute(
                 """
                 SELECT cases.case_id, cases.case_number, cases.decision_date,
-                       cases.dispute_type, case_texts.normalized_text
+                       cases.dispute_type, cases.decision_result, case_summaries.holding,
+                       case_texts.normalized_text
                 FROM case_search
                 JOIN cases ON cases.case_id = case_search.case_id
                 JOIN case_texts ON case_texts.case_id = cases.case_id
+                LEFT JOIN case_summaries ON case_summaries.case_id = cases.case_id
                 WHERE case_search MATCH ?
                 ORDER BY bm25(case_search), cases.decision_date DESC
                 LIMIT ? OFFSET ?;
@@ -110,6 +141,7 @@ def search_cases(query: str, *, page: int = 1, page_size: int = 20) -> dict[str,
                 "case_number": row["case_number"],
                 "decision_date": row["decision_date"],
                 "dispute_type": row["dispute_type"],
+                "decision_result": classify_decision_result(row["decision_result"], row["holding"]),
                 "snippet": make_snippet(row["normalized_text"], cleaned_query),
                 "match_source": match_source,
             }

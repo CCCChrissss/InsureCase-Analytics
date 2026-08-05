@@ -80,6 +80,7 @@ export type SearchResult = {
   case_number: string;
   decision_date: string | null;
   dispute_type: string | null;
+  decision_result: string | null;
   snippet: string | null;
   match_source: string;
 };
@@ -112,6 +113,25 @@ export type SemanticSearchResponse = {
   embedding_device: string;
   elapsed_ms: number;
   items: SemanticSearchResult[];
+  total_candidates: number;
+};
+
+export type SemanticCaseScore = {
+  case_id: string;
+  score: number;
+  section_hint: string | null;
+  chunk_index: number;
+  chunk_text: string;
+};
+
+export type SemanticCaseScoresResponse = {
+  query: string;
+  embedding_provider: string;
+  embedding_model: string;
+  embedding_dims: number;
+  embedding_device: string;
+  elapsed_ms: number;
+  items: SemanticCaseScore[];
   total_candidates: number;
 };
 

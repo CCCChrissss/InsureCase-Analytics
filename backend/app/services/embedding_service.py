@@ -735,6 +735,126 @@ def semantic_search(
     }
 
 
+def semantic_case_scores(
+    query: str,
+    *,
+    case_ids: Sequence[str],
+    model_name: str = MODEL_NAME,
+    provider_name: str | None = None,
+) -> dict[str, Any]:
+    started_at = time.perf_counter()
+    unique_case_ids = list(dict.fromkeys(case_id.strip() for case_id in case_ids if case_id.strip()))
+    if not unique_case_ids:
+        raise EmbeddingProviderError("At least one case ID is required for semantic scoring.")
+    if len(unique_case_ids) > 20:
+        raise EmbeddingProviderError("At most 20 case IDs can be scored at once.")
+
+    resolved_provider_name = (provider_name or EMBEDDING_PROVIDER).strip().lower()
+    resolved_model_name = (model_name or EMBEDDING_MODEL).strip()
+    if resolved_provider_name in LOCAL_BGE_PROVIDER_ALIASES and resolved_model_name in {
+        LOCAL_MODEL_NAME,
+        HUGGINGFACE_DEFAULT_MODEL_NAME,
+    }:
+        resolved_model_name = LOCAL_BGE_MODEL_NAME
+
+    with connect() as connection:
+        inventory_row = connection.execute(
+            """
+            SELECT COUNT(*) AS embedding_count,
+                   MIN(embedding_dims) AS min_dims,
+                   MAX(embedding_dims) AS max_dims
+            FROM chunk_embeddings
+            WHERE embedding_model = ?;
+            """,
+            (resolved_model_name,),
+        ).fetchone()
+
+    embedding_count = int(inventory_row["embedding_count"])
+    if embedding_count == 0:
+        raise EmbeddingProviderError(
+            f"No stored embeddings were found for model '{resolved_model_name}' in database "
+            f"'{DEFAULT_DB_PATH.name}'. Start the API with a database that contains this model."
+        )
+    min_dims = int(inventory_row["min_dims"])
+    max_dims = int(inventory_row["max_dims"])
+    if min_dims != max_dims:
+        raise EmbeddingProviderError(
+            f"Stored embeddings for model '{resolved_model_name}' contain mixed dimensions: "
+            f"{min_dims} and {max_dims}. Rebuild the model embeddings before searching."
+        )
+
+    provider = create_embedding_provider(
+        provider_name=resolved_provider_name,
+        model_name=resolved_model_name,
+        dims=min_dims,
+    )
+    if min_dims != provider.dims:
+        raise EmbeddingProviderError(
+            f"Stored embeddings for model '{provider.model_name}' have {min_dims} dimensions, "
+            f"but query provider '{provider.provider_name}' produces {provider.dims} dimensions. "
+            "Use a matching embedding_provider for the selected embedding_model."
+        )
+
+    query_embeddings = provider.embed_texts([query])
+    validate_provider_embeddings(
+        provider,
+        query_embeddings,
+        expected_count=1,
+        context_ids=["query"],
+    )
+    embedded_query = query_embeddings[0]
+    if embedded_query.token_count == 0 or embedded_query.norm == 0:
+        rows: list[sqlite3.Row] = []
+    else:
+        placeholders = ", ".join("?" for _ in unique_case_ids)
+        with connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT chunk_embeddings.chunk_id, chunk_embeddings.embedding,
+                       chunk_embeddings.embedding_dims,
+                       case_chunks.case_id, case_chunks.chunk_index,
+                       case_chunks.section_hint, case_chunks.chunk_text
+                FROM chunk_embeddings
+                JOIN case_chunks ON case_chunks.chunk_id = chunk_embeddings.chunk_id
+                WHERE chunk_embeddings.embedding_model = ?
+                  AND case_chunks.case_id IN ({placeholders});
+                """,
+                (provider.model_name, *unique_case_ids),
+            ).fetchall()
+
+    best_by_case: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        candidate_vector = unpack_vector(row["embedding"], row["embedding_dims"])
+        score = dot_product(embedded_query.vector, candidate_vector)
+        current = best_by_case.get(row["case_id"])
+        if current is None or score > current["score"]:
+            best_by_case[row["case_id"]] = {
+                "case_id": row["case_id"],
+                "score": score,
+                "section_hint": row["section_hint"],
+                "chunk_index": row["chunk_index"],
+                "chunk_text": row["chunk_text"],
+            }
+
+    items = []
+    for case_id in unique_case_ids:
+        item = best_by_case.get(case_id)
+        if item is None:
+            continue
+        items.append({**item, "score": round(item["score"], 4)})
+
+    return {
+        "query": query,
+        "embedding_provider": provider.provider_name,
+        "embedding_model": provider.model_name,
+        "embedding_dims": provider.dims,
+        "embedding_device": embedding_device(provider),
+        "elapsed_ms": round((time.perf_counter() - started_at) * 1000, 2),
+        "items": items,
+        "total_candidates": len(rows),
+    }
+
+
 def embedding_device(provider: EmbeddingProvider) -> str:
     if isinstance(provider, LocalSentenceTransformerEmbeddingProvider):
         return provider.resolved_device

@@ -21,12 +21,18 @@ def create_search_fixture(db_path: Path) -> None:
               case_number TEXT NOT NULL UNIQUE,
               roc_year INTEGER NOT NULL,
               decision_date TEXT,
-              dispute_type TEXT
+              dispute_type TEXT,
+              decision_result TEXT
             );
 
             CREATE TABLE case_texts (
               case_id TEXT PRIMARY KEY,
               normalized_text TEXT
+            );
+
+            CREATE TABLE case_summaries (
+              case_id TEXT PRIMARY KEY,
+              holding TEXT
             );
 
             CREATE VIRTUAL TABLE case_search USING fts5(
@@ -37,14 +43,17 @@ def create_search_fixture(db_path: Path) -> None:
             );
 
             INSERT INTO cases (
-              case_id, case_number, roc_year, decision_date, dispute_type
+              case_id, case_number, roc_year, decision_date, dispute_type, decision_result
             )
             VALUES (
-              'case_1', '115年評字第000001號', 115, '115.01.09', '保險金給付'
+              'case_1', '115年評字第000001號', 115, '115.01.09', '保險金給付', '無理由'
             );
 
             INSERT INTO case_texts (case_id, normalized_text)
             VALUES ('case_1', '申請人主張其癌症治療費用應由保險公司給付。');
+
+            INSERT INTO case_summaries (case_id, holding)
+            VALUES ('case_1', '本中心就申請人之請求尚難為有利申請人之認定。');
 
             INSERT INTO case_search (
               case_id, case_number, dispute_type, normalized_text
@@ -69,8 +78,22 @@ def test_search_uses_like_fallback_when_fts5_returns_empty(
 
     assert result["total"] == 1
     assert result["items"][0]["case_id"] == "case_1"
+    assert result["items"][0]["decision_result"] == "無理由"
     assert result["items"][0]["match_source"] == "like_fallback_empty_fts5"
     assert "癌症" in result["items"][0]["snippet"]
+
+
+def test_classify_decision_result_uses_holding_instead_of_filter_metadata() -> None:
+    assert search_service.classify_decision_result("全部", "相對人應給付申請人新臺幣十萬元整。") == "有理由"
+    assert search_service.classify_decision_result(
+        "全部",
+        "相對人應給付申請人新臺幣十萬元整。申請人其餘請求尚難為有利之認定。",
+    ) == "部分有理由"
+    assert search_service.classify_decision_result("全部", "本中心就申請人之請求尚難為有利之認定。") == "無理由"
+    assert search_service.classify_decision_result("全部", "本中心不予受理。") == "不受理"
+    assert search_service.classify_decision_result("全部", "確認兩造間保險契約關係存在。") == "有理由"
+    assert search_service.classify_decision_result("全部", "相對人應恢復保險契約之效力。") == "有理由"
+    assert search_service.classify_decision_result("全部", "文字不足以判斷。") is None
 
 
 def test_like_fallback_searches_case_number_when_fts5_returns_empty(

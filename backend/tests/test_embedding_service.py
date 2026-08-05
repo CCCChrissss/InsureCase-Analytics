@@ -576,6 +576,43 @@ def test_semantic_search_ranks_related_chunk_first(tmp_path: Path, monkeypatch) 
     assert result["items"][0]["score"] > 0
 
 
+def test_semantic_case_scores_returns_best_chunk_for_each_requested_case(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db_path = tmp_path / "insurance_cases.db"
+    with make_connection(db_path) as connection:
+        connection.executescript((Path(__file__).resolve().parents[1] / "schema.sql").read_text(encoding="utf-8"))
+        insert_case_with_chunks(
+            connection,
+            case_id="case_cancer",
+            case_number="115年評字第000001號",
+            dispute_type="理賠爭議",
+            chunks=["癌症治療後申請保險金。", "本段內容與住院日數有關。"],
+        )
+        insert_case_with_chunks(
+            connection,
+            case_id="case_hospital",
+            case_number="115年評字第000002號",
+            dispute_type="住院爭議",
+            chunks=["住院日額保險金與住院天數計算爭議。"],
+        )
+    embedding_service.build_chunk_embeddings(db_path)
+    monkeypatch.setattr(embedding_service, "connect", lambda: make_connection(db_path))
+
+    result = embedding_service.semantic_case_scores(
+        "癌症保險金",
+        case_ids=["case_hospital", "case_cancer", "case_hospital"],
+    )
+
+    assert result["embedding_provider"] == "local"
+    assert [item["case_id"] for item in result["items"]] == ["case_hospital", "case_cancer"]
+    scores = {item["case_id"]: item for item in result["items"]}
+    assert scores["case_cancer"]["score"] > scores["case_hospital"]["score"]
+    assert "癌症" in scores["case_cancer"]["chunk_text"]
+    assert result["total_candidates"] == 3
+
+
 def test_semantic_search_uses_stored_dims_when_global_dims_differ(tmp_path: Path, monkeypatch) -> None:
     db_path = tmp_path / "insurance_cases.db"
     with make_connection(db_path) as connection:

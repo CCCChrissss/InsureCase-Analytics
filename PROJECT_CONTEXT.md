@@ -166,6 +166,7 @@
       ├─ components/
       │  ├─ CaseDetailView.tsx
       │  ├─ CaseWorkspaceModal.tsx
+      │  ├─ SimilarityExplanationDialog.tsx
       │  └─ ui.tsx
       ├─ config/
       │  └─ semantic.ts
@@ -313,12 +314,13 @@ frontend/dist/
 - `frontend/src/main.tsx`：React app 掛載入口。
 - `frontend/src/App.tsx`：主版面、側邊欄導覽、背景頁面 route 與全域案件工作區整合。
 - `frontend/src/api/client.ts`：API base URL、`apiGet`、`apiGetOptional`。
-- `frontend/src/config/semantic.ts`：理賠人員主搜尋與案件 Dashboard 共用的本機 BGE provider、模型名稱與語意候選上限。
+- `frontend/src/config/semantic.ts`：理賠人員主搜尋與案件 Dashboard 共用的本機 BGE provider 與模型名稱。
 - `frontend/src/types.ts`：前端 API response 型別，包含查詢建議回應。
 - `frontend/src/hooks/useAsyncData.ts`：共用非同步資料載入 hook。
 - `frontend/src/hooks/useOpenCases.ts`：已開啟案件分頁、切換、關閉、最小化與 `sessionStorage` 狀態保存。
 - `frontend/src/components/CaseDetailView.tsx`：理賠人員導向的案件摘要、判斷理由、法源、相關案件及原文閱讀區。
 - `frontend/src/components/CaseWorkspaceModal.tsx`：不離開搜尋背景頁的彈出式案件 Dashboard 與瀏覽器式案件分頁。
+- `frontend/src/components/SimilarityExplanationDialog.tsx`：以理賠人員可理解的白話說明相似度用途、產生方式與限制。
 - `frontend/src/components/ui.tsx`：PageHeader、PanelHeader、Metric、AsyncBlock、EmptyState。
 - `frontend/src/pages/`：案件工作台、全文搜尋、語意搜尋與分析驗證頁；主要導覽只顯示案件工作台與全文搜尋，技術頁保留 direct route。
 - `frontend/src/utils/legalReferences.ts`：從案件原文規則式擷取法規與保單條款名稱、條號及來源段落。
@@ -437,7 +439,7 @@ VITE_API_BASE_URL 若存在則使用該值
 
 - 側邊欄主要導覽：案件工作台、全文搜尋；另有已開啟案件數量與還原按鈕。
 - 案件工作台：年度、爭議類型、案號篩選與案件列表，可選擇每頁顯示 10、15 或 20 筆。
-- 全文搜尋：同時執行 FTS5 / LIKE 關鍵字搜尋與本機 BGE 語意搜尋，將案件去重後交錯顯示，標示關鍵字、語意或兩者皆命中；可選擇顯示 10、15 或 20 筆。語意服務失敗時仍保留關鍵字結果。
+- 全文搜尋：完整分頁顯示所有 FTS5 / LIKE 命中案件，每頁可選擇 10、15 或 20 筆；本機 BGE 只替目前頁面的案件計算 query-to-case 相似度。每筆在開啟 Dashboard 前即顯示相似度與由摘要主文保守分類的評議結果；語意服務失敗時仍保留全文結果與翻頁。
 - 案件工作區：瀏覽器式案件分頁、關閉、切換、最小化、摘要、評議結論、申請人主張、判斷理由、法源與契約條款、本機 BGE 語意相似案件與相似度、查看原文及正式 PDF。相似度為 cosine similarity 的百分比表示，不是相關機率或理賠正確率。
 - 語意搜尋：輸入查詢文字，展示 embedding 模型、候選 chunk、cosine similarity、score bar、段落提示、命中段落與案件來源。
 - 統計分析：目前保留 direct route 與後端 API 作為輔助檢查，不放在主要導覽。
@@ -679,6 +681,7 @@ Query parameters：
 - 若 FTS5 沒報錯但回傳 0 筆，也會 fallback 到 `LIKE`。
 - FTS5 與 LIKE fallback 的查詢範圍皆包含案號、爭議類型與 normalized text。
 - 回傳 snippet 與 `match_source`。
+- 回傳由摘要主文保守分類的 `decision_result`；無法可靠分類時為 `null`。
 
 ### Query Suggestions
 
@@ -727,6 +730,20 @@ Query parameters：
 - 回傳實際 provider、model、device、維度、API 耗時、候選數，以及命中的 `chunk_text`、`section_hint`、`score` 與案件基本資料。
 - 搜尋前先驗證 stored model 存在、維度一致及 provider / model 相容，不存在時不載入 BGE 模型。
 - 若指定 `embedding_provider=huggingface` 或 `hf`，API 會回傳 400 且不送出外部 request；本機 BGE 必須搭配 `embedding_model=BAAI/bge-large-zh-v1.5-local`。
+
+```text
+GET /api/semantic-case-scores
+```
+
+用途：為全文搜尋目前頁面的案件計算查詢文字相似度，不改變全文搜尋的命中範圍與分頁。
+
+Query parameters：
+
+- `q`：必填搜尋文字。
+- `case_ids`：逗號分隔的案件 ID，至少 1 筆、最多 20 筆，重複 ID 會去重。
+- `embedding_model`、`embedding_provider`：使用方式與 `/api/semantic-search` 相同。
+
+每案回傳分數最高的 chunk、段落提示與 `score`。前端將分數轉成「與搜尋內容相近 XX%」；此數字只供排序與查找，不是理賠機率或法律判斷。
 
 ### Summaries
 
@@ -1468,7 +1485,8 @@ http://127.0.0.1:5173
 - 已建立 embedding provider 介面，目前只啟用 `local` 與 `local_bge`；`huggingface` / `hf`、`openai` / `ai` 均會明確拒絕執行。
 - 已完成本機 `BAAI/bge-large-zh-v1.5` CUDA provider、模型快取、17254 chunks / 1024 維全量 trial 與 15 詞／75 結果的完全離線 benchmark；RTX 4050 GPU 長時間推論已驗證，正式 DB 未切換。
 - 已將前端主流程改為理賠案件工作台與全文搜尋；案件以彈出式 Dashboard 開啟，不改變搜尋背景 route，並支援瀏覽器式多案件分頁、關閉、最小化、重新整理還原、原文切換與正式 PDF。
-- 已將理賠人員主搜尋改為 FTS5 / LIKE 與本機 BGE 的混合式查找；結果依案件去重並標示命中來源，搜尋與案件清單皆可選擇顯示 10、15 或 20 筆。語意服務失敗時會降級保留關鍵字結果。
+- 已將理賠人員主搜尋改為完整 FTS5 / LIKE 分頁，每頁可選擇 10、15 或 20 筆；本機 BGE 為目前頁面的案件補上 query-to-case 相似度，並在開啟案件前顯示相似度與評議結果。語意服務失敗時仍保留全文搜尋與翻頁。
+- 已新增「相似度怎麼看」白話說明視窗，明確說明數字用於查找排序，不是理賠機率或法律結論。
 - 案件 Dashboard 的相關案件已切換為本機 BGE 案件層級語意相似 API，畫面顯示相似度百分比與主要相近內容；規則式 `/similar` endpoint 僅保留為 baseline 與測試用途。
 - 已完成全量 17254-candidate 的 75 筆 Codex-assisted 第一輪標註與評測；69 筆相關、4 筆部分相關、2 筆不相關，Strict P@5 `0.9200`、Lenient P@5 `0.9733`。最低分查詢為 `違反告知義務`，Strict P@5 `0.2000`，主要混淆來自不同角色的說明／告知義務及保費催告內容。
 - 曾完成 Hugging Face API provider 與小批量試測；目前遠端 HTTP provider、response parser、retry 與 Token 設定已從 production code 移除，歷史結果只保留在文件與 trial DB。

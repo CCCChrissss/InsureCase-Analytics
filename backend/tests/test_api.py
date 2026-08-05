@@ -111,6 +111,7 @@ def test_search_cancer() -> None:
     assert data["query"] == "癌症"
     assert data["total"] >= 1
     assert len(data["items"]) >= 1
+    assert "decision_result" in data["items"][0]
     assert data["items"][0]["match_source"] in {
         "fts5",
         "like_fallback_error",
@@ -267,6 +268,62 @@ def test_semantic_search_accepts_embedding_model_params(monkeypatch) -> None:
     assert response.json()["embedding_model"] == "BAAI/bge-large-zh-v1.5"
     assert response.json()["embedding_provider"] == "huggingface"
     assert response.json()["embedding_device"] == "cuda"
+
+
+def test_semantic_case_scores_accepts_page_case_ids(monkeypatch) -> None:
+    captured = {}
+
+    def fake_semantic_case_scores(query: str, **kwargs):
+        captured["query"] = query
+        captured.update(kwargs)
+        return {
+            "query": query,
+            "embedding_provider": kwargs["provider_name"],
+            "embedding_model": kwargs["model_name"],
+            "embedding_dims": 1024,
+            "embedding_device": "cuda",
+            "elapsed_ms": 8.5,
+            "items": [
+                {
+                    "case_id": "case_1",
+                    "score": 0.8123,
+                    "section_hint": "判斷理由",
+                    "chunk_index": 2,
+                    "chunk_text": "癌症住院治療是否符合保單約定。",
+                }
+            ],
+            "total_candidates": 6,
+        }
+
+    monkeypatch.setattr(semantic_search_router, "semantic_case_scores", fake_semantic_case_scores)
+
+    response = client.get(
+        "/api/semantic-case-scores",
+        params={
+            "q": "癌症住院",
+            "case_ids": "case_1,case_2,case_1",
+            "embedding_model": "BAAI/bge-large-zh-v1.5-local",
+            "embedding_provider": "local_bge",
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["query"] == "癌症住院"
+    assert captured["case_ids"] == ["case_1", "case_2"]
+    assert response.json()["items"][0]["score"] == 0.8123
+
+
+def test_semantic_case_scores_rejects_more_than_twenty_cases() -> None:
+    response = client.get(
+        "/api/semantic-case-scores",
+        params={
+            "q": "癌症住院",
+            "case_ids": ",".join(f"case_{index}" for index in range(21)),
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "At most 20 case IDs can be scored at once."
 
 
 def test_embedding_status_reports_available_models(monkeypatch) -> None:

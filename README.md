@@ -198,6 +198,7 @@ GET /api/dispute-types
 GET /api/files/{case_id}/pdf
 GET /api/search
 GET /api/semantic-search
+GET /api/semantic-case-scores
 GET /api/cases/{case_id}/summary
 GET /api/cases/{case_id}/similar
 GET /api/cases/{case_id}/semantic-similar
@@ -225,24 +226,25 @@ FTS5 與 LIKE fallback 的搜尋範圍皆包含：
 - 爭議類型 `dispute_type`
 - 正規化全文 `normalized_text`
 
-理賠人員使用的前端搜尋頁採混合式查找：
+理賠人員使用的前端搜尋頁採「全文命中加語意評分」：
 
 ```text
 FTS5 / LIKE 關鍵字結果
   +
-本機 BAAI/bge-large-zh-v1.5 語意候選
+本機 BAAI/bge-large-zh-v1.5 逐案評分
   ↓
-依案件去重並交錯顯示
+完整分頁顯示全文命中案件
 ```
 
 前端搜尋頁會展示：
 
-- 查詢文字、關鍵字命中數、語意候選數，並可選擇顯示 10、15 或 20 筆。
-- 每筆結果的案號、決定日期、爭議類型與命中文字片段。
-- 每筆結果標示「關鍵字命中」、「語意相關」或「關鍵字與語意」。
+- 查詢文字、全部命中案件數、目前頁數與總頁數，每頁可選擇 10、15 或 20 筆。
+- 每筆結果的案號、決定日期、爭議類型、命中文字片段、評議結果與「與搜尋內容相近 XX%」。
+- 評議結果由摘要主文保守分類為有理由、部分有理由、無理由或不受理；無法可靠分類時顯示尚未整理。
+- 「相似度怎麼看」以白話說明搜尋文字、案件內容與接近程度的關係，不在理賠人員主畫面呈現模型公式。
 - 點擊案件後直接開啟彈出式案件 Dashboard，背景仍保留原查詢與結果。
 
-語意查詢固定指定 `local_bge` 與 `BAAI/bge-large-zh-v1.5-local`，只讀取本機模型快取與目前後端連線 DB 的既有 embeddings，不呼叫 Hugging Face API。若本機 BGE 或對應 embeddings 無法使用，前端保留關鍵字結果並提示語意補充暫時不可用。
+語意評分只針對目前頁面的 10 至 20 件全文命中案件，取各案件中與查詢最接近的 chunk 分數。查詢固定指定 `local_bge` 與 `BAAI/bge-large-zh-v1.5-local`，只讀取本機模型快取與目前後端連線 DB 的既有 embeddings，不呼叫 Hugging Face API。若本機 BGE 或對應 embeddings 無法使用，前端仍保留完整全文搜尋與翻頁。
 
 `match_source` 與 FTS5 / LIKE fallback 技術資訊仍由 API 保留，但不放在理賠人員的主要畫面；需要驗證搜尋來源時可由 API response 或後端測試確認。
 

@@ -72,6 +72,7 @@ class SearchResult(BaseModel):
     case_number: str
     decision_date: str | None
     dispute_type: str | None
+    decision_result: str | None
     snippet: str | None
     match_source: str
 
@@ -104,6 +105,25 @@ class SemanticSearchResponse(BaseModel):
     embedding_device: str
     elapsed_ms: float
     items: list[SemanticSearchResult]
+    total_candidates: int
+
+
+class SemanticCaseScore(BaseModel):
+    case_id: str
+    score: float
+    section_hint: str | None
+    chunk_index: int
+    chunk_text: str
+
+
+class SemanticCaseScoresResponse(BaseModel):
+    query: str
+    embedding_provider: str
+    embedding_model: str
+    embedding_dims: int
+    embedding_device: str
+    elapsed_ms: float
+    items: list[SemanticCaseScore]
     total_candidates: int
 
 

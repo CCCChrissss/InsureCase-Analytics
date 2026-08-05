@@ -1,4 +1,2 @@
 export const LOCAL_BGE_PROVIDER = "local_bge";
 export const LOCAL_BGE_MODEL = "BAAI/bge-large-zh-v1.5-local";
-export const SEMANTIC_SEARCH_CANDIDATE_LIMIT = 50;
-
