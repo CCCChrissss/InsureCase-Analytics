@@ -286,4 +286,8 @@ POC 第二輪不是獨立盲標，一致率與 Kappa 即使為 `1.0000` 也不�
 4. CPU 或 GPU 的全量重建時間可接受。（GPU 全量約 28 分 52 秒，已完成）
 5. 17254 筆 embeddings 全數建立且資料庫驗證通過。（已完成）
 6. 全量第一輪與 POC 混合式第二輪已完成；正式第二位獨立標註與有效信度估計尚未完成。
-7. 前端與 API 明確顯示實際 provider、model 與 device。
+7. 前端與 API 明確顯示實際 provider、model、device、維度、候選數與耗時。（已完成）
+8. API 暖機查詢小於 5 秒。（目前約 2.5 至 2.8 秒，已完成）
+9. 冷啟動時間或背景 warmup 達到可接受的互動體驗。（目前約 66.65 秒，未完成）
+
+API / 前端完整試跑證據與啟動方式記錄於 `docs/local_bge_api_frontend_trial.md`。Local BGE API 必須以專案 `.venv` 啟動；系統 `py` launcher 目前是 CPU-only PyTorch，不能用來驗證 CUDA。

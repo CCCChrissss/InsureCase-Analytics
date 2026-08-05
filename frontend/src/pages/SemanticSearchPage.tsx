@@ -1,7 +1,6 @@
 import React from "react";
 import {
   AlertTriangle,
-  BarChart3,
   BrainCircuit,
   CheckCircle2,
   Database,
@@ -15,7 +14,7 @@ import {
 import { apiGet, apiPath } from "../api/client";
 import { AsyncBlock, Metric, PageHeader, PanelHeader } from "../components/ui";
 import { useAsyncData } from "../hooks/useAsyncData";
-import type { QuerySuggestionResponse, SemanticSearchResponse } from "../types";
+import type { EmbeddingStatusResponse, QuerySuggestionResponse, SemanticSearchResponse } from "../types";
 
 type SemanticModelMode = "local" | "local_bge_trial";
 
@@ -34,16 +33,8 @@ const LOCAL_BGE_TRIAL_MODEL = {
   provider: "local_bge",
   model: "BAAI/bge-large-zh-v1.5-local",
   dims: 1024,
-  candidates: 1000,
+  candidates: 17254,
 };
-
-const TRIAL_QUERY_SUMMARY = [
-  { query: "除外責任", top1: "除外責任", note: "Top 5 中 4 筆為除外責任，結果集中。" },
-  { query: "必要性醫療", top1: "必要性醫療", note: "Top 5 全部為必要性醫療，穩定度最高。" },
-  { query: "癌症", top1: "停效期間事故認定", note: "有命中癌症類型，也會跨到疾病事實相關爭點。" },
-  { query: "住院", top1: "必要性醫療", note: "多數結果落在醫療必要性與承保範圍。" },
-  { query: "失能", top1: "投保時已患疾病或在妊娠中", note: "語意相關但類型分散，需要回看 chunk 原文。" },
-];
 
 function formatScore(score: number) {
   return score.toFixed(4);
@@ -65,19 +56,24 @@ export function SemanticSearchPage({ onOpenCase }: { onOpenCase: (caseId: string
   const [modelMode, setModelMode] = React.useState<SemanticModelMode>("local");
   const selectedModel = modelMode === "local" ? LOCAL_MODEL : LOCAL_BGE_TRIAL_MODEL;
   const isLocalMode = modelMode === "local";
+  const embeddingStatus = useAsyncData(
+    () => apiGet<EmbeddingStatusResponse>(apiPath("/embedding-status")),
+    []
+  );
+  const selectedInventory = embeddingStatus.data?.models.find(
+    (item) => item.embedding_model === selectedModel.model
+  );
   const results = useAsyncData(
     () =>
-      isLocalMode
-        ? apiGet<SemanticSearchResponse>(
-            apiPath("/semantic-search", {
-              q: submittedQuery,
-              limit,
-              embedding_provider: LOCAL_MODEL.provider,
-              embedding_model: LOCAL_MODEL.model,
-            })
-          )
-        : Promise.resolve<SemanticSearchResponse | null>(null),
-    [submittedQuery, limit, isLocalMode]
+      apiGet<SemanticSearchResponse>(
+        apiPath("/semantic-search", {
+          q: submittedQuery,
+          limit,
+          embedding_provider: selectedModel.provider,
+          embedding_model: selectedModel.model,
+        })
+      ),
+    [submittedQuery, limit, modelMode]
   );
   const suggestions = useAsyncData(
     () =>
@@ -110,7 +106,7 @@ export function SemanticSearchPage({ onOpenCase }: { onOpenCase: (caseId: string
           >
             <Database size={20} />
             <strong>Local MVP</strong>
-            <span>正式 DB 目前使用的模型，可直接查詢 17254 個 chunks。</span>
+            <span>本機 hashing baseline，可查詢目前 API 所連資料庫中的 embeddings。</span>
           </button>
           <button
             type="button"
@@ -119,7 +115,7 @@ export function SemanticSearchPage({ onOpenCase }: { onOpenCase: (caseId: string
           >
             <FlaskConical size={20} />
             <strong>Local BGE Trial</strong>
-            <span>已在 RTX 4050 完成 1000 筆離線試測，但正式 DB 尚未切換。</span>
+            <span>已完成 17254 筆本機 BGE embeddings，可透過 trial backend 實際查詢。</span>
           </button>
         </div>
         <div className="model-status-panel">
@@ -129,18 +125,25 @@ export function SemanticSearchPage({ onOpenCase }: { onOpenCase: (caseId: string
               目前選擇：{selectedModel.label} / {selectedModel.model} / {selectedModel.dims} 維
             </span>
           </div>
+          <div>
+            <Database size={18} />
+            <span>
+              API 資料庫：{embeddingStatus.data?.database_name ?? "讀取中"} / 模型 embeddings：
+              {selectedInventory?.embedding_count.toLocaleString("zh-TW") ?? "未提供"}
+            </span>
+          </div>
           <div className={isLocalMode ? "" : "semantic-warning"}>
             <AlertTriangle size={18} />
             <span>
               {isLocalMode
-                ? "此模式會查詢正式 SQLite DB。搜尋品質是本機 hashing MVP，適合展示流程，不等同正式 AI 語意模型。"
-                : "此模式目前只展示本機 BGE trial 報告，不會呼叫外部 API，也不會查詢正式 DB 以外的 trial DB。"}
+                ? "此模式會查詢目前 API 所連的 SQLite DB。搜尋品質是本機 hashing MVP，適合展示流程，不等同正式 AI 語意模型。"
+                : "此模式會呼叫目前 API；只有 API 以 Local BGE trial DB 啟動時才有結果，全程不呼叫外部 embedding API。"}
             </span>
           </div>
         </div>
       </section>
 
-      {isLocalMode ? (
+      {(
         <>
           <form
             className="semantic-search-form"
@@ -221,6 +224,9 @@ export function SemanticSearchPage({ onOpenCase }: { onOpenCase: (caseId: string
               <>
                 <div className="metric-grid semantic-metrics">
                   <Metric label="Embedding 模型" value={data.embedding_model} />
+                  <Metric label="Provider / 裝置" value={`${data.embedding_provider} / ${data.embedding_device}`} />
+                  <Metric label="向量維度" value={data.embedding_dims.toLocaleString("zh-TW")} />
+                  <Metric label="API 耗時" value={`${data.elapsed_ms.toLocaleString("zh-TW")} ms`} />
                   <Metric label="候選 chunks" value={data.total_candidates.toLocaleString("zh-TW")} />
                   <Metric label="顯示結果" value={`${data.items.length} 筆`} />
                   <Metric label="查詢詞" value={data.query} />
@@ -231,7 +237,11 @@ export function SemanticSearchPage({ onOpenCase }: { onOpenCase: (caseId: string
                   <div className="semantic-flow">
                     <div>
                       <BrainCircuit size={18} />
-                      <span>查詢詞會被轉成本機 CJK n-gram hashing vector。</span>
+                      <span>
+                        {isLocalMode
+                          ? "查詢詞會被轉成本機 CJK n-gram hashing vector。"
+                          : "查詢詞會由本機 BGE 模型轉為 1024 維語意向量。"}
+                      </span>
                     </div>
                     <div>
                       <FileText size={18} />
@@ -246,7 +256,11 @@ export function SemanticSearchPage({ onOpenCase }: { onOpenCase: (caseId: string
                     </div>
                     <div className="semantic-warning">
                       <AlertTriangle size={18} />
-                      <span>這是本機 hashing MVP，適合展示查詢流程；本機 BGE 的品質仍需完成 75 筆人工 relevance 標註。</span>
+                      <span>
+                        {isLocalMode
+                          ? "這是本機 hashing baseline，適合比較流程，不等同正式 AI 語意品質。"
+                          : "Local BGE POC 的 AI 輔助 Strict / Lenient P@5 為 0.9200 / 0.9733；正式 DB 尚未切換，且尚非獨立人工驗證。"}
+                      </span>
                     </div>
                   </div>
                 </section>
@@ -286,40 +300,6 @@ export function SemanticSearchPage({ onOpenCase }: { onOpenCase: (caseId: string
             )}
           </AsyncBlock>
         </>
-      ) : (
-        <section className="panel">
-          <PanelHeader title="Local BGE 1000 筆離線試測摘要" />
-          <div className="trial-summary">
-            <div className="metric-grid semantic-metrics">
-              <Metric label="Provider" value={LOCAL_BGE_TRIAL_MODEL.provider} />
-              <Metric label="Embedding 模型" value={LOCAL_BGE_TRIAL_MODEL.model} />
-              <Metric label="Trial candidates" value={LOCAL_BGE_TRIAL_MODEL.candidates.toLocaleString("zh-TW")} />
-              <Metric label="狀態" value="等待人工標註" />
-            </div>
-            <div className="semantic-method-note">
-              這組結果來自 `docs/local_bge_semantic_query_trial_1000.md`，由本機模型快取與 RTX 4050 產生。正式 DB 尚未全量重建 BGE embeddings，因此前端目前只展示試測摘要。
-            </div>
-            <div className="trial-summary-table">
-              {TRIAL_QUERY_SUMMARY.map((item) => (
-                <div key={item.query}>
-                  <strong>{item.query}</strong>
-                  <span>Top 1：{item.top1}</span>
-                  <p>{item.note}</p>
-                </div>
-              ))}
-            </div>
-            <div className="semantic-flow">
-              <div>
-                <BarChart3 size={18} />
-                <span>可展示重點：1000 筆 trial 已證明本機 BGE 查詢流程可跑通，全程不使用外部 embedding API。</span>
-              </div>
-              <div className="semantic-warning">
-                <AlertTriangle size={18} />
-                <span>限制：這還不是正式 DB 切換；目前需先完成 75 筆人工 relevance 標註，再決定是否全量重建 embeddings。</span>
-              </div>
-            </div>
-          </div>
-        </section>
       )}
     </section>
   );

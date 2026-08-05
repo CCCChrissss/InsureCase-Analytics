@@ -106,9 +106,28 @@ export type SemanticSearchResult = {
 
 export type SemanticSearchResponse = {
   query: string;
+  embedding_provider: string;
   embedding_model: string;
+  embedding_dims: number;
+  embedding_device: string;
+  elapsed_ms: number;
   items: SemanticSearchResult[];
   total_candidates: number;
+};
+
+export type EmbeddingModelStatus = {
+  embedding_model: string;
+  embedding_dims: number;
+  embedding_count: number;
+  suggested_provider: string;
+};
+
+export type EmbeddingStatusResponse = {
+  database_name: string;
+  configured_provider: string;
+  configured_model: string;
+  local_bge_requested_device: string;
+  models: EmbeddingModelStatus[];
 };
 
 export type QuerySuggestionResponse = {

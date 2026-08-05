@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -575,7 +576,35 @@ def test_semantic_search_ranks_related_chunk_first(tmp_path: Path, monkeypatch) 
     assert result["items"][0]["score"] > 0
 
 
-def test_semantic_search_returns_empty_for_model_without_embeddings(tmp_path: Path, monkeypatch) -> None:
+def test_semantic_search_uses_stored_dims_when_global_dims_differ(tmp_path: Path, monkeypatch) -> None:
+    db_path = tmp_path / "insurance_cases.db"
+    with make_connection(db_path) as connection:
+        connection.executescript((Path(__file__).resolve().parents[1] / "schema.sql").read_text(encoding="utf-8"))
+        insert_case_with_chunks(
+            connection,
+            case_id="case_cancer",
+            case_number="115年評字第000001號",
+            dispute_type="承保範圍",
+            chunks=["癌症住院治療是否屬於保險契約承保範圍"],
+        )
+    embedding_service.build_chunk_embeddings(db_path)
+
+    monkeypatch.setattr(embedding_service, "connect", lambda: make_connection(db_path))
+    monkeypatch.setattr(embedding_service, "EMBEDDING_DIMS", 1024)
+
+    result = embedding_service.semantic_search(
+        "癌症保險",
+        provider_name="local",
+        model_name=embedding_service.LOCAL_MODEL_NAME,
+        limit=1,
+    )
+
+    assert result["embedding_dims"] == 384
+    assert result["embedding_provider"] == "local"
+    assert result["items"][0]["case_id"] == "case_cancer"
+
+
+def test_semantic_search_rejects_model_without_embeddings_before_embedding(tmp_path: Path, monkeypatch) -> None:
     db_path = tmp_path / "insurance_cases.db"
     with make_connection(db_path) as connection:
         connection.executescript((Path(__file__).resolve().parents[1] / "schema.sql").read_text(encoding="utf-8"))
@@ -590,16 +619,67 @@ def test_semantic_search_returns_empty_for_model_without_embeddings(tmp_path: Pa
 
     monkeypatch.setattr(embedding_service, "connect", lambda: make_connection(db_path))
 
-    result = embedding_service.semantic_search(
-        "癌症保險金",
-        provider_name="local",
-        model_name="missing_model_v1",
-        limit=2,
+    embed_calls = 0
+
+    @dataclass(frozen=True)
+    class MissingModelProvider:
+        provider_name: str = "local"
+        model_name: str = "missing_model_v1"
+        dims: int = 384
+
+        def embed_texts(self, texts: list[str]):
+            nonlocal embed_calls
+            embed_calls += 1
+            return []
+
+    monkeypatch.setattr(
+        embedding_service,
+        "create_embedding_provider",
+        lambda **_: MissingModelProvider(),
     )
 
-    assert result["embedding_model"] == "missing_model_v1"
-    assert result["total_candidates"] == 0
-    assert result["items"] == []
+    try:
+        embedding_service.semantic_search(
+            "癌症保險金",
+            provider_name="local",
+            model_name="missing_model_v1",
+            limit=2,
+        )
+    except embedding_service.EmbeddingProviderError as error:
+        assert "No stored embeddings" in str(error)
+        assert "missing_model_v1" in str(error)
+    else:
+        raise AssertionError("Expected EmbeddingProviderError")
+
+    assert embed_calls == 0
+
+
+def test_embedding_status_reports_models_without_loading_provider(tmp_path: Path, monkeypatch) -> None:
+    db_path = tmp_path / "insurance_cases.db"
+    with make_connection(db_path) as connection:
+        connection.executescript((Path(__file__).resolve().parents[1] / "schema.sql").read_text(encoding="utf-8"))
+        insert_case_with_chunks(
+            connection,
+            case_id="case_cancer",
+            case_number="115年評字第000001號",
+            dispute_type="理賠爭議",
+            chunks=["癌症治療後申請保險金，保險公司拒絕理賠。"],
+        )
+    embedding_service.build_chunk_embeddings(db_path)
+    monkeypatch.setattr(embedding_service, "connect", lambda: make_connection(db_path))
+    monkeypatch.setattr(embedding_service, "DEFAULT_DB_PATH", db_path)
+
+    status = embedding_service.get_embedding_status()
+
+    assert status["database_name"] == "insurance_cases.db"
+    assert status["models"] == [
+        {
+            "embedding_model": "local_hashing_cjk_v1",
+            "embedding_dims": 384,
+            "embedding_count": 1,
+            "suggested_provider": "local",
+        }
+    ]
 
 
 def test_semantic_search_rejects_query_provider_dimension_mismatch(tmp_path: Path, monkeypatch) -> None:
@@ -641,8 +721,8 @@ def test_semantic_search_rejects_query_provider_dimension_mismatch(tmp_path: Pat
         )
     except embedding_service.EmbeddingProviderError as error:
         assert "Use a matching embedding_provider" in str(error)
-        assert "1024 dimensions" in str(error)
-        assert "384 dimensions" in str(error)
+        assert bge_model in str(error)
+        assert embedding_service.LOCAL_MODEL_NAME in str(error)
     else:
         raise AssertionError("Expected EmbeddingProviderError")
 
@@ -699,19 +779,24 @@ def test_semantic_similar_cases_returns_empty_for_model_without_embeddings(tmp_p
             chunks=["癌症治療後申請保險金，保險公司拒絕理賠。"],
         )
     embedding_service.build_chunk_embeddings(db_path)
+    with make_connection(db_path) as connection:
+        connection.execute(
+            "DELETE FROM chunk_embeddings WHERE embedding_model = ?;",
+            (embedding_service.LOCAL_MODEL_NAME,),
+        )
 
     monkeypatch.setattr(embedding_service, "connect", lambda: make_connection(db_path))
 
     result = embedding_service.semantic_similar_cases(
         "source_case",
         provider_name="local",
-        model_name="missing_model_v1",
+        model_name=embedding_service.LOCAL_MODEL_NAME,
         limit=2,
     )
 
     assert result is not None
     assert result["case_id"] == "source_case"
-    assert result["embedding_model"] == "missing_model_v1"
+    assert result["embedding_model"] == embedding_service.LOCAL_MODEL_NAME
     assert result["source_chunk_count"] == 0
     assert result["total_candidates"] == 0
     assert result["items"] == []

@@ -6,6 +6,7 @@ import re
 import sqlite3
 import struct
 import threading
+import time
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -18,6 +19,7 @@ from backend.app.config import EMBEDDING_PROVIDER
 from backend.app.config import LOCAL_BGE_BATCH_SIZE
 from backend.app.config import LOCAL_BGE_DEVICE
 from backend.app.database import connect
+from backend.app.database import DEFAULT_DB_PATH
 
 LOCAL_PROVIDER_NAME = "local"
 LOCAL_MODEL_NAME = "local_hashing_cjk_v1"
@@ -229,8 +231,13 @@ def create_embedding_provider(
         raise EmbeddingProviderError("Embedding dimensions must be greater than 0.")
 
     if resolved_provider in {LOCAL_PROVIDER_NAME, "local_hashing"}:
+        if resolved_model != LOCAL_MODEL_NAME:
+            raise EmbeddingProviderError(
+                f"Local hashing provider supports model '{LOCAL_MODEL_NAME}' only. "
+                f"Use a matching embedding_provider for model '{resolved_model}'."
+            )
         return LocalHashingEmbeddingProvider(
-            model_name=resolved_model or LOCAL_MODEL_NAME,
+            model_name=resolved_model,
             dims=resolved_dims,
         )
 
@@ -596,7 +603,60 @@ def semantic_search(
     provider_name: str | None = None,
     min_score: float = 0.0,
 ) -> dict[str, Any]:
-    provider = create_embedding_provider(provider_name=provider_name, model_name=model_name)
+    started_at = time.perf_counter()
+    resolved_provider_name = (provider_name or EMBEDDING_PROVIDER).strip().lower()
+    resolved_model_name = (model_name or EMBEDDING_MODEL).strip()
+    if resolved_provider_name in LOCAL_BGE_PROVIDER_ALIASES and resolved_model_name in {
+        LOCAL_MODEL_NAME,
+        HUGGINGFACE_DEFAULT_MODEL_NAME,
+    }:
+        resolved_model_name = LOCAL_BGE_MODEL_NAME
+
+    if resolved_provider_name not in {LOCAL_PROVIDER_NAME, "local_hashing", *LOCAL_BGE_PROVIDER_ALIASES}:
+        create_embedding_provider(
+            provider_name=resolved_provider_name,
+            model_name=resolved_model_name,
+        )
+
+    with connect() as connection:
+        inventory_row = connection.execute(
+            """
+            SELECT COUNT(*) AS embedding_count,
+                   MIN(embedding_dims) AS min_dims,
+                   MAX(embedding_dims) AS max_dims
+            FROM chunk_embeddings
+            WHERE embedding_model = ?;
+            """,
+            (resolved_model_name,),
+        ).fetchone()
+
+    embedding_count = int(inventory_row["embedding_count"])
+    if embedding_count == 0:
+        raise EmbeddingProviderError(
+            f"No stored embeddings were found for model '{resolved_model_name}' in database "
+            f"'{DEFAULT_DB_PATH.name}'. Start the API with a database that contains this model."
+        )
+
+    min_dims = int(inventory_row["min_dims"])
+    max_dims = int(inventory_row["max_dims"])
+    if min_dims != max_dims:
+        raise EmbeddingProviderError(
+            f"Stored embeddings for model '{resolved_model_name}' contain mixed dimensions: "
+            f"{min_dims} and {max_dims}. Rebuild the model embeddings before searching."
+        )
+
+    provider = create_embedding_provider(
+        provider_name=resolved_provider_name,
+        model_name=resolved_model_name,
+        dims=min_dims,
+    )
+    if min_dims != provider.dims:
+        raise EmbeddingProviderError(
+            f"Stored embeddings for model '{provider.model_name}' have {min_dims} dimensions, "
+            f"but query provider '{provider.provider_name}' produces {provider.dims} dimensions. "
+            "Use a matching embedding_provider for the selected embedding_model."
+        )
+
     query_embeddings = provider.embed_texts([query])
     validate_provider_embeddings(
         provider,
@@ -609,9 +669,13 @@ def semantic_search(
     if embedded_query.token_count == 0 or embedded_query.norm == 0:
         return {
             "query": query,
+            "embedding_provider": provider.provider_name,
             "embedding_model": provider.model_name,
+            "embedding_dims": provider.dims,
+            "embedding_device": embedding_device(provider),
+            "elapsed_ms": round((time.perf_counter() - started_at) * 1000, 2),
             "items": [],
-            "total_candidates": 0,
+            "total_candidates": embedding_count,
         }
 
     with connect() as connection:
@@ -632,12 +696,6 @@ def semantic_search(
 
     scored: list[dict[str, Any]] = []
     for row in rows:
-        if row["embedding_dims"] != provider.dims:
-            raise EmbeddingProviderError(
-                f"Stored embeddings for model '{provider.model_name}' have {row['embedding_dims']} dimensions, "
-                f"but query provider '{provider.provider_name}' produced {provider.dims} dimensions. "
-                "Use a matching embedding_provider for the selected embedding_model."
-            )
         candidate_vector = unpack_vector(row["embedding"], row["embedding_dims"])
         score = dot_product(embedded_query.vector, candidate_vector)
         if score <= min_score:
@@ -667,9 +725,55 @@ def semantic_search(
     )
     return {
         "query": query,
+        "embedding_provider": provider.provider_name,
         "embedding_model": provider.model_name,
+        "embedding_dims": provider.dims,
+        "embedding_device": embedding_device(provider),
+        "elapsed_ms": round((time.perf_counter() - started_at) * 1000, 2),
         "items": scored[:safe_limit],
-        "total_candidates": len(scored),
+        "total_candidates": len(rows),
+    }
+
+
+def embedding_device(provider: EmbeddingProvider) -> str:
+    if isinstance(provider, LocalSentenceTransformerEmbeddingProvider):
+        return provider.resolved_device
+    return "cpu"
+
+
+def suggested_provider_for_model(model_name: str) -> str:
+    if model_name == LOCAL_BGE_MODEL_NAME:
+        return LOCAL_BGE_PROVIDER_NAME
+    if model_name == LOCAL_MODEL_NAME:
+        return LOCAL_PROVIDER_NAME
+    return "unknown"
+
+
+def get_embedding_status() -> dict[str, Any]:
+    with connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT embedding_model, embedding_dims, COUNT(*) AS embedding_count
+            FROM chunk_embeddings
+            GROUP BY embedding_model, embedding_dims
+            ORDER BY embedding_model, embedding_dims;
+            """
+        ).fetchall()
+
+    return {
+        "database_name": DEFAULT_DB_PATH.name,
+        "configured_provider": EMBEDDING_PROVIDER,
+        "configured_model": EMBEDDING_MODEL,
+        "local_bge_requested_device": LOCAL_BGE_DEVICE,
+        "models": [
+            {
+                "embedding_model": row["embedding_model"],
+                "embedding_dims": int(row["embedding_dims"]),
+                "embedding_count": int(row["embedding_count"]),
+                "suggested_provider": suggested_provider_for_model(row["embedding_model"]),
+            }
+            for row in rows
+        ],
     }
 
 

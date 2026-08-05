@@ -14,7 +14,7 @@ export function apiPath(path: string, params: Record<string, string | number | n
 export async function apiGet<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`);
   if (!response.ok) {
-    throw new Error(`API ${response.status}: ${response.statusText}`);
+    throw new Error(await apiErrorMessage(response));
   }
   return response.json() as Promise<T>;
 }
@@ -25,7 +25,20 @@ export async function apiGetOptional<T>(path: string): Promise<T | null> {
     return null;
   }
   if (!response.ok) {
-    throw new Error(`API ${response.status}: ${response.statusText}`);
+    throw new Error(await apiErrorMessage(response));
   }
   return response.json() as Promise<T>;
+}
+
+async function apiErrorMessage(response: Response): Promise<string> {
+  let detail = response.statusText || "Request failed";
+  try {
+    const payload = (await response.json()) as { detail?: unknown };
+    if (typeof payload.detail === "string" && payload.detail.trim()) {
+      detail = payload.detail;
+    }
+  } catch {
+    // Keep the HTTP status text when the response body is not JSON.
+  }
+  return `API ${response.status}: ${detail}`;
 }

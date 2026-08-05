@@ -2,12 +2,19 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
 
+from backend.app.schemas import EmbeddingStatusResponse
 from backend.app.schemas import SemanticSearchResponse
 from backend.app.services.embedding_service import EmbeddingProviderError
+from backend.app.services.embedding_service import get_embedding_status
 from backend.app.services.embedding_service import semantic_search
 
 
 router = APIRouter(prefix="/api", tags=["semantic search"])
+
+
+@router.get("/embedding-status", response_model=EmbeddingStatusResponse)
+def embedding_status() -> dict:
+    return get_embedding_status()
 
 
 @router.get("/semantic-search", response_model=SemanticSearchResponse)

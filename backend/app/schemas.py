@@ -98,9 +98,28 @@ class SemanticSearchResult(BaseModel):
 
 class SemanticSearchResponse(BaseModel):
     query: str
+    embedding_provider: str
     embedding_model: str
+    embedding_dims: int
+    embedding_device: str
+    elapsed_ms: float
     items: list[SemanticSearchResult]
     total_candidates: int
+
+
+class EmbeddingModelStatus(BaseModel):
+    embedding_model: str
+    embedding_dims: int
+    embedding_count: int
+    suggested_provider: str
+
+
+class EmbeddingStatusResponse(BaseModel):
+    database_name: str
+    configured_provider: str
+    configured_model: str
+    local_bge_requested_device: str
+    models: list[EmbeddingModelStatus]
 
 
 class QuerySuggestionResponse(BaseModel):

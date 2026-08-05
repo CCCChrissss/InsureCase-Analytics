@@ -70,6 +70,7 @@
 │  ├─ embedding_pipeline.md
 │  ├─ ai_embedding_provider_plan.md
 │  ├─ local_bge_provider.md
+│  ├─ local_bge_api_frontend_trial.md
 │  ├─ local_bge_semantic_query_trial_100.md
 │  ├─ local_bge_semantic_query_trial_1000.md
 │  ├─ local_bge_semantic_benchmark_v1_1000_assisted_guide.md
@@ -218,6 +219,7 @@ frontend/dist/
 - `docs/embedding_pipeline.md`：本機 chunk embedding MVP、語意搜尋 API、provider 狀態與後續正式 AI provider 升級路線。
 - `docs/ai_embedding_provider_plan.md`：正式 AI embedding provider 接入規格與本機 BGE 狀態，包含 provider 介面、環境變數、模型重建、費用控制、DB model version、測試與展示說法。
 - `docs/local_bge_provider.md`：本機 BGE provider、CPU / CUDA 安裝、離線模型快取、17254 chunks 全量實測結果、查詢 trial 與正式切換條件。
+- `docs/local_bge_api_frontend_trial.md`：Local BGE trial DB 的 API / 前端實際切換、模型庫存、冷暖查詢耗時、GPU 觀察限制、錯誤處理與瀏覽器驗證報告。
 - `docs/local_bge_semantic_query_trial_100.md`：本機 BGE 100 candidates 的 15 詞 Top 5 結果、20/100 候選涵蓋比較、執行證據與限制。
 - `docs/local_bge_semantic_query_trial_1000.md`：本機 BGE 1000 candidates 的 15 詞 Top 5 結果、100/1000 排名穩定性、執行證據與限制。
 - `docs/local_bge_semantic_query_trial_full.md`：本機 BGE 全量 17254 candidates 的 15 詞 Top 5 結果與適用限制。
@@ -253,12 +255,12 @@ frontend/dist/
 - `backend/app/routers/quality.py`：分析驗證 API，回傳 ROC 114 摘要與相似案件品質檢查結果。
 - `backend/app/routers/query_suggestions.py`：唯讀查詢建議 API；區分有建議與無建議，拒絕空白輸入，且不會自動執行建議查詢。
 - `backend/app/routers/search.py`：全文搜尋 API。
-- `backend/app/routers/semantic_search.py`：chunk embedding 語意搜尋 API，支援 `embedding_model` / `embedding_provider` 可選參數。
+- `backend/app/routers/semantic_search.py`：chunk embedding 語意搜尋與 embedding 庫存狀態 API，支援 `embedding_model` / `embedding_provider` 可選參數。
 - `backend/app/routers/similar_cases.py`：相似案件 API；案件層級語意相似 API 支援 `embedding_model` / `embedding_provider` 可選參數。
 - `backend/app/routers/statistics.py`：首頁與案件篩選使用的輕量總覽 API，支援可選 `roc_year`。
 - `backend/app/routers/summaries.py`：案件摘要 API。
 - `backend/app/services/case_service.py`：案件查詢、篩選、分頁、PDF path resolver。
-- `backend/app/services/embedding_service.py`：embedding provider 介面、本機 CJK hashing、本機 Sentence Transformers BGE、可續跑分批 chunk embedding 建置、chunk 語意搜尋與案件層級語意相似；目前只啟用 `local` 與 `local_bge`，遠端 Hugging Face HTTP 實作已移除，本機 BGE 強制只讀本機模型快取。
+- `backend/app/services/embedding_service.py`：embedding provider 介面、本機 CJK hashing、本機 Sentence Transformers BGE、可續跑分批 chunk embedding 建置、模型庫存、chunk 語意搜尋與案件層級語意相似；搜尋前依 DB stored model 驗證維度及 provider 相容性，目前只啟用 `local` 與 `local_bge`，遠端 Hugging Face HTTP 實作已移除，本機 BGE 強制只讀本機模型快取。
 - `backend/app/services/quality_service.py`：ROC 114 分析驗證報告資料。
 - `backend/app/services/query_suggestion_service.py`：選擇性查詢建議服務；目前只收錄 4 個已在離線實驗改善的短查詢，以精確詞彙觸發，回傳原查詢、建議查詢、規則編號與理由，並固定標示不自動套用。
 - `backend/app/services/search_service.py`：FTS5 搜尋、LIKE fallback、snippet 產生；FTS5 報錯或 0 筆時會進 LIKE fallback，且 fallback 會查案號、爭議類型與 normalized text。
@@ -690,6 +692,12 @@ Query parameters：
 ### Semantic Search
 
 ```text
+GET /api/embedding-status
+```
+
+用途：回傳目前 API 連線的 DB 名稱、後端 configured provider / model / BGE device，以及 DB 內各 stored model 的維度、筆數與建議 provider。此 endpoint 不載入 BGE 模型。
+
+```text
 GET /api/semantic-search
 ```
 
@@ -705,9 +713,9 @@ Query parameters：
 
 目前方法：
 
-- 使用 `local_hashing_cjk_v1`。
-- 回傳命中的 `chunk_text`、`section_hint`、`score` 與案件基本資料。
-- 這是本機 MVP，尚不是正式語意模型。
+- 正式 DB 預設使用 `local_hashing_cjk_v1`；獨立 trial DB 同時包含 Local Hashing 384 維與 Local BGE 1024 維各 17254 筆。
+- 回傳實際 provider、model、device、維度、API 耗時、候選數，以及命中的 `chunk_text`、`section_hint`、`score` 與案件基本資料。
+- 搜尋前先驗證 stored model 存在、維度一致及 provider / model 相容，不存在時不載入 BGE 模型。
 - 若指定 `embedding_provider=huggingface` 或 `hf`，API 會回傳 400 且不送出外部 request；本機 BGE 必須搭配 `embedding_model=BAAI/bge-large-zh-v1.5-local`。
 
 ### Summaries
@@ -825,6 +833,7 @@ Query parameters：
 - PDF 回傳 API。
 - 全文搜尋 API。
 - 語意搜尋 API。
+- Embedding model inventory / status API。
 - 案件層級語意相似 API。
 - 摘要 API。
 - 規則式相似案件 API。
@@ -843,7 +852,7 @@ Query parameters：
 - 案件詳情區。
 - 全文搜尋頁。
 - 全文搜尋頁，展示 query、命中數、match_source、fallback 說明、snippet 與案件來源。
-- 語意搜尋頁，展示 query、embedding 模型、候選 chunk 數、分析流程、模型限制、命中 chunk、score、score bar、section hint 與案件來源。
+- 語意搜尋頁可在 Local Hashing 與 Local BGE 間切換並實際呼叫 API，展示 DB、stored embedding 筆數、provider、model、device、維度、API 耗時、候選 chunk、分析流程、模型限制、命中 chunk、score、score bar、section hint 與案件來源。
 - 語意搜尋頁已接入查詢建議 API；有核准建議時顯示原查詢、建議查詢、理由、規則編號與目前實際執行查詢，由使用者自行切換。
 - 案件詳情頁語意相似案件區塊，展示相似案件、分數與實際命中 chunk。
 - 統計分析頁仍保留 direct route，但不作為主導覽項目。
@@ -883,10 +892,10 @@ Query parameters：
 - API 錯誤回應格式統一。
 - 正式 React Router。
 - 前端自動化測試。
-- Hugging Face embeddings 尚未對正式 DB 全量重建；目前已完成 trial DB 1000 筆、離線 anchor-based 比較報告，以及 5 個查詢詞的 query-to-document 小樣本試測。
+- 遠端 Hugging Face embeddings 不再建置；本機 BGE 已在獨立 trial DB 完成全量 17254 筆，正式 DB 仍未切換。
 - 本機 BGE 已完成 RTX 4050 CUDA 17254 chunks 全量 embeddings，維度、blob 長度、缺漏、norm、非有限值與 SQLite integrity 均驗證通過；全量 15 詞／75 結果、第一輪評測及 POC 混合式第二輪均已完成，但尚未完成第二位獨立標註或正式 DB 切換。
 - 選擇性查詢建議 service、response schema、API endpoint 與前端操作介面已完成；目前只支援 4 個核准短查詢，尚未擴充同義詞或模糊觸發。
-- 前端語意搜尋頁目前展示 Local BGE trial 摘要，不會直接查詢 trial DB 或呼叫外部 embedding API。
+- 前端語意搜尋頁已可透過 trial backend 實際查詢 Local BGE trial DB；是否使用 trial DB 由後端啟動環境決定，前端不直接開啟 SQLite，也不呼叫外部 embedding API。
 - 15 詞 benchmark v1 已完成 75 筆 Codex-assisted 第一輪原文標註與 Precision@5 報告。
 - 一致性比較工具與 POC 混合式第二輪已完成；正式第二位獨立標註與有效的跨標註者信度估計仍未完成。
 - OpenAI 或其他外部 AI embedding provider 尚未實作。
@@ -907,6 +916,19 @@ Query parameters：
 建議：
 
 - 後續先完成本機 BGE 全量結果的第二位獨立標註與一致率比較；再確認 API 載入時間與 GPU 記憶體，最後決定是否替換正式 DB 或導入 pgvector。
+
+### Local BGE 冷啟動與 Python 環境
+
+Local BGE trial API 已可實際查詢 17254 個 candidates，暖機後 API 約 2.5 至 2.8 秒；第一次載入模型實測約 66.65 秒，未達互動式搜尋期待。SQLite 向量目前仍由 Python 全量解包與排序，尚未使用 ANN index。
+
+另需注意系統 `py` launcher 目前安裝 CPU-only PyTorch；CUDA API 必須用 `.\.venv\Scripts\python.exe` 啟動。若誤用系統 Python 並指定 `LOCAL_BGE_DEVICE=cuda`，API 會回傳 HTTP 400，不會靜默改用 CPU。
+
+建議：
+
+- POC 展示期間保持 API 常駐，避免現場冷啟動。
+- 下一階段增加 startup warmup 或背景模型預載，並讓前端顯示初始化狀態。
+- 評估將 stored vectors 預載到記憶體，之後再比較 SQLite 全量掃描與 FAISS / pgvector ANN。
+- Windows WDDM 無法由 `nvidia-smi` 準確歸屬單一 Python process 的 VRAM；目前整張 GPU 觀察值不可當作模型獨占記憶體。
 
 ### ROC 114 一月亂碼問題已修正
 
@@ -1169,6 +1191,26 @@ py -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
 http://127.0.0.1:8000/docs
 ```
 
+### 啟動 Local BGE trial API
+
+CUDA 版本必須從專案根目錄使用 `.venv`，不可改成系統 `py`：
+
+```powershell
+$env:INSURANCE_CASES_DB_PATH="backend/data/insurance_cases_local_bge_trial.db"
+$env:EMBEDDING_PROVIDER="local_bge"
+$env:EMBEDDING_MODEL="BAAI/bge-large-zh-v1.5-local"
+$env:EMBEDDING_DIMS="1024"
+$env:LOCAL_BGE_DEVICE="cuda"
+$env:LOCAL_BGE_BATCH_SIZE="4"
+$env:HF_HUB_OFFLINE="1"
+$env:TRANSFORMERS_OFFLINE="1"
+$env:BACKEND_CORS_ORIGINS="http://localhost:5174,http://127.0.0.1:5174"
+
+.\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8001
+```
+
+另開前端 shell，設定 `VITE_API_BASE_URL=http://127.0.0.1:8001/api` 後啟動於 5174。可先以 `GET /api/embedding-status` 確認 API 連到 trial DB，再切換前端 Local BGE Trial。
+
 ### 本機 BGE POC 第二輪狀態
 
 POC 混合式第二輪已完成，工作檔為 `outputs/local_bge_semantic_benchmark_v1_full_second_annotations.json`。第 1 至 9 題由使用者先行判讀，第 10 至 75 題為 Codex-assisted consolidation，因此不得再將此檔作為獨立標註模板。
@@ -1360,11 +1402,14 @@ http://127.0.0.1:5173
 - 全量第一輪標註：69 筆相關、4 筆部分相關、2 筆不相關；Strict / Lenient Precision@5 為 `0.9200 / 0.9733`。
 - 75 筆證據摘要全部非空且不重複，最短 23 個字；本輪為 Codex-assisted 判讀，不是第二位標註者的獨立盲標。
 - POC 混合式第二輪：75/75 完成，Strict / Lenient Precision@5 同為 `0.9200 / 0.9733`；與第一輪一致率及 Kappa 均為 `1.0000`，但第 10 至 75 題不是獨立來源，數值只用於流程展示。
-- `.\.venv\Scripts\python.exe -m pytest`：111 passed。
+- `.\.venv\Scripts\python.exe -m pytest`：114 passed。
 - embedding build、query trial、evaluation 與 annotation 相關模組的 `py_compile`：通過。
 - `verify_case_db.py --expected-count 2992 --require-chunks --require-embeddings`：passed；正式 DB 仍為 2992 案、17254 chunks、17254 筆 local hashing embeddings。
+- Trial API `/api/embedding-status`：同時辨識 Local Hashing 384 維與 Local BGE 1024 維各 17254 筆。
+- Local BGE API：冷啟動約 66.65 秒；暖機約 2.5 至 2.8 秒，provider / model / device / dims 均正確回傳。
+- 前端 production build 與瀏覽器功能檢查通過；Local BGE 顯示實際結果，桌面無水平溢位，console 無 error 或 warning。
 
-注意：語意搜尋頁第一次載入會計算 17254 筆 chunk embedding 相似度，可能短暫顯示「載入中」；等待數秒後會顯示結果。
+注意：Local BGE 語意搜尋第一次載入模型實測約 66.65 秒；暖機後仍需約 2.5 至 2.8 秒計算 17254 筆 chunk similarity。POC 展示前應先暖機，正式切換前需處理 cold start。
 
 ## 13. 建議下一步開發順序
 
@@ -1416,7 +1461,7 @@ http://127.0.0.1:5173
 - 已完成 `docs/hf_semantic_benchmark_v1_results.md`、`docs/hf_semantic_benchmark_v1_annotations.json` 與 `docs/hf_semantic_benchmark_v1_evaluation.md`；第一輪共 61 筆相關、9 筆部分相關、5 筆不相關，Strict P@5 0.8133、Lenient P@5 0.9333。
 - 已新增 `docs/ai_embedding_provider_plan.md`，規劃正式 AI embedding provider 的環境變數、費用控制、DB model version、測試與 embeddings 重建流程，並記錄本機 BGE 與歷史 Hugging Face trial 狀態。
 - 已補上正式 AI provider 實作前測試保護，包含 fake provider、provider 回傳筆數檢查、向量維度檢查、`token_count` / `norm` 檢查與非有限數值檢查。
-- 已更新前端 `SemanticSearchPage`，提供 Local Hashing MVP 與 Local BGE Trial 模型狀態切換；Local Hashing MVP 可直接查正式 DB，Local BGE Trial 只展示 1000 筆完全離線試測摘要，避免誤認正式 DB 已切換。
+- 已更新前端 `SemanticSearchPage`，提供 Local Hashing MVP 與 Local BGE Trial 模型切換；兩種模式均實際呼叫目前 API，顯示 DB、stored embedding 數、provider、model、device、維度、耗時與候選數。Local BGE 只有在後端以 trial DB 啟動時可查，正式 DB 尚未切換。
 - 已完成迭代後 Code Review：移除舊遠端 Hugging Face HTTP provider、response parser、retry / timeout 設定與專用 fake HTTP 測試；移除隱藏統計頁、重複統計 endpoints、未使用的 `recharts` 與未引用的資料庫初始化函式。
 
 ### 已完成：低分短查詢的可選建議服務核心
@@ -1472,10 +1517,11 @@ http://127.0.0.1:5173
 
 下一步工作：
 
-1. POC 先進入 API / 前端切換 trial DB 的載入時間、GPU 記憶體與錯誤處理驗證。
-2. 正式研究品質階段再由未接觸既有答案的第二位標註者，使用全新空白檔完成 75 筆判讀。
-3. 正式獨立標註完成後，再計算有效的一致率、Cohen's Kappa 與爭議項目仲裁。
-4. 品質與執行條件通過後，再另行確認是否備份並切換正式 DB。
+1. API / 前端切換 trial DB、模型庫存、錯誤處理與暖查詢驗證已完成；下一步先處理約 66.65 秒的 BGE 冷啟動，加入 startup warmup 或背景預載。
+2. 量測並優化 17254 個 SQLite vectors 的每次全量解包與排序成本，再決定使用記憶體快取、FAISS 或 pgvector ANN。
+3. 正式研究品質階段再由未接觸既有答案的第二位標註者，使用全新空白檔完成 75 筆判讀。
+4. 正式獨立標註完成後，再計算有效的一致率、Cohen's Kappa 與爭議項目仲裁。
+5. 冷啟動、搜尋效能與品質條件通過後，再另行確認是否備份並切換正式 DB。
 
 ### 第 8 階段：跨年度擴充
 

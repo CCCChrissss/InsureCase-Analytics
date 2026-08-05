@@ -240,7 +240,11 @@ def test_semantic_search_accepts_embedding_model_params(monkeypatch) -> None:
         captured.update(kwargs)
         return {
             "query": query,
+            "embedding_provider": kwargs["provider_name"],
             "embedding_model": kwargs["model_name"],
+            "embedding_dims": 1024,
+            "embedding_device": "cuda",
+            "elapsed_ms": 12.5,
             "items": [],
             "total_candidates": 0,
         }
@@ -261,6 +265,37 @@ def test_semantic_search_accepts_embedding_model_params(monkeypatch) -> None:
     assert captured["model_name"] == "BAAI/bge-large-zh-v1.5"
     assert captured["provider_name"] == "huggingface"
     assert response.json()["embedding_model"] == "BAAI/bge-large-zh-v1.5"
+    assert response.json()["embedding_provider"] == "huggingface"
+    assert response.json()["embedding_device"] == "cuda"
+
+
+def test_embedding_status_reports_available_models(monkeypatch) -> None:
+    monkeypatch.setattr(
+        semantic_search_router,
+        "get_embedding_status",
+        lambda: {
+            "database_name": "insurance_cases_local_bge_trial.db",
+            "configured_provider": "local_bge",
+            "configured_model": "BAAI/bge-large-zh-v1.5-local",
+            "local_bge_requested_device": "cuda",
+            "models": [
+                {
+                    "embedding_model": "BAAI/bge-large-zh-v1.5-local",
+                    "embedding_dims": 1024,
+                    "embedding_count": 17254,
+                    "suggested_provider": "local_bge",
+                }
+            ],
+        },
+    )
+
+    response = client.get("/api/embedding-status")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["database_name"] == "insurance_cases_local_bge_trial.db"
+    assert data["models"][0]["embedding_count"] == 17254
+    assert data["models"][0]["suggested_provider"] == "local_bge"
 
 
 def test_semantic_search_returns_400_for_invalid_embedding_provider(monkeypatch) -> None:
