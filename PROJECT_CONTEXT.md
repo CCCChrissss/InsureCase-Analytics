@@ -72,7 +72,8 @@
 │  ├─ local_bge_provider.md
 │  ├─ local_bge_semantic_query_trial_100.md
 │  ├─ local_bge_semantic_query_trial_1000.md
-│  ├─ local_bge_semantic_benchmark_v1_neutral_guide.md
+│  ├─ local_bge_semantic_benchmark_v1_1000_assisted_guide.md
+│  ├─ local_bge_semantic_benchmark_v1_independent_guide.md
 │  ├─ local_bge_semantic_benchmark_v1_annotations.json
 │  ├─ local_bge_semantic_benchmark_v1_evaluation.md
 │  ├─ local_bge_low_precision_query_analysis.md
@@ -220,7 +221,8 @@ frontend/dist/
 - `docs/local_bge_full_build_report.md`：本機 BGE 全量建置參數、耗時、資料庫完整性證據、1000/17254 排名差異與正式切換邊界。
 - `docs/local_bge_semantic_benchmark_v1_full_annotations.json`：全量 17254-candidate Top 5 的 75 筆 Codex-assisted 第一輪標註快照，包含每筆原文證據摘要。
 - `docs/local_bge_semantic_benchmark_v1_full_evaluation.md`：全量 75 筆第一輪評測報告，Strict / Lenient Precision@5 為 `0.9200 / 0.9733`，並記錄限制與低分查詢。
-- `docs/local_bge_semantic_benchmark_v1_neutral_guide.md`：本機 BGE 15 詞、75 題的中立判讀指南；只提供概念邊界、段落焦點、自行檢查問題與易混淆概念，不提供標籤、模型分數或可直接貼用的證據摘要。
+- `docs/local_bge_semantic_benchmark_v1_1000_assisted_guide.md`：歷史 1000-candidate 的 75 題 AI 輔助指南，包含逐題提示；不適用全量結果或第二位獨立標註者。
+- `docs/local_bge_semantic_benchmark_v1_independent_guide.md`：全量第二輪獨立標註規範，只包含標籤定義、15 詞概念邊界、流程與證據規則，不含個別案件提示或第一輪答案。
 - `docs/local_bge_semantic_benchmark_v1_annotations.json`：本機 BGE 75 筆完成版 AI 輔助標註快照，包含共同標註方法、label 與 evidence summary；來源工作檔位於 Git 忽略的 `outputs/`。
 - `docs/local_bge_semantic_benchmark_v1_evaluation.md`：本機 BGE 15 詞、75 筆 AI 輔助標註的完整評測報告，包含逐查詢與逐筆判讀結果。
 - `docs/local_bge_low_precision_query_analysis.md`：針對四個低 Strict P@5 查詢執行 12 組、60 筆本機 BGE 對照試驗，記錄 query 改寫、逐筆 AI 輔助判讀、Precision@5 與實作建議。
@@ -1391,7 +1393,7 @@ http://127.0.0.1:5173
 - 已新增 `backend/scripts/evaluate_semantic_benchmark.py`，可建立 75 筆標註模板、驗證 label 與 evidence summary，並計算 strict / lenient、macro / micro Precision@5。
 - 已新增 `backend/scripts/compare_semantic_annotations.py`，可比較兩位標註者的 75 筆結果，輸出一致率、Cohen's Kappa、混淆矩陣、各查詢一致率與待仲裁衝突。
 - 已新增 `backend/scripts/annotate_semantic_benchmark.py`，可在終端機逐筆閱讀本機 BGE benchmark 命中內容與相鄰 chunks，並安全續作 75 筆人工標註。
-- 已新增 `docs/local_bge_semantic_benchmark_v1_neutral_guide.md`，涵蓋 15 個查詢詞與 75 題中立提示。
+- 歷史逐題指南已更名為 `docs/local_bge_semantic_benchmark_v1_1000_assisted_guide.md`，明確限制為 1000-candidate AI 輔助流程；全量第二輪改用不含逐題提示的 `docs/local_bge_semantic_benchmark_v1_independent_guide.md`。
 - 已完成本機 BGE 75/75 AI 輔助標註，並建立 `docs/local_bge_semantic_benchmark_v1_annotations.json` 與 `docs/local_bge_semantic_benchmark_v1_evaluation.md`；第 1 至 23 題由使用者在 Codex 逐題解說後輸入，第 24 至 75 題由 Codex 批次補齊。結果為 61 筆相關、6 筆部分相關、8 筆不相關，Strict P@5 0.8133、Lenient P@5 0.8933，不得表述為獨立人工盲標。
 - 已完成四個低分查詢的改寫對照試驗，共 12 個查詢版本、60 筆 Top 5 AI 輔助判讀。最佳改寫的 Strict P@5 為：違反告知義務 `0.6 -> 1.0`、手術認定 `0.6 -> 1.0`、業務招攬 `0.6 -> 0.8`、豁免保費 `0.0 -> 1.0`；同時確認並非所有加長查詢都有效，暫不將固定改寫硬編碼進 production API。
 - 已將可解釋查詢建議擴充至 benchmark v1 全部 15 詞，完成 75 筆建議查詢 Top 5 AI 輔助判讀。整體 Strict P@5 `0.8133 -> 0.8800`、Lenient P@5 `0.8933 -> 0.9333`，共有 6 組改善、7 組持平、2 組退步；`除外責任` 與 `理賠金額` 的建議造成明顯退步，因此不採全自動改寫。

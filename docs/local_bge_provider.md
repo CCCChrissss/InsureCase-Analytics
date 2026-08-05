@@ -218,6 +218,8 @@ $env:LOCAL_BGE_DEVICE="cuda"
 
 第一輪屬 Codex-assisted 判讀，不是獨立人工盲標。第二位標註者的空白工作檔為 `outputs/local_bge_semantic_benchmark_v1_full_second_annotations.json`。第二位標註者必須在未查看第一輪快照、評測報告與標籤的前提下，在專案根目錄執行：
 
+第二輪可使用 `docs/local_bge_semantic_benchmark_v1_independent_guide.md` 的共同標準；不得使用歷史 `docs/local_bge_semantic_benchmark_v1_1000_assisted_guide.md`，因其題目對應舊的 1000-candidate 結果且包含逐題提示。
+
 ```powershell
 .\.venv\Scripts\python.exe .\backend\scripts\annotate_semantic_benchmark.py `
   --annotations .\outputs\local_bge_semantic_benchmark_v1_full_second_annotations.json

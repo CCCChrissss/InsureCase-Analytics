@@ -1,8 +1,10 @@
-# Local BGE Semantic Benchmark v1 中立判讀指南
+# Local BGE Semantic Benchmark v1 1000-candidate AI 輔助指南
+
+> 歷史文件：本指南只對應 `1000 candidates` 的舊版 75 筆結果，不適用於全量 `17254 candidates` 的第二輪獨立標註，也不得作為獨立標註者的判讀指南。
 
 ## 1. 使用目的
 
-本指南協助標註者理解 15 個查詢概念及 75 筆命中段落，但不提供任何題目的標籤答案，也不提供可直接貼入 `evidence_summary` 的完成句。
+本指南曾用於協助標註者理解 15 個查詢概念及舊版 75 筆命中段落，但不提供可直接貼入 `evidence_summary` 的完成句。
 
 資料來源只包含：
 
