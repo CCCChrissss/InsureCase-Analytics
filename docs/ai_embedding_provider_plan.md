@@ -19,7 +19,7 @@
 
 - `backend/app/services/embedding_service.py` 已有 provider factory。
 - `local` provider 已實作，可離線建立 `local_hashing_cjk_v1` embeddings。
-- `local_bge` provider 已實作，可透過 Sentence Transformers 在本機執行 `BAAI/bge-large-zh-v1.5`，不需要 API token；RTX 4050 CUDA 1000 chunks 與 15 詞 benchmark 已通過流程驗證。
+- `local_bge` provider 已實作，可透過 Sentence Transformers 在本機執行 `BAAI/bge-large-zh-v1.5`，不需要 API token；RTX 4050 CUDA 17254 chunks 全量建置與 15 詞 benchmark 已通過流程驗證。
 - `huggingface` / `hf` 遠端實作已移除；即使環境中有 Token，也沒有可送出 embedding request 的 provider。
 - 後端不再讀取 `EMBEDDING_API_KEY` 或 `HF_TOKEN`。
 - 本機 BGE 使用 `local_files_only=True`，執行期間不會自動連線下載模型。
@@ -41,7 +41,16 @@
 - `GET /api/semantic-search` 與 `GET /api/cases/{case_id}/semantic-similar` 已支援 `embedding_model` / `embedding_provider` query 參數。
 - Hugging Face trial DB 曾完成 `--limit 20`、`--limit 100` 與 `--limit 1000` 試跑；這些都是歷史結果，不再呼叫遠端 API。
 - `docs/hf_embedding_trial_comparison.md` 已記錄 100 筆 trial embeddings 與 local hashing 的離線 anchor-based 比較。
-- 本機 BGE trial DB 已完成 1000 筆 embeddings；15 詞、75 筆 Top 5 結果記錄於 `docs/local_bge_semantic_query_trial_1000.md`。
+- 本機 BGE trial DB 已完成 17254 筆 embeddings；15 詞、75 筆全量 Top 5 結果記錄於 `docs/local_bge_semantic_query_trial_full.md`。
+
+目前本機 BGE trial DB 狀態：
+
+- Trial DB：`backend/data/insurance_cases_local_bge_trial.db`
+- BGE embeddings：17254 筆
+- `embedding_model`：`BAAI/bge-large-zh-v1.5-local`
+- `embedding_dims`：1024
+- 全量 CUDA 建置時間：約 28 分 52 秒
+- 缺漏、空向量、非有限數值：0
 
 目前正式 DB 狀態：
 
@@ -337,8 +346,8 @@ GET /api/cases/{case_id}/semantic-similar?embedding_provider=local_bge&embedding
 ```text
 系統目前正式 DB 使用本機 CJK hashing vector 完成語意搜尋 MVP，
 已建立 provider 邊界，Hugging Face Inference API 執行實作已移除。
-本機 BGE 已在 RTX 4050 CUDA 完成 1000 chunks 與 15 詞 benchmark，不需要 API token；
-正式展示 DB 若要切換，仍需完成人工 relevance 驗證並重建 chunk_embeddings，
+本機 BGE 已在 RTX 4050 CUDA 完成 17254 chunks 全量建置與 15 詞 benchmark，不需要 API token；
+正式展示 DB 若要切換，仍需完成全量結果的人工 relevance 驗證與切換測試，
 案件搜尋 API 與前端展示流程可大致沿用。
 ```
 
@@ -353,8 +362,8 @@ GET /api/cases/{case_id}/semantic-similar?embedding_provider=local_bge&embedding
 
 ## 15. 建議實作順序
 
-1. 依固定規則人工判讀本機 BGE 1000-candidate 的 75 筆結果，並與既有 API BGE benchmark 比較。
-2. 依 1000 chunks CUDA 建置時間估算全量時間，必要時另測 VRAM 與長時間穩定性。
-3. 在前端展示實際 provider、model 與 device。
-4. 品質與效能可接受後，再考慮全量重建正式 DB。
+1. 依固定規則人工判讀本機 BGE 17254-candidate 的 75 筆新結果。
+2. 計算全量 Precision@5，並與 1000-candidate 舊結果分開比較。
+3. 在前端展示實際 provider、model 與 device，並驗證首次載入時間與 GPU 記憶體。
+4. 品質與效能可接受後，再考慮備份並切換正式 DB。
 5. 後續如需 OpenAI 或其他 provider，再在 `embedding_service.py` 新增 provider。

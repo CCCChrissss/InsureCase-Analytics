@@ -213,9 +213,11 @@ frontend/dist/
 - `docs/roc114_summary_similarity_quality_check.md`：ROC 114 摘要與相似案件抽樣品質檢查，記錄摘要覆蓋率、截段污染檢查、相似案件 top 5 檢查與已知例外。
 - `docs/embedding_pipeline.md`：本機 chunk embedding MVP、語意搜尋 API、provider 狀態與後續正式 AI provider 升級路線。
 - `docs/ai_embedding_provider_plan.md`：正式 AI embedding provider 接入規格與本機 BGE 狀態，包含 provider 介面、環境變數、模型重建、費用控制、DB model version、測試與展示說法。
-- `docs/local_bge_provider.md`：本機 BGE provider、CPU / CUDA 安裝、離線模型快取、1000 chunks 實測結果、查詢 trial 與正式切換條件。
+- `docs/local_bge_provider.md`：本機 BGE provider、CPU / CUDA 安裝、離線模型快取、17254 chunks 全量實測結果、查詢 trial 與正式切換條件。
 - `docs/local_bge_semantic_query_trial_100.md`：本機 BGE 100 candidates 的 15 詞 Top 5 結果、20/100 候選涵蓋比較、執行證據與限制。
 - `docs/local_bge_semantic_query_trial_1000.md`：本機 BGE 1000 candidates 的 15 詞 Top 5 結果、100/1000 排名穩定性、執行證據與限制。
+- `docs/local_bge_semantic_query_trial_full.md`：本機 BGE 全量 17254 candidates 的 15 詞 Top 5 結果與適用限制。
+- `docs/local_bge_full_build_report.md`：本機 BGE 全量建置參數、耗時、資料庫完整性證據、1000/17254 排名差異與正式切換邊界。
 - `docs/local_bge_semantic_benchmark_v1_neutral_guide.md`：本機 BGE 15 詞、75 題的中立判讀指南；只提供概念邊界、段落焦點、自行檢查問題與易混淆概念，不提供標籤、模型分數或可直接貼用的證據摘要。
 - `docs/local_bge_semantic_benchmark_v1_annotations.json`：本機 BGE 75 筆完成版 AI 輔助標註快照，包含共同標註方法、label 與 evidence summary；來源工作檔位於 Git 忽略的 `outputs/`。
 - `docs/local_bge_semantic_benchmark_v1_evaluation.md`：本機 BGE 15 詞、75 筆 AI 輔助標註的完整評測報告，包含逐查詢與逐筆判讀結果。
@@ -552,11 +554,11 @@ local_hashing_cjk_v1
 
 - `local`：正式展示 DB 目前使用的 provider，使用本機 CJK hashing vector。
 - `local_hashing`：`local` 的相容別名。
-- `local_bge`：已實作本機 Sentence Transformers provider，來源模型為 `BAAI/bge-large-zh-v1.5`，DB 儲存名稱為 `BAAI/bge-large-zh-v1.5-local`、維度 1024，不需要 API token；RTX 4050 CUDA 1000 chunks 與 15 詞 benchmark 流程已通過。
+- `local_bge`：已實作本機 Sentence Transformers provider，來源模型為 `BAAI/bge-large-zh-v1.5`，DB 儲存名稱為 `BAAI/bge-large-zh-v1.5-local`、維度 1024，不需要 API token；RTX 4050 CUDA 17254 chunks 全量建置與 15 詞 benchmark 流程已通過。
 - `huggingface` / `hf`：可送出遠端 embedding request 的實作已移除；aliases 會直接拋出 `EmbeddingProviderError`。
 - `openai` / `ai`：預留給未來 OpenAI 類 provider，目前會明確拋出 `EmbeddingProviderError`。
 
-注意：正式 DB 目前仍是學校專題版的本機 hashing vector MVP。本機 BGE 已完成 1000 chunks trial，但尚未完成獨立人工品質驗證；只改環境變數不會更新既有資料，仍必須用新 provider / model 重建 `chunk_embeddings`。
+注意：正式 DB 目前仍是學校專題版的本機 hashing vector MVP。本機 BGE 已在獨立 trial DB 完成 17254 chunks 全量建置，但全量 75 筆新結果尚未完成獨立人工品質驗證；只改環境變數不會切換 DB，正式採用仍需另外備份、驗證與明確確認。
 
 ### `case_search`
 
@@ -872,7 +874,7 @@ Query parameters：
 - 正式 React Router。
 - 前端自動化測試。
 - Hugging Face embeddings 尚未對正式 DB 全量重建；目前已完成 trial DB 1000 筆、離線 anchor-based 比較報告，以及 5 個查詢詞的 query-to-document 小樣本試測。
-- 本機 BGE 已完成 RTX 4050 CUDA 1100 chunks embeddings；其中前 1000 筆已完成 15 詞／75 結果離線 benchmark 與 AI 輔助標註評測，另以 resume pipeline 新增 100 筆並確認原有向量未變；尚未完成第二位獨立人工標註、歷史 API BGE 排名比較或 trial DB 全量建置。
+- 本機 BGE 已完成 RTX 4050 CUDA 17254 chunks 全量 embeddings，維度、blob 長度、缺漏、norm、非有限值與 SQLite integrity 均驗證通過；全量 15 詞／75 結果已重跑，但尚未完成這批新結果的獨立人工標註或正式 DB 切換。
 - 選擇性查詢建議 service、response schema、API endpoint 與前端操作介面已完成；目前只支援 4 個核准短查詢，尚未擴充同義詞或模糊觸發。
 - 前端語意搜尋頁目前展示 Local BGE trial 摘要，不會直接查詢 trial DB 或呼叫外部 embedding API。
 - 15 詞 benchmark v1 已完成 75 筆 Codex-assisted 第一輪原文標註與 Precision@5 報告。
@@ -894,7 +896,7 @@ Query parameters：
 
 建議：
 
-- 後續先以第二位獨立標註者驗證本機 BGE 1000-candidate 結果，再與歷史 API BGE benchmark 比較；確認品質與全量建置時間後，再決定是否替換正式 DB 或導入 pgvector。
+- 後續先重新標註本機 BGE 17254-candidate 的 75 筆全量結果；確認全量 Precision@5、API 載入時間與 GPU 記憶體後，再決定是否替換正式 DB 或導入 pgvector。
 
 ### ROC 114 一月亂碼問題已修正
 
@@ -1162,13 +1164,16 @@ http://127.0.0.1:8000/docs
 在專案根目錄執行：
 
 ```powershell
-.\.venv\Scripts\python.exe .\backend\scripts\annotate_semantic_benchmark.py
+.\.venv\Scripts\python.exe .\backend\scripts\annotate_semantic_benchmark.py `
+  --annotations .\outputs\local_bge_semantic_benchmark_v1_full_annotations.json
 ```
 
-預設讀取：
+全量標註讀取：
 
-- 標註檔：`outputs/local_bge_semantic_benchmark_v1_1000_annotations.json`
+- 標註檔：`outputs/local_bge_semantic_benchmark_v1_full_annotations.json`
 - 脈絡資料庫：`backend/data/insurance_cases_local_bge_trial.db`（唯讀）
+
+若省略 `--annotations`，工具仍會開啟歷史 1000-candidate 工作檔，因此處理全量結果時不可省略此參數。
 
 每筆必須選擇 `r`、`p` 或 `n`，並輸入一段以原文為依據的判斷摘要。可用 `s` 暫時略過、`q` 結束；重新執行會從第一筆未完成項目繼續。
 
@@ -1327,6 +1332,17 @@ http://127.0.0.1:5173
 - 正式執行程式未包含 Hugging Face router URL、Bearer header、Token 讀取或遠端 embedding HTTP client。
 - `build_chunk_embeddings.py --resume --limit 100 --write-batch-size 25`：本機 CUDA trial 從 1000 增至 1100 筆，4 batches 成功、空向量 0、剩餘 16154；原有 1000 筆 embedding、norm 與 `created_at` 逐筆變更數為 0。
 
+2026-08-05 已完成以下全量檢查：
+
+- `build_chunk_embeddings.py --resume --write-batch-size 100`：從 1100 新增 16154 筆，162 batches 成功，總計 17254，耗時約 28 分 52 秒，裝置為 CUDA，空向量 0。
+- Trial DB：BGE 17254 筆、維度全為 1024、blob 長度全為 4096 bytes、缺漏 0、非正數 norm 0、非有限值 0、`integrity_check = ok`。
+- 建置前備份中的 1000 筆 embedding、norm 與 `created_at` 逐筆比較完全未變。
+- 正式 DB：BGE 0 筆、`local_hashing_cjk_v1` 17254 筆、`integrity_check = ok`，未切換。
+- 全量 15 詞 benchmark：每詞 17254 candidates、共 75 筆；相較 1000-candidate 結果只有 1/15 Top 1 相同，平均 Top 5 overlap 為 0.2/5。
+- `.\.venv\Scripts\python.exe -m pytest`：111 passed。
+- embedding build、query trial、evaluation 與 annotation 相關模組的 `py_compile`：通過。
+- `verify_case_db.py --expected-count 2992 --require-chunks --require-embeddings`：passed；正式 DB 仍為 2992 案、17254 chunks、17254 筆 local hashing embeddings。
+
 注意：語意搜尋頁第一次載入會計算 17254 筆 chunk embedding 相似度，可能短暫顯示「載入中」；等待數秒後會顯示結果。
 
 ## 13. 建議下一步開發順序
@@ -1360,7 +1376,7 @@ http://127.0.0.1:5173
 - 已新增案件層級語意相似 API 與案件詳情頁區塊，可展示相似案件、分數與實際命中 chunk。
 - 已讓語意搜尋 API 與案件層級語意相似 API 支援 `embedding_model` / `embedding_provider` 可選參數，並加入 provider/model 維度不一致防呆。
 - 已建立 embedding provider 介面，目前只啟用 `local` 與 `local_bge`；`huggingface` / `hf`、`openai` / `ai` 均會明確拒絕執行。
-- 已完成本機 `BAAI/bge-large-zh-v1.5` CUDA provider、模型快取、1000 chunks / 1024 維 trial 與 15 詞／75 結果的完全離線 benchmark；RTX 4050 GPU 推論已驗證，正式 DB 未切換。
+- 已完成本機 `BAAI/bge-large-zh-v1.5` CUDA provider、模型快取、17254 chunks / 1024 維全量 trial 與 15 詞／75 結果的完全離線 benchmark；RTX 4050 GPU 長時間推論已驗證，正式 DB 未切換。
 - 曾完成 Hugging Face API provider 與小批量試測；目前遠端 HTTP provider、response parser、retry 與 Token 設定已從 production code 移除，歷史結果只保留在文件與 trial DB。
 - 已完成 Hugging Face `BAAI/bge-large-zh-v1.5` 20 筆、100 筆與 1000 筆 trial DB 試跑，trial DB 中 BGE embeddings 為 1000 筆，正式 DB 未切換。
 - 已新增 `backend/scripts/compare_embedding_models.py`，可在不呼叫 Hugging Face API 的情況下，比較共同 chunks 的 local / BGE anchor-based 相似度排序。
@@ -1417,16 +1433,21 @@ http://127.0.0.1:5173
 3. 預設維持原查詢；只有使用者明確選擇後才以建議查詢重新搜尋。
 4. 已以桌面 1440×900 與手機 390×844 實際驗證，沒有水平溢出、按鈕重疊或 console error。
 
-### 下一步：完成本機 BGE trial DB 全量建置與驗證
+### 已完成：本機 BGE trial DB 全量建置與驗證
 
-建議工作：
+已完成工作：
 
-1. 已新增可續跑與分批 commit pipeline，並完成 100 筆 smoke test；BGE 目前為 1100 筆，尚缺 16154 筆，原有 1000 筆逐筆比較變更數為 0。
-2. 經使用者確認後，在 RTX 4050 以本機模型快取完成剩餘 16154 chunks 的 BGE embeddings，全程不呼叫外部 API。
-3. 驗證 BGE embedding 數量、維度、缺漏、模型名稱與資料庫檔案大小。
-4. 重跑固定 15 詞 benchmark，記錄全量 candidates 的 Precision@5、查詢時間與排名變化。
-5. 第二位標註者的獨立判讀與一致率仍是正式品質宣稱前的必要工作。
-6. 全量 trial 通過後，再決定是否讓正式 API 與前端切換至 BGE DB。
+1. 以可續跑與分批 commit pipeline 從 1100 筆接續完成剩餘 16154 chunks，全程使用本機模型快取與 CUDA。
+2. 驗證 BGE embedding 數量 17254、維度 1024、blob 長度 4096 bytes、缺漏 0、空向量 0、非有限值 0 與資料庫完整性。
+3. 驗證建置前備份中的 1000 筆向量未被重算，正式 DB 仍維持 local hashing。
+4. 重跑固定 15 詞 benchmark，完成全量 17254 candidates 的 75 筆 Top 5 結果與 1000-candidate 排名比較。
+
+下一步工作：
+
+1. 重新人工標註全量 benchmark 的 75 筆新結果；舊標註不可直接沿用。
+2. 計算全量 Strict / Lenient Precision@5，並保留第二位獨立標註與一致率要求。
+3. 驗證 API / 前端切換 trial DB 的載入時間、GPU 記憶體與錯誤處理。
+4. 品質與執行條件通過後，再另行確認是否備份並切換正式 DB。
 
 ### 第 8 階段：跨年度擴充
 

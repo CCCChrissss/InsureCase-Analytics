@@ -115,11 +115,14 @@ $env:LOCAL_BGE_BATCH_SIZE="4"
 - `--limit 100`：成功。
 - `--limit 1000`：成功。
 - Trial DB：`backend/data/insurance_cases_local_bge_trial.db`。
-- BGE embeddings：`BAAI/bge-large-zh-v1.5-local`，1024 維，1100 筆。
+- BGE embeddings：`BAAI/bge-large-zh-v1.5-local`，1024 維，17254 筆。
 - Local embeddings：`local_hashing_cjk_v1`，384 維，17254 筆仍保留。
-- 離線 benchmark 報告：`docs/local_bge_semantic_query_trial_1000.md`。
+- 離線全量 benchmark 報告：`docs/local_bge_semantic_query_trial_full.md`。
 - 2026-08-04 resume smoke test：從 1000 新增 100 筆，4 個 SQLite batches 全部成功，耗時約 23.6 秒，空向量 0，剩餘 16154 筆。
 - 與 smoke test 前備份逐筆比較：原有 1000 筆 embedding、norm 與 `created_at` 變更數均為 0。
+- 2026-08-05 全量 resume：從 1100 新增 16154 筆，162 個 SQLite batches 全部成功，耗時約 28 分 52 秒，空向量與缺漏均為 0。
+- 全量 BGE 維度均為 1024、blob 長度均為 4096 bytes，所有向量值與 norm 都是有限數；trial DB `integrity_check` 為 `ok`。
+- 正式 DB 仍只有 17254 筆 `local_hashing_cjk_v1`，尚未切換 BGE。
 
 ## 驗證方式
 
@@ -257,6 +260,7 @@ GET /api/cases/{case_id}/semantic-similar?limit=5
 
 ## 下一步
 
-1. 依既有 benchmark 規則人工判讀本機 BGE 1000-candidate 的 75 筆結果。
-2. 與歷史 Hugging Face API BGE benchmark 比較排名與人工 relevance。
-3. 若品質與本機建置時間可接受，再全量重建 trial DB；正式 DB 仍須另行確認後才切換。
+1. 依既有 benchmark 規則重新判讀全量 17254-candidate 的 75 筆結果。
+2. 計算全量 Precision@5，並與 1000-candidate 舊結果分開比較。
+3. 驗證 API 與前端使用 trial DB 的載入時間、GPU 記憶體與錯誤處理。
+4. 品質與執行條件通過後，再另行確認是否切換正式 DB。
