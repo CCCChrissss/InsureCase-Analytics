@@ -584,20 +584,42 @@ http://127.0.0.1:5173
 前端預設 API：
 
 ```text
-http://127.0.0.1:8000/api
+/api
 ```
 
-若要改 API 位址，可設定：
+本機 Vite 會將 `/api` 代理到 `http://127.0.0.1:8000`。若後端使用其他位址，可設定：
 
 ```text
-VITE_API_BASE_URL
+VITE_DEV_API_PROXY_TARGET
 ```
+
+只有前後端無法使用同源代理時，才需要以 `VITE_API_BASE_URL` 覆寫瀏覽器實際呼叫的 API 位址。
 
 設定範例位於：
 
 ```text
 frontend/.env.example
 ```
+
+### Temporary public preview with Cloudflare Tunnel
+
+Quick Tunnel 僅適合短時間專題展示。公開網址沒有本系統層級的登入驗證，持有網址的人可以搜尋案件、閱讀案件內容並開啟系統提供的 PDF；展示結束後必須停止 tunnel。
+
+後端若使用 Local BGE trial API `http://127.0.0.1:8001`，在 `frontend/` 啟動一個同源代理前端：
+
+```powershell
+$env:VITE_API_BASE_URL="/api"
+$env:VITE_DEV_API_PROXY_TARGET="http://127.0.0.1:8001"
+pnpm dev --port 5174
+```
+
+另開終端機建立臨時公開網址：
+
+```powershell
+cloudflared tunnel --url http://127.0.0.1:5174
+```
+
+成功後終端機會顯示 `https://<random>.trycloudflare.com`。按 `Ctrl+C` 或停止 `cloudflared` process 即可關閉公開入口；每次重新建立 Quick Tunnel 時網址可能改變。
 
 ## Testing
 

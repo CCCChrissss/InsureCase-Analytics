@@ -304,11 +304,11 @@ frontend/dist/
 ### frontend
 
 - `frontend/package.json`：React + Vite 前端專案設定與 scripts。
-- `frontend/.env.example`：前端環境變數範例，主要設定 `VITE_API_BASE_URL`。
+- `frontend/.env.example`：前端環境變數範例，設定同源 `/api` 與 Vite dev proxy target。
 - `frontend/pnpm-lock.yaml`：pnpm lockfile，鎖定前端相依版本。
 - `frontend/pnpm-workspace.yaml`：pnpm build approval 設定，目前允許 `esbuild`。
 - `frontend/index.html`：Vite HTML 入口。
-- `frontend/vite.config.ts`：Vite 設定，使用 React plugin，dev server 固定 `127.0.0.1:5173`。
+- `frontend/vite.config.ts`：Vite 設定，使用 React plugin，dev server 固定 `127.0.0.1:5173`，並將 `/api` 代理到可設定的本機 FastAPI；臨時展示只允許 `trycloudflare.com` hostname。
 - `frontend/tsconfig.json`：前端 TypeScript 設定。
 - `frontend/tsconfig.node.json`：Vite config 使用的 TypeScript 設定。
 - `frontend/src/main.tsx`：React app 掛載入口。
@@ -414,10 +414,10 @@ FastAPI /api/*
 
 ```text
 VITE_API_BASE_URL 若存在則使用該值
-否則預設 http://127.0.0.1:8000/api
+否則預設同源 /api
 ```
 
-前端設定範例位於 `frontend/.env.example`。
+Vite dev server 預設將 `/api` 代理到 `http://127.0.0.1:8000`，可透過 `VITE_DEV_API_PROXY_TARGET` 調整。前端設定範例位於 `frontend/.env.example`。
 
 目前背景頁面以 React state 切換，並同步基本 URL query：
 
@@ -1322,19 +1322,37 @@ pnpm dev
 http://127.0.0.1:5173
 ```
 
-前端預設呼叫：
+前端預設呼叫同源 API：
 
 ```text
-http://127.0.0.1:8000/api
+/api
 ```
 
-若要改 API 位址，可設定：
+Vite 預設代理到 `http://127.0.0.1:8000`。若要改本機 FastAPI 位址，可設定：
 
 ```text
-VITE_API_BASE_URL
+VITE_DEV_API_PROXY_TARGET
 ```
 
-設定範例在 `frontend/.env.example`。
+若前後端無法使用同源代理，才以 `VITE_API_BASE_URL` 覆寫瀏覽器 API 位址。設定範例在 `frontend/.env.example`。
+
+### Cloudflare Quick Tunnel 臨時展示
+
+本專案可由 Vite 將 `/api` 代理至本機 FastAPI，再以一個 Quick Tunnel 公開前端，避免外部瀏覽器連到自己的 `127.0.0.1`。Local BGE trial backend 使用 8001 時，在 `frontend/` 執行：
+
+```powershell
+$env:VITE_API_BASE_URL="/api"
+$env:VITE_DEV_API_PROXY_TARGET="http://127.0.0.1:8001"
+pnpm dev --port 5174
+```
+
+另開終端機執行：
+
+```powershell
+cloudflared tunnel --url http://127.0.0.1:5174
+```
+
+Quick Tunnel 僅供短時間展示，公開網址沒有應用程式登入保護。展示結束後應停止 `cloudflared`；正式提供外部使用前仍需加入身分驗證、權限控管與正式部署。
 
 ## 12. 測試方式
 

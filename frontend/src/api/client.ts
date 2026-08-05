@@ -1,4 +1,5 @@
-export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000/api";
+// 同源預設值可同時支援本機 Vite proxy、Cloudflare Tunnel 與日後反向代理部署。
+export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 export function apiPath(path: string, params: Record<string, string | number | null | undefined> = {}): string {
   const query = new URLSearchParams();
