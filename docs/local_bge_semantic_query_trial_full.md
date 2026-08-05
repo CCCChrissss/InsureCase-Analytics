@@ -21,8 +21,11 @@ It does not call an external inference API and does not modify the source databa
 Compared with the earlier 1000-candidate run, only `1 / 15` queries kept the
 same Top 1 chunk and the average Top 5 chunk overlap was `0.2 / 5`. The old
 annotations therefore cannot be reused as full-candidate quality labels. This
-report records retrieval output only; it does not claim full-candidate
-Precision@5 or legal correctness.
+report records retrieval output only. The separate Codex-assisted first-pass
+evaluation is available at
+`docs/local_bge_semantic_benchmark_v1_full_evaluation.md`; its Precision@5
+results are not independent human validation and do not establish legal
+correctness.
 
 ## Query: `除外責任`
 

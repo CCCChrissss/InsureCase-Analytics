@@ -207,18 +207,23 @@ $env:LOCAL_BGE_DEVICE="cuda"
 
 15 個查詢均已在全量 17254 筆 candidates 上完成 Top 5 排序，共 75 筆結果。Top 5 合集涵蓋 73 個案件與 21 種爭議類型，完整結果記錄於 `docs/local_bge_semantic_query_trial_full.md`。
 
-1000 與 17254 candidates 的 15 組查詢中，只有 1 組維持相同 Top 1，平均 Top 5 chunk overlap 為 `0.2 / 5`。這表示 1000 筆候選不足以代表全資料排名，不應作為全量品質基準。舊的 75 筆 AI 輔助標註不能直接套用到新的結果；全量 Precision@5 仍須重新人工標註後才能計算。
+1000 與 17254 candidates 的 15 組查詢中，只有 1 組維持相同 Top 1，平均 Top 5 chunk overlap 為 `0.2 / 5`。這表示 1000 筆候選不足以代表全資料排名，不應作為全量品質基準。舊標註沒有直接套用；全量結果已另做 Codex-assisted 第一輪判讀，Strict / Lenient Precision@5 為 `0.9200 / 0.9733`。
 
 ## 7. 人工標註
 
-全量 17254-candidate 的空白工作檔已建立於 `outputs/local_bge_semantic_benchmark_v1_full_annotations.json`。在專案根目錄執行：
+第一輪 75 筆已完成，追蹤版快照與評測報告為：
+
+- `docs/local_bge_semantic_benchmark_v1_full_annotations.json`
+- `docs/local_bge_semantic_benchmark_v1_full_evaluation.md`
+
+第一輪屬 Codex-assisted 判讀，不是獨立人工盲標。第二位標註者的空白工作檔為 `outputs/local_bge_semantic_benchmark_v1_full_second_annotations.json`。第二位標註者必須在未查看第一輪快照、評測報告與標籤的前提下，在專案根目錄執行：
 
 ```powershell
 .\.venv\Scripts\python.exe .\backend\scripts\annotate_semantic_benchmark.py `
-  --annotations .\outputs\local_bge_semantic_benchmark_v1_full_annotations.json
+  --annotations .\outputs\local_bge_semantic_benchmark_v1_full_second_annotations.json
 ```
 
-未指定 `--annotations` 時，預設仍會開啟歷史 1000-candidate 工作檔；全量標註必須明確指定上述路徑。工具會逐筆顯示：
+未指定 `--annotations` 時，預設仍會開啟歷史 1000-candidate 工作檔；第二輪全量標註必須明確指定上述路徑。工具會逐筆顯示：
 
 - 查詢詞、排名與 cosine score。
 - 案號、爭議類型與段落提示。
@@ -230,7 +235,7 @@ $env:LOCAL_BGE_DEVICE="cuda"
 
 ```powershell
 .\.venv\Scripts\python.exe .\backend\scripts\annotate_semantic_benchmark.py `
-  --annotations .\outputs\local_bge_semantic_benchmark_v1_full_annotations.json `
+  --annotations .\outputs\local_bge_semantic_benchmark_v1_full_second_annotations.json `
   --query 除外責任
 ```
 
@@ -238,19 +243,25 @@ $env:LOCAL_BGE_DEVICE="cuda"
 
 ```powershell
 .\.venv\Scripts\python.exe .\backend\scripts\annotate_semantic_benchmark.py `
-  --annotations .\outputs\local_bge_semantic_benchmark_v1_full_annotations.json `
+  --annotations .\outputs\local_bge_semantic_benchmark_v1_full_second_annotations.json `
   --index 1
 ```
 
 標註工具只讀 trial DB，且不載入模型、不呼叫 Hugging Face 或其他外部 API。
 
-75 筆全部完成後產生評測報告：
+第二輪 75 筆全部完成後，先產生第二輪評測，再比較兩位標註者：
 
 ```powershell
 .\.venv\Scripts\python.exe .\backend\scripts\evaluate_semantic_benchmark.py `
   --results .\outputs\local_bge_semantic_benchmark_v1_full.json `
-  --annotations .\outputs\local_bge_semantic_benchmark_v1_full_annotations.json `
-  --out .\outputs\local_bge_semantic_benchmark_v1_full_evaluation.md
+  --annotations .\outputs\local_bge_semantic_benchmark_v1_full_second_annotations.json `
+  --out .\outputs\local_bge_semantic_benchmark_v1_full_second_evaluation.md
+
+.\.venv\Scripts\python.exe .\backend\scripts\compare_semantic_annotations.py `
+  --results .\outputs\local_bge_semantic_benchmark_v1_full.json `
+  --annotations-a .\docs\local_bge_semantic_benchmark_v1_full_annotations.json `
+  --annotations-b .\outputs\local_bge_semantic_benchmark_v1_full_second_annotations.json `
+  --out .\outputs\local_bge_semantic_benchmark_v1_full_agreement.md
 ```
 
 ## 8. 正式切換條件
@@ -262,4 +273,5 @@ $env:LOCAL_BGE_DEVICE="cuda"
 3. 與 Hugging Face API BGE 的排名差異有紀錄。
 4. CPU 或 GPU 的全量重建時間可接受。（GPU 全量約 28 分 52 秒，已完成）
 5. 17254 筆 embeddings 全數建立且資料庫驗證通過。（已完成）
-6. 前端與 API 明確顯示實際 provider、model 與 device。
+6. 全量 75 筆第一輪評測已完成，但第二位獨立標註與一致率尚未完成。
+7. 前端與 API 明確顯示實際 provider、model 與 device。

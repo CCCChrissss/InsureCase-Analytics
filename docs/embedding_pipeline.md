@@ -118,6 +118,7 @@ $env:LOCAL_BGE_BATCH_SIZE="4"
 - BGE embeddings：`BAAI/bge-large-zh-v1.5-local`，1024 維，17254 筆。
 - Local embeddings：`local_hashing_cjk_v1`，384 維，17254 筆仍保留。
 - 離線全量 benchmark 報告：`docs/local_bge_semantic_query_trial_full.md`。
+- 全量第一輪評測：69 筆相關、4 筆部分相關、2 筆不相關，Strict / Lenient Precision@5 為 `0.9200 / 0.9733`；屬 Codex-assisted 判讀，不是獨立盲標。
 - 2026-08-04 resume smoke test：從 1000 新增 100 筆，4 個 SQLite batches 全部成功，耗時約 23.6 秒，空向量 0，剩餘 16154 筆。
 - 與 smoke test 前備份逐筆比較：原有 1000 筆 embedding、norm 與 `created_at` 變更數均為 0。
 - 2026-08-05 全量 resume：從 1100 新增 16154 筆，162 個 SQLite batches 全部成功，耗時約 28 分 52 秒，空向量與缺漏均為 0。
@@ -260,7 +261,7 @@ GET /api/cases/{case_id}/semantic-similar?limit=5
 
 ## 下一步
 
-1. 依既有 benchmark 規則重新判讀全量 17254-candidate 的 75 筆結果。
-2. 計算全量 Precision@5，並與 1000-candidate 舊結果分開比較。
+1. 由第二位標註者在未查看第一輪答案的前提下，獨立完成全量 75 筆判讀。
+2. 計算標註一致率、Cohen's Kappa 並仲裁不一致項目。
 3. 驗證 API 與前端使用 trial DB 的載入時間、GPU 記憶體與錯誤處理。
 4. 品質與執行條件通過後，再另行確認是否切換正式 DB。

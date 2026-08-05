@@ -42,6 +42,7 @@
 - Hugging Face trial DB 曾完成 `--limit 20`、`--limit 100` 與 `--limit 1000` 試跑；這些都是歷史結果，不再呼叫遠端 API。
 - `docs/hf_embedding_trial_comparison.md` 已記錄 100 筆 trial embeddings 與 local hashing 的離線 anchor-based 比較。
 - 本機 BGE trial DB 已完成 17254 筆 embeddings；15 詞、75 筆全量 Top 5 結果記錄於 `docs/local_bge_semantic_query_trial_full.md`。
+- 全量 Top 5 已完成 Codex-assisted 第一輪標註：Strict / Lenient Precision@5 為 `0.9200 / 0.9733`；第二位獨立標註尚未完成。
 
 目前本機 BGE trial DB 狀態：
 
@@ -362,8 +363,8 @@ GET /api/cases/{case_id}/semantic-similar?embedding_provider=local_bge&embedding
 
 ## 15. 建議實作順序
 
-1. 依固定規則人工判讀本機 BGE 17254-candidate 的 75 筆新結果。
-2. 計算全量 Precision@5，並與 1000-candidate 舊結果分開比較。
+1. 由第二位標註者獨立判讀本機 BGE 17254-candidate 的 75 筆結果，且判讀前不可查看第一輪答案。
+2. 計算一致率、Cohen's Kappa 並仲裁不一致項目。
 3. 在前端展示實際 provider、model 與 device，並驗證首次載入時間與 GPU 記憶體。
 4. 品質與效能可接受後，再考慮備份並切換正式 DB。
 5. 後續如需 OpenAI 或其他 provider，再在 `embedding_service.py` 新增 provider。

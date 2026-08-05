@@ -80,6 +80,10 @@ $env:LOCAL_BGE_BATCH_SIZE="4"
 - Top 5 合集涵蓋案件：`73`
 - Top 5 合集涵蓋爭議類型：`21`
 - 平均 Top 1 cosine score：`0.6503`
+- 第一輪標註：`69` 相關、`4` 部分相關、`2` 不相關
+- 第一輪 Strict / Lenient Precision@5：`0.9200 / 0.9733`
+- 標註快照：`docs/local_bge_semantic_benchmark_v1_full_annotations.json`
+- 評測報告：`docs/local_bge_semantic_benchmark_v1_full_evaluation.md`
 
 與先前 1000-candidate 結果比較：
 
@@ -89,7 +93,7 @@ $env:LOCAL_BGE_BATCH_SIZE="4"
 - 1000-candidate 平均 Top 1 score：`0.6148`
 - 17254-candidate 平均 Top 1 score：`0.6503`
 
-候選範圍擴大後排名明顯改變，證明前 1000 筆只適合驗證流程，不可代表全資料搜尋品質。舊的 75 筆標註不能直接套用到新的 75 筆結果；全量 Precision@5 必須重新標註後才能計算。
+候選範圍擴大後排名明顯改變，證明前 1000 筆只適合驗證流程，不可代表全資料搜尋品質。舊的 75 筆標註沒有直接沿用；全量結果已另做 75 筆 Codex-assisted 第一輪原文判讀。
 
 ## 5. 可下的結論與限制
 
@@ -102,14 +106,14 @@ $env:LOCAL_BGE_BATCH_SIZE="4"
 
 目前不能宣稱：
 
-- 全量搜尋已通過人工品質驗證。
+- 全量搜尋已通過獨立人工品質驗證。
 - BGE 分數等同法律相似度或評議結論。
 - 正式 API 與前端已切換到 BGE。
 - 既有 1000-candidate Precision@5 可代表全量結果。
 
 ## 6. 下一步
 
-1. 針對全量 benchmark 的 75 筆新結果建立獨立人工標註。
-2. 計算全量 Strict / Lenient Precision@5，並與 1000-candidate 結果分開呈現。
+1. 由未接觸第一輪答案的第二位標註者，使用空白模板獨立判讀 75 筆結果。
+2. 執行一致率、Cohen's Kappa 與爭議標記比較，必要時另行仲裁。
 3. 確認前端與 API 的 trial DB 切換方式、首次模型載入時間與記憶體需求。
 4. 品質通過且使用者明確確認後，再規劃正式 DB 備份與 BGE 切換；本報告不包含正式切換。
