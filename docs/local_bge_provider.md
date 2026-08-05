@@ -216,16 +216,26 @@ $env:LOCAL_BGE_DEVICE="cuda"
 - `docs/local_bge_semantic_benchmark_v1_full_annotations.json`
 - `docs/local_bge_semantic_benchmark_v1_full_evaluation.md`
 
-第一輪屬 Codex-assisted 判讀，不是獨立人工盲標。第二位標註者的空白工作檔為 `outputs/local_bge_semantic_benchmark_v1_full_second_annotations.json`。第二位標註者必須在未查看第一輪快照、評測報告與標籤的前提下，在專案根目錄執行：
+POC 混合式第二輪也已完成：第 1 至 9 題由使用者先行判讀，第 10 至 75 題為 Codex-assisted consolidation。追蹤版快照、評測及比較報告為：
 
-第二輪可使用 `docs/local_bge_semantic_benchmark_v1_independent_guide.md` 的共同標準；不得使用歷史 `docs/local_bge_semantic_benchmark_v1_1000_assisted_guide.md`，因其題目對應舊的 1000-candidate 結果且包含逐題提示。
+- `docs/local_bge_semantic_benchmark_v1_poc_second_annotations.json`
+- `docs/local_bge_semantic_benchmark_v1_poc_second_evaluation.md`
+- `docs/local_bge_semantic_benchmark_v1_poc_comparison.md`
+
+POC 第二輪不是獨立盲標，一致率與 Kappa 即使為 `1.0000` 也不能當作正式信度證據。未來若要補正式第二位獨立標註，必須建立另一個全新空白檔，且標註者不可查看第一輪與 POC 答案：
+
+正式獨立標註可使用 `docs/local_bge_semantic_benchmark_v1_independent_guide.md` 的共同標準；不得使用歷史 `docs/local_bge_semantic_benchmark_v1_1000_assisted_guide.md`，因其題目對應舊的 1000-candidate 結果且包含逐題提示。
 
 ```powershell
+.\.venv\Scripts\python.exe .\backend\scripts\evaluate_semantic_benchmark.py `
+  --results .\outputs\local_bge_semantic_benchmark_v1_full.json `
+  --template-out .\outputs\local_bge_semantic_benchmark_v1_formal_independent_annotations.json
+
 .\.venv\Scripts\python.exe .\backend\scripts\annotate_semantic_benchmark.py `
-  --annotations .\outputs\local_bge_semantic_benchmark_v1_full_second_annotations.json
+  --annotations .\outputs\local_bge_semantic_benchmark_v1_formal_independent_annotations.json
 ```
 
-未指定 `--annotations` 時，預設仍會開啟歷史 1000-candidate 工作檔；第二輪全量標註必須明確指定上述路徑。工具會逐筆顯示：
+未指定 `--annotations` 時，預設仍會開啟歷史 1000-candidate 工作檔；正式全量標註必須明確指定上述新路徑。工具會逐筆顯示：
 
 - 查詢詞、排名與 cosine score。
 - 案號、爭議類型與段落提示。
@@ -237,7 +247,7 @@ $env:LOCAL_BGE_DEVICE="cuda"
 
 ```powershell
 .\.venv\Scripts\python.exe .\backend\scripts\annotate_semantic_benchmark.py `
-  --annotations .\outputs\local_bge_semantic_benchmark_v1_full_second_annotations.json `
+  --annotations .\outputs\local_bge_semantic_benchmark_v1_formal_independent_annotations.json `
   --query 除外責任
 ```
 
@@ -245,25 +255,25 @@ $env:LOCAL_BGE_DEVICE="cuda"
 
 ```powershell
 .\.venv\Scripts\python.exe .\backend\scripts\annotate_semantic_benchmark.py `
-  --annotations .\outputs\local_bge_semantic_benchmark_v1_full_second_annotations.json `
+  --annotations .\outputs\local_bge_semantic_benchmark_v1_formal_independent_annotations.json `
   --index 1
 ```
 
 標註工具只讀 trial DB，且不載入模型、不呼叫 Hugging Face 或其他外部 API。
 
-第二輪 75 筆全部完成後，先產生第二輪評測，再比較兩位標註者：
+正式第二輪 75 筆全部完成後，先產生評測，再比較兩位獨立標註者：
 
 ```powershell
 .\.venv\Scripts\python.exe .\backend\scripts\evaluate_semantic_benchmark.py `
   --results .\outputs\local_bge_semantic_benchmark_v1_full.json `
-  --annotations .\outputs\local_bge_semantic_benchmark_v1_full_second_annotations.json `
-  --out .\outputs\local_bge_semantic_benchmark_v1_full_second_evaluation.md
+  --annotations .\outputs\local_bge_semantic_benchmark_v1_formal_independent_annotations.json `
+  --out .\outputs\local_bge_semantic_benchmark_v1_formal_independent_evaluation.md
 
 .\.venv\Scripts\python.exe .\backend\scripts\compare_semantic_annotations.py `
   --results .\outputs\local_bge_semantic_benchmark_v1_full.json `
   --annotations-a .\docs\local_bge_semantic_benchmark_v1_full_annotations.json `
-  --annotations-b .\outputs\local_bge_semantic_benchmark_v1_full_second_annotations.json `
-  --out .\outputs\local_bge_semantic_benchmark_v1_full_agreement.md
+  --annotations-b .\outputs\local_bge_semantic_benchmark_v1_formal_independent_annotations.json `
+  --out .\outputs\local_bge_semantic_benchmark_v1_formal_independent_agreement.md
 ```
 
 ## 8. 正式切換條件
@@ -275,5 +285,5 @@ $env:LOCAL_BGE_DEVICE="cuda"
 3. 與 Hugging Face API BGE 的排名差異有紀錄。
 4. CPU 或 GPU 的全量重建時間可接受。（GPU 全量約 28 分 52 秒，已完成）
 5. 17254 筆 embeddings 全數建立且資料庫驗證通過。（已完成）
-6. 全量 75 筆第一輪評測已完成，但第二位獨立標註與一致率尚未完成。
+6. 全量第一輪與 POC 混合式第二輪已完成；正式第二位獨立標註與有效信度估計尚未完成。
 7. 前端與 API 明確顯示實際 provider、model 與 device。

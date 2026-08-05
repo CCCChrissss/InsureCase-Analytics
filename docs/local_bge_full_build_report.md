@@ -84,6 +84,8 @@ $env:LOCAL_BGE_BATCH_SIZE="4"
 - 第一輪 Strict / Lenient Precision@5：`0.9200 / 0.9733`
 - 標註快照：`docs/local_bge_semantic_benchmark_v1_full_annotations.json`
 - 評測報告：`docs/local_bge_semantic_benchmark_v1_full_evaluation.md`
+- POC 第二輪快照：`docs/local_bge_semantic_benchmark_v1_poc_second_annotations.json`
+- POC 第二輪評測／比較：`docs/local_bge_semantic_benchmark_v1_poc_second_evaluation.md`、`docs/local_bge_semantic_benchmark_v1_poc_comparison.md`
 
 與先前 1000-candidate 結果比較：
 
@@ -113,7 +115,7 @@ $env:LOCAL_BGE_BATCH_SIZE="4"
 
 ## 6. 下一步
 
-1. 由未接觸第一輪答案的第二位標註者，使用空白模板獨立判讀 75 筆結果。
-2. 執行一致率、Cohen's Kappa 與爭議標記比較，必要時另行仲裁。
-3. 確認前端與 API 的 trial DB 切換方式、首次模型載入時間與記憶體需求。
+1. POC 已完成混合式第二輪與比較流程，但不是獨立信度驗證。
+2. 下一步確認前端與 API 的 trial DB 切換方式、首次模型載入時間與記憶體需求。
+3. 正式研究品質階段再以全新空白模板完成第二位獨立標註及仲裁。
 4. 品質通過且使用者明確確認後，再規劃正式 DB 備份與 BGE 切換；本報告不包含正式切換。

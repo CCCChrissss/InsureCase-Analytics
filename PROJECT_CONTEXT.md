@@ -74,6 +74,9 @@
 │  ├─ local_bge_semantic_query_trial_1000.md
 │  ├─ local_bge_semantic_benchmark_v1_1000_assisted_guide.md
 │  ├─ local_bge_semantic_benchmark_v1_independent_guide.md
+│  ├─ local_bge_semantic_benchmark_v1_poc_second_annotations.json
+│  ├─ local_bge_semantic_benchmark_v1_poc_second_evaluation.md
+│  ├─ local_bge_semantic_benchmark_v1_poc_comparison.md
 │  ├─ local_bge_semantic_benchmark_v1_annotations.json
 │  ├─ local_bge_semantic_benchmark_v1_evaluation.md
 │  ├─ local_bge_low_precision_query_analysis.md
@@ -223,6 +226,9 @@ frontend/dist/
 - `docs/local_bge_semantic_benchmark_v1_full_evaluation.md`：全量 75 筆第一輪評測報告，Strict / Lenient Precision@5 為 `0.9200 / 0.9733`，並記錄限制與低分查詢。
 - `docs/local_bge_semantic_benchmark_v1_1000_assisted_guide.md`：歷史 1000-candidate 的 75 題 AI 輔助指南，包含逐題提示；不適用全量結果或第二位獨立標註者。
 - `docs/local_bge_semantic_benchmark_v1_independent_guide.md`：全量第二輪獨立標註規範，只包含標籤定義、15 詞概念邊界、流程與證據規則，不含個別案件提示或第一輪答案。
+- `docs/local_bge_semantic_benchmark_v1_poc_second_annotations.json`：POC 混合式第二輪快照；第 1 至 9 題由使用者先行判讀，第 10 至 75 題為 Codex-assisted consolidation，明確標記 `independent = false`。
+- `docs/local_bge_semantic_benchmark_v1_poc_second_evaluation.md`：POC 第二輪 Precision@5 報告，結果為 Strict `0.9200`、Lenient `0.9733`，不得當作獨立人工評測。
+- `docs/local_bge_semantic_benchmark_v1_poc_comparison.md`：第一輪與 POC 第二輪的比較流程報告；一致率與 Kappa 均為 `1.0000`，但因來源不獨立，只能證明比較流程可運作。
 - `docs/local_bge_semantic_benchmark_v1_annotations.json`：本機 BGE 75 筆完成版 AI 輔助標註快照，包含共同標註方法、label 與 evidence summary；來源工作檔位於 Git 忽略的 `outputs/`。
 - `docs/local_bge_semantic_benchmark_v1_evaluation.md`：本機 BGE 15 詞、75 筆 AI 輔助標註的完整評測報告，包含逐查詢與逐筆判讀結果。
 - `docs/local_bge_low_precision_query_analysis.md`：針對四個低 Strict P@5 查詢執行 12 組、60 筆本機 BGE 對照試驗，記錄 query 改寫、逐筆 AI 輔助判讀、Precision@5 與實作建議。
@@ -878,11 +884,11 @@ Query parameters：
 - 正式 React Router。
 - 前端自動化測試。
 - Hugging Face embeddings 尚未對正式 DB 全量重建；目前已完成 trial DB 1000 筆、離線 anchor-based 比較報告，以及 5 個查詢詞的 query-to-document 小樣本試測。
-- 本機 BGE 已完成 RTX 4050 CUDA 17254 chunks 全量 embeddings，維度、blob 長度、缺漏、norm、非有限值與 SQLite integrity 均驗證通過；全量 15 詞／75 結果及第一輪評測已完成，但尚未完成第二位獨立標註或正式 DB 切換。
+- 本機 BGE 已完成 RTX 4050 CUDA 17254 chunks 全量 embeddings，維度、blob 長度、缺漏、norm、非有限值與 SQLite integrity 均驗證通過；全量 15 詞／75 結果、第一輪評測及 POC 混合式第二輪均已完成，但尚未完成第二位獨立標註或正式 DB 切換。
 - 選擇性查詢建議 service、response schema、API endpoint 與前端操作介面已完成；目前只支援 4 個核准短查詢，尚未擴充同義詞或模糊觸發。
 - 前端語意搜尋頁目前展示 Local BGE trial 摘要，不會直接查詢 trial DB 或呼叫外部 embedding API。
 - 15 詞 benchmark v1 已完成 75 筆 Codex-assisted 第一輪原文標註與 Precision@5 報告。
-- 第二位標註者空白模板與一致性比較工具已完成；第二位獨立標註、實際一致率計算與爭議標記仲裁尚未完成。
+- 一致性比較工具與 POC 混合式第二輪已完成；正式第二位獨立標註與有效的跨標註者信度估計仍未完成。
 - OpenAI 或其他外部 AI embedding provider 尚未實作。
 - 實務級向量資料庫或 ANN index。
 
@@ -1163,20 +1169,26 @@ py -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
 http://127.0.0.1:8000/docs
 ```
 
-### 執行本機 BGE 第二輪獨立標註
+### 本機 BGE POC 第二輪狀態
 
-第一輪全量標註已完成。第二位標註者在開始前不可查看 `docs/local_bge_semantic_benchmark_v1_full_annotations.json` 或第一輪評測報告，以免答案污染。
+POC 混合式第二輪已完成，工作檔為 `outputs/local_bge_semantic_benchmark_v1_full_second_annotations.json`。第 1 至 9 題由使用者先行判讀，第 10 至 75 題為 Codex-assisted consolidation，因此不得再將此檔作為獨立標註模板。
+
+若未來要補正式第二位獨立標註，必須另外建立全新空白檔，例如 `outputs/local_bge_semantic_benchmark_v1_formal_independent_annotations.json`，且標註者在完成前不可查看第一輪及 POC 報告。
 
 在專案根目錄執行：
 
 ```powershell
+.\.venv\Scripts\python.exe .\backend\scripts\evaluate_semantic_benchmark.py `
+  --results .\outputs\local_bge_semantic_benchmark_v1_full.json `
+  --template-out .\outputs\local_bge_semantic_benchmark_v1_formal_independent_annotations.json
+
 .\.venv\Scripts\python.exe .\backend\scripts\annotate_semantic_benchmark.py `
-  --annotations .\outputs\local_bge_semantic_benchmark_v1_full_second_annotations.json
+  --annotations .\outputs\local_bge_semantic_benchmark_v1_formal_independent_annotations.json
 ```
 
 全量標註讀取：
 
-- 標註檔：`outputs/local_bge_semantic_benchmark_v1_full_second_annotations.json`
+- 標註檔：`outputs/local_bge_semantic_benchmark_v1_formal_independent_annotations.json`
 - 脈絡資料庫：`backend/data/insurance_cases_local_bge_trial.db`（唯讀）
 
 若省略 `--annotations`，工具仍會開啟歷史 1000-candidate 工作檔，因此處理全量結果時不可省略此參數。
@@ -1347,6 +1359,7 @@ http://127.0.0.1:5173
 - 全量 15 詞 benchmark：每詞 17254 candidates、共 75 筆；相較 1000-candidate 結果只有 1/15 Top 1 相同，平均 Top 5 overlap 為 0.2/5。
 - 全量第一輪標註：69 筆相關、4 筆部分相關、2 筆不相關；Strict / Lenient Precision@5 為 `0.9200 / 0.9733`。
 - 75 筆證據摘要全部非空且不重複，最短 23 個字；本輪為 Codex-assisted 判讀，不是第二位標註者的獨立盲標。
+- POC 混合式第二輪：75/75 完成，Strict / Lenient Precision@5 同為 `0.9200 / 0.9733`；與第一輪一致率及 Kappa 均為 `1.0000`，但第 10 至 75 題不是獨立來源，數值只用於流程展示。
 - `.\.venv\Scripts\python.exe -m pytest`：111 passed。
 - embedding build、query trial、evaluation 與 annotation 相關模組的 `py_compile`：通過。
 - `verify_case_db.py --expected-count 2992 --require-chunks --require-embeddings`：passed；正式 DB 仍為 2992 案、17254 chunks、17254 筆 local hashing embeddings。
@@ -1455,12 +1468,13 @@ http://127.0.0.1:5173
 
 1. 全量 benchmark 75 筆已重新判讀，未沿用 1000-candidate 舊標籤。
 2. 已建立可追溯標註快照與 Strict / Lenient Precision@5 報告。
+3. 已完成 POC 混合式第二輪、評測與比較流程；限制已寫入報告，未宣稱獨立信度。
 
 下一步工作：
 
-1. 由未接觸第一輪答案的第二位標註者，使用 `outputs/local_bge_semantic_benchmark_v1_full_second_annotations.json` 獨立完成 75 筆判讀。
-2. 執行一致率、Cohen's Kappa 與爭議項目仲裁。
-3. 驗證 API / 前端切換 trial DB 的載入時間、GPU 記憶體與錯誤處理。
+1. POC 先進入 API / 前端切換 trial DB 的載入時間、GPU 記憶體與錯誤處理驗證。
+2. 正式研究品質階段再由未接觸既有答案的第二位標註者，使用全新空白檔完成 75 筆判讀。
+3. 正式獨立標註完成後，再計算有效的一致率、Cohen's Kappa 與爭議項目仲裁。
 4. 品質與執行條件通過後，再另行確認是否備份並切換正式 DB。
 
 ### 第 8 階段：跨年度擴充
