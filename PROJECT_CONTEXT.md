@@ -165,15 +165,18 @@
       │  └─ client.ts
       ├─ components/
       │  ├─ CaseDetailView.tsx
+      │  ├─ CaseWorkspaceModal.tsx
       │  └─ ui.tsx
       ├─ hooks/
-      │  └─ useAsyncData.ts
-      └─ pages/
+      │  ├─ useAsyncData.ts
+      │  └─ useOpenCases.ts
+      ├─ pages/
          ├─ CasesPage.tsx
-         ├─ Dashboard.tsx
          ├─ QualityPage.tsx
          ├─ SearchPage.tsx
          └─ SemanticSearchPage.tsx
+      └─ utils/
+         └─ legalReferences.ts
 ```
 
 未掃描但專案會使用的產物目錄：
@@ -306,13 +309,16 @@ frontend/dist/
 - `frontend/tsconfig.json`：前端 TypeScript 設定。
 - `frontend/tsconfig.node.json`：Vite config 使用的 TypeScript 設定。
 - `frontend/src/main.tsx`：React app 掛載入口。
-- `frontend/src/App.tsx`：主版面、側邊欄導覽與 route state 管理。
+- `frontend/src/App.tsx`：主版面、側邊欄導覽、背景頁面 route 與全域案件工作區整合。
 - `frontend/src/api/client.ts`：API base URL、`apiGet`、`apiGetOptional`。
 - `frontend/src/types.ts`：前端 API response 型別，包含查詢建議回應。
 - `frontend/src/hooks/useAsyncData.ts`：共用非同步資料載入 hook。
-- `frontend/src/components/CaseDetailView.tsx`：案件詳情、摘要、相似案件區塊。
+- `frontend/src/hooks/useOpenCases.ts`：已開啟案件分頁、切換、關閉、最小化與 `sessionStorage` 狀態保存。
+- `frontend/src/components/CaseDetailView.tsx`：理賠人員導向的案件摘要、判斷理由、法源、相關案件及原文閱讀區。
+- `frontend/src/components/CaseWorkspaceModal.tsx`：不離開搜尋背景頁的彈出式案件 Dashboard 與瀏覽器式案件分頁。
 - `frontend/src/components/ui.tsx`：PageHeader、PanelHeader、Metric、AsyncBlock、EmptyState。
-- `frontend/src/pages/`：Dashboard、案件管理、全文搜尋、語意搜尋、統計分析、分析驗證頁；語意搜尋頁已接入可選查詢建議。
+- `frontend/src/pages/`：案件工作台、全文搜尋、語意搜尋與分析驗證頁；主要導覽只顯示案件工作台與全文搜尋，技術頁保留 direct route。
+- `frontend/src/utils/legalReferences.ts`：從案件原文規則式擷取法規與保單條款名稱、條號及來源段落。
 - `frontend/src/styles.css`：前端全域樣式與 responsive layout。
 - `frontend/src/vite-env.d.ts`：Vite TypeScript 型別宣告。
 
@@ -406,29 +412,30 @@ VITE_API_BASE_URL 若存在則使用該值
 
 前端設定範例位於 `frontend/.env.example`。
 
-目前頁面以 React state 切換，並同步基本 URL query：
+目前背景頁面以 React state 切換，並同步基本 URL query：
 
 - `dashboard`
 - `cases`
 - `search`
 - `semantic`
-- `statistics`
 - `quality`
 
-案件詳情可分享：
+舊版案件連結仍可向下相容：
 
 ```text
 ?view=cases&case_id=<case_id>
 ```
 
-重新整理或使用瀏覽器上一頁/下一頁時，會依 URL 還原頁面與選中案件。
+一般操作不再把案件 ID 寫回 URL。開啟案件時會保留目前背景頁面，例如從全文搜尋開啟案件後仍停留在 `?view=search`，案件內容由全域彈出式工作區顯示。
+
+已開啟案件分頁只保存 `case_id` 與顯示標籤於 `sessionStorage`；同一瀏覽器分頁重新整理可還原，關閉瀏覽器分頁後不保證保留。詳細資料、摘要與相關案件只在目前作用中的案件分頁載入。
 
 主要 UI：
 
-- 側邊欄導覽：查找首頁、案件查找、全文搜尋、語意搜尋、分析驗證。
-- Dashboard：案件查找工作台，提供案件查找、全文搜尋、語意搜尋入口與資料整理狀態。
-- 案件管理：年度、爭議類型、案號 filter，案件列表，案件詳情。
-- 全文搜尋：關鍵字輸入，顯示查詢摘要、FTS5 / LIKE fallback 來源、命中片段，點擊進入案件詳情。
+- 側邊欄主要導覽：案件工作台、全文搜尋；另有已開啟案件數量與還原按鈕。
+- 案件工作台：年度、爭議類型、案號篩選與案件列表。
+- 全文搜尋：關鍵字搜尋、命中片段與案件基本資料；點擊結果時在目前頁面上開啟案件工作區，不切換背景 route。
+- 案件工作區：瀏覽器式案件分頁、關閉、切換、最小化、摘要、評議結論、申請人主張、判斷理由、法源與契約條款、相關案件、查看原文及正式 PDF。
 - 語意搜尋：輸入查詢文字，展示 embedding 模型、候選 chunk、cosine similarity、score bar、段落提示、命中段落與案件來源。
 - 統計分析：目前保留 direct route 與後端 API 作為輔助檢查，不放在主要導覽。
 - 分析驗證：展示 ROC 114 摘要覆蓋率、截段污染檢查、相似度計分規則、抽樣案件、已知例外與限制。
@@ -847,14 +854,14 @@ Query parameters：
 ### 前端
 
 - React + Vite 專案。
-- Dashboard 已調整為案件查找工作台。
+- 案件工作台已取代舊 Dashboard，首頁直接提供案件篩選與清單。
 - 案件管理頁年度篩選。
 - 案件詳情區。
 - 全文搜尋頁。
-- 全文搜尋頁，展示 query、命中數、match_source、fallback 說明、snippet 與案件來源。
+- 全文搜尋頁以理賠人員可理解的案件資訊與命中片段為主，不顯示 FTS5、fallback 或模型等技術欄位。
 - 語意搜尋頁可在 Local Hashing 與 Local BGE 間切換並實際呼叫 API，展示 DB、stored embedding 筆數、provider、model、device、維度、API 耗時、候選 chunk、分析流程、模型限制、命中 chunk、score、score bar、section hint 與案件來源。
 - 語意搜尋頁已接入查詢建議 API；有核准建議時顯示原查詢、建議查詢、理由、規則編號與目前實際執行查詢，由使用者自行切換。
-- 案件詳情頁語意相似案件區塊，展示相似案件、分數與實際命中 chunk。
+- 一般案件工作區顯示規則式相關案件與業務理由，不顯示相似度分數或模型參數；語意技術細節留在 direct route 的語意搜尋頁。
 - 統計分析頁仍保留 direct route，但不作為主導覽項目。
 - 分析驗證頁。
 - 案件摘要區塊。
@@ -862,7 +869,11 @@ Query parameters：
 - PDF 連結。
 - Responsive layout。
 - API 連線狀態顯示。
-- 基本 URL 狀態同步，可分享案件詳情。
+- 背景頁面 URL 狀態同步與舊案件 URL 向下相容。
+- 彈出式案件 Dashboard 與多案件分頁，可切換、關閉、最小化及還原。
+- 已開啟案件以 `sessionStorage` 保存，同一瀏覽器分頁重新整理後可還原。
+- 案件整理內容與原文可在同一彈窗內切換，並保留正式 PDF 連結。
+- 規則式法源與保單條款擷取，顯示可回查的原文段落並標示需人工核對。
 
 ### Git
 
@@ -892,6 +903,8 @@ Query parameters：
 - API 錯誤回應格式統一。
 - 正式 React Router。
 - 前端自動化測試。
+- 規則式摘要與法源擷取仍可能截取過長或不完整段落；正式理賠判斷必須回查原文與 PDF，不可把前端整理內容當成法律結論。
+- 案件工作區使用 `sessionStorage`，不是帳號層級或跨裝置保存；關閉瀏覽器分頁後不保證留存。
 - 遠端 Hugging Face embeddings 不再建置；本機 BGE 已在獨立 trial DB 完成全量 17254 筆，正式 DB 仍未切換。
 - 本機 BGE 已完成 RTX 4050 CUDA 17254 chunks 全量 embeddings，維度、blob 長度、缺漏、norm、非有限值與 SQLite integrity 均驗證通過；全量 15 詞／75 結果、第一輪評測及 POC 混合式第二輪均已完成，但尚未完成第二位獨立標註或正式 DB 切換。
 - 選擇性查詢建議 service、response schema、API endpoint 與前端操作介面已完成；目前只支援 4 個核准短查詢，尚未擴充同義詞或模糊觸發。
@@ -1443,6 +1456,7 @@ http://127.0.0.1:5173
 - 已讓語意搜尋 API 與案件層級語意相似 API 支援 `embedding_model` / `embedding_provider` 可選參數，並加入 provider/model 維度不一致防呆。
 - 已建立 embedding provider 介面，目前只啟用 `local` 與 `local_bge`；`huggingface` / `hf`、`openai` / `ai` 均會明確拒絕執行。
 - 已完成本機 `BAAI/bge-large-zh-v1.5` CUDA provider、模型快取、17254 chunks / 1024 維全量 trial 與 15 詞／75 結果的完全離線 benchmark；RTX 4050 GPU 長時間推論已驗證，正式 DB 未切換。
+- 已將前端主流程改為理賠案件工作台與全文搜尋；案件以彈出式 Dashboard 開啟，不改變搜尋背景 route，並支援瀏覽器式多案件分頁、關閉、最小化、重新整理還原、原文切換與正式 PDF。
 - 已完成全量 17254-candidate 的 75 筆 Codex-assisted 第一輪標註與評測；69 筆相關、4 筆部分相關、2 筆不相關，Strict P@5 `0.9200`、Lenient P@5 `0.9733`。最低分查詢為 `違反告知義務`，Strict P@5 `0.2000`，主要混淆來自不同角色的說明／告知義務及保費催告內容。
 - 曾完成 Hugging Face API provider 與小批量試測；目前遠端 HTTP provider、response parser、retry 與 Token 設定已從 production code 移除，歷史結果只保留在文件與 trial DB。
 - 已完成 Hugging Face `BAAI/bge-large-zh-v1.5` 20 筆、100 筆與 1000 筆 trial DB 試跑，trial DB 中 BGE embeddings 為 1000 筆，正式 DB 未切換。

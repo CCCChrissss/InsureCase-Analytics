@@ -17,10 +17,13 @@
 - 中文搜尋 LIKE fallback
 - FastAPI 後端 API
 - React + Vite 前端案件查找工作台
-- 案件列表、案件詳情、PDF 連結
+- 案件列表、彈出式案件 Dashboard、正式 PDF 連結
 - 全文搜尋頁
+- 搜尋結果不跳頁，保留原搜尋畫面並在上層開啟案件
+- 瀏覽器式多案件分頁，可切換、關閉、最小化與重新整理還原
 - 年度篩選
 - 規則式案件摘要
+- 規則式法源與保單條款擷取，附可回查原文段落
 - 規則式相似案件推薦
 - 分析驗證頁，展示摘要與相似案件品質檢查過程
 - 案件文字 chunking pipeline，作為後續 embedding 與向量搜尋前置資料
@@ -202,7 +205,9 @@ GET /api/quality/roc114-summary-similarity
 GET /api/statistics/overview
 ```
 
-目前前端主軸是案件查找、全文搜尋、語意搜尋與案件詳情。只保留統計總覽 API，供首頁資料狀態與案件年度選單使用。
+目前前端主軸是理賠人員使用的案件工作台、全文搜尋與彈出式案件 Dashboard。主要導覽不顯示語意模型、品質指標或統計報表；語意搜尋與分析驗證頁仍保留 direct route，供開發與專題驗證使用。統計總覽 API 保留供案件年度選單與資料狀態使用。
+
+從案件清單、全文搜尋或相關案件開啟案件時，不會切換背景頁面。案件工作區可同時保留多個案件分頁，並以 `sessionStorage` 保存案件 ID 與標籤；同一瀏覽器分頁重新整理可還原，但這不是帳號層級或跨裝置保存。
 
 ### Search
 
@@ -224,8 +229,9 @@ FTS5 與 LIKE fallback 的搜尋範圍皆包含：
 
 - 查詢文字、總命中案件、本頁顯示筆數。
 - 每筆結果的案號、決定日期、爭議類型與命中文字片段。
-- `match_source`，例如 `FTS5`、`LIKE 補查`、`LIKE fallback`，用來說明結果來源。
-- FTS5 優先、中文補查與錯誤 fallback 的判讀流程。
+- 點擊案件後直接開啟彈出式案件 Dashboard，背景仍保留原查詢與結果。
+
+`match_source` 與 FTS5 / LIKE fallback 技術資訊仍由 API 保留，但不放在理賠人員的主要畫面；需要驗證搜尋來源時可由 API response 或後端測試確認。
 
 ### Summaries
 
@@ -662,6 +668,8 @@ pnpm build
 - CI
 - 部署設定
 - 前端自動化測試
+- 規則式摘要與法源擷取不是 LLM 法律判斷，可能有截段或漏抓，正式使用必須回查原文與官方 PDF
+- 案件分頁目前只用 `sessionStorage` 保存，不支援帳號同步、跨裝置或永久工作清單
 - PostgreSQL / pgvector 實務版
 
 ## Recommended Next Steps
