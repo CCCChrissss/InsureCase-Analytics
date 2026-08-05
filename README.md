@@ -23,11 +23,13 @@
 - 瀏覽器式多案件分頁，可切換、關閉、最小化與重新整理還原
 - 年度篩選
 - 規則式案件摘要
-- 規則式法源與保單條款擷取，附可回查原文段落
+- 規則式法源擷取，只呈現明確法規條文並排除保單、附約與契約條款
 - 規則式相似案件推薦
 - 分析驗證頁，展示摘要與相似案件品質檢查過程
 - 案件文字 chunking pipeline，作為後續 embedding 與向量搜尋前置資料
 - 本機 chunk embedding MVP 與語意搜尋 API
+- 全文命中案件可依關鍵字相關性或全域語意相似度排序，排序完成後再分頁
+- 「計算方法」頁公開全文搜尋、搜尋相似度、相關案件、評議結果與 Precision@5 計算流程
 - 前端語意搜尋頁，展示 query、embedding 模型、命中 chunk、score、section hint 與案件來源
 - 案件詳情頁語意相似案件區塊，展示案件層級語意相似與命中段落
 - 語意搜尋 API 支援指定 `embedding_model` / `embedding_provider`
@@ -199,6 +201,7 @@ GET /api/files/{case_id}/pdf
 GET /api/search
 GET /api/semantic-search
 GET /api/semantic-case-scores
+GET /api/semantic-ranked-search
 GET /api/cases/{case_id}/summary
 GET /api/cases/{case_id}/similar
 GET /api/cases/{case_id}/semantic-similar
@@ -206,7 +209,7 @@ GET /api/quality/roc114-summary-similarity
 GET /api/statistics/overview
 ```
 
-目前前端主軸是理賠人員使用的案件工作台、全文搜尋與彈出式案件 Dashboard。主要導覽不顯示語意模型、品質指標或統計報表；語意搜尋與分析驗證頁仍保留 direct route，供開發與專題驗證使用。統計總覽 API 保留供案件年度選單與資料狀態使用。
+目前前端主軸是理賠人員使用的案件工作台、全文搜尋、計算方法與彈出式案件 Dashboard。計算方法頁公開所有與畫面分數有關的公式與限制；語意搜尋與分析驗證頁仍保留 direct route，供開發與專題驗證使用。統計總覽 API 保留供案件年度選單與資料狀態使用。
 
 從案件清單、全文搜尋或相關案件開啟案件時，不會切換背景頁面。案件工作區可同時保留多個案件分頁，並以 `sessionStorage` 保存案件 ID 與標籤；同一瀏覽器分頁重新整理可還原，但這不是帳號層級或跨裝置保存。
 
@@ -233,18 +236,21 @@ FTS5 / LIKE 關鍵字結果
   +
 本機 BAAI/bge-large-zh-v1.5 逐案評分
   ↓
-完整分頁顯示全文命中案件
+關鍵字相關性排序，或先完成全體語意排序再分頁
 ```
 
 前端搜尋頁會展示：
 
 - 查詢文字、全部命中案件數、目前頁數與總頁數，每頁可選擇 10、15 或 20 筆。
+- 排序方式可選擇「關鍵字相關性」或「相似度：高到低」。
 - 每筆結果的案號、決定日期、爭議類型、命中文字片段、評議結果與「與搜尋內容相近 XX%」。
 - 評議結果由摘要主文保守分類為有理由、部分有理由、無理由或不受理；無法可靠分類時顯示尚未整理。
 - 「相似度怎麼看」以白話說明搜尋文字、案件內容與接近程度的關係，不在理賠人員主畫面呈現模型公式。
 - 點擊案件後直接開啟彈出式案件 Dashboard，背景仍保留原查詢與結果。
 
-語意評分只針對目前頁面的 10 至 20 件全文命中案件，取各案件中與查詢最接近的 chunk 分數。查詢固定指定 `local_bge` 與 `BAAI/bge-large-zh-v1.5-local`，只讀取本機模型快取與目前後端連線 DB 的既有 embeddings，不呼叫 Hugging Face API。若本機 BGE 或對應 embeddings 無法使用，前端仍保留完整全文搜尋與翻頁。
+關鍵字排序時，語意評分只針對目前頁面的 10 至 20 件案件；相似度排序時，`GET /api/semantic-ranked-search` 會先取得全部關鍵字命中案件，逐案取最高 chunk cosine similarity，完成全域排序後才分頁。後端以 DB 檔案身分、查詢、provider 與 model 作為 key，最多快取最近 16 組完整排名。查詢固定指定 `local_bge` 與 `BAAI/bge-large-zh-v1.5-local`，只讀取本機模型快取與目前後端連線 DB 的既有 embeddings，不呼叫 Hugging Face API；若全域排序失敗，前端會退回關鍵字排序。
+
+案件 Dashboard 的相關案件使用不同公式：先將來源案件全部 chunks 向量相加並正規化，再與其他案件的每個 chunk 比較，候選案件取最高分。此計算具有方向性，且制式文字可能拉高分數，因此只能作為查找提示。完整公式、BM25、百分比換算、評議結果分類與 Precision@5 限制可由側邊欄「計算方法」查看。
 
 `match_source` 與 FTS5 / LIKE fallback 技術資訊仍由 API 保留，但不放在理賠人員的主要畫面；需要驗證搜尋來源時可由 API response 或後端測試確認。
 
@@ -609,6 +615,8 @@ py -m py_compile .\backend\scripts\run_semantic_query_trial.py
 py -m py_compile .\backend\scripts\evaluate_semantic_benchmark.py
 py -m py_compile .\backend\scripts\verify_case_db.py
 py -m py_compile .\backend\scripts\extract_case_summaries.py
+py -m py_compile .\backend\app\services\search_service.py
+py -m py_compile .\backend\app\services\embedding_service.py
 ```
 
 ### Backend pytest
@@ -623,6 +631,7 @@ py -m pytest
 - 分析驗證 API
 - 統計 API 年度篩選
 - 搜尋 fallback
+- 全域語意排序、排序後分頁與 bounded cache
 - 案件文字 chunking pipeline
 - 本機 embedding service 與語意搜尋
 - 摘要擷取與 summary service
@@ -636,6 +645,12 @@ py -m pytest
 ```powershell
 cd frontend
 pnpm build
+```
+
+法源過濾可使用 Node 內建測試，不需新增前端測試套件：
+
+```powershell
+node --test .\frontend\tests\legalReferences.test.ts
 ```
 
 若目前 shell 找不到 `node`，需先確認 Node.js 已在 PATH，或使用 Codex bundled Node runtime。

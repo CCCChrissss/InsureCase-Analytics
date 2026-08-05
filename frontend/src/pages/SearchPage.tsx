@@ -6,35 +6,63 @@ import { SimilarityExplanationDialog } from "../components/SimilarityExplanation
 import { AsyncBlock, PageHeader } from "../components/ui";
 import { LOCAL_BGE_MODEL, LOCAL_BGE_PROVIDER } from "../config/semantic";
 import { useAsyncData } from "../hooks/useAsyncData";
-import type { SearchResponse, SemanticCaseScore, SemanticCaseScoresResponse } from "../types";
+import type {
+  SearchResponse,
+  SearchResult,
+  SemanticCaseScoresResponse,
+  SemanticRankedSearchResponse,
+  SemanticRankedSearchResult,
+} from "../types";
 
 const PAGE_SIZE_OPTIONS = [10, 15, 20] as const;
+type SearchSortMode = "keyword" | "similarity";
 
 export function SearchPage({ onOpenCase }: { onOpenCase: (caseId: string, label?: string) => void }) {
   const [query, setQuery] = React.useState("");
   const [submittedQuery, setSubmittedQuery] = React.useState("");
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(15);
+  const [sortMode, setSortMode] = React.useState<SearchSortMode>("keyword");
   const [showSimilarityExplanation, setShowSimilarityExplanation] = React.useState(false);
 
-  const results = useAsyncData(
+  // 關鍵字搜尋永遠保留為基線，讓本機語意模型失敗時仍可完成查找與翻頁。
+  const keywordResults = useAsyncData(
     () => submittedQuery
       ? apiGet<SearchResponse>(apiPath("/search", { q: submittedQuery, page, page_size: pageSize }))
       : Promise.resolve<SearchResponse | null>(null),
     [submittedQuery, page, pageSize]
   );
+  const rankedResults = useAsyncData(
+    () => submittedQuery && sortMode === "similarity"
+      ? apiGet<SemanticRankedSearchResponse>(apiPath("/semantic-ranked-search", {
+          q: submittedQuery,
+          page,
+          page_size: pageSize,
+          embedding_provider: LOCAL_BGE_PROVIDER,
+          embedding_model: LOCAL_BGE_MODEL,
+        }))
+      : Promise.resolve<SemanticRankedSearchResponse | null>(null),
+    [submittedQuery, page, pageSize, sortMode]
+  );
+
+  // useAsyncData 在新請求期間會保留舊資料，因此必須比對查詢與頁碼，避免畫面短暫顯示錯頁。
+  const validKeywordResults = isCurrentPage(keywordResults.data, submittedQuery, page, pageSize)
+    ? keywordResults.data
+    : null;
+  const validRankedResults = isCurrentPage(rankedResults.data, submittedQuery, page, pageSize)
+    ? rankedResults.data
+    : null;
+  const fallbackToKeyword = sortMode === "similarity" && Boolean(rankedResults.error);
+  const usesKeywordResults = sortMode === "keyword" || fallbackToKeyword;
+  const activeResults = usesKeywordResults ? validKeywordResults : validRankedResults;
+  const activeLoading = usesKeywordResults ? keywordResults.loading : rankedResults.loading;
+  const activeError = usesKeywordResults ? keywordResults.error : rankedResults.error;
+
+  // 關鍵字排序只對當頁補相似度；全域排序 API 已直接回傳每筆案件分數，不需重算。
   const scoreCaseIds = React.useMemo(() => {
-    if (
-      results.loading
-      || !results.data
-      || results.data.query !== submittedQuery
-      || results.data.page !== page
-      || results.data.page_size !== pageSize
-    ) {
-      return "";
-    }
-    return results.data.items.map((item) => item.case_id).join(",");
-  }, [page, pageSize, results.data, results.loading, submittedQuery]);
+    if (!usesKeywordResults || keywordResults.loading || !validKeywordResults) return "";
+    return validKeywordResults.items.map((item) => item.case_id).join(",");
+  }, [keywordResults.loading, usesKeywordResults, validKeywordResults]);
   const semanticScores = useAsyncData(
     () => scoreCaseIds
       ? apiGet<SemanticCaseScoresResponse>(apiPath("/semantic-case-scores", {
@@ -47,10 +75,10 @@ export function SearchPage({ onOpenCase }: { onOpenCase: (caseId: string, label?
     [scoreCaseIds, submittedQuery]
   );
   const scoreByCase = React.useMemo(
-    () => new Map((semanticScores.data?.items ?? []).map((item) => [item.case_id, item])),
+    () => new Map((semanticScores.data?.items ?? []).map((item) => [item.case_id, item.score])),
     [semanticScores.data]
   );
-  const totalPages = Math.max(1, Math.ceil((results.data?.total ?? 0) / pageSize));
+  const totalPages = Math.max(1, Math.ceil((activeResults?.total ?? 0) / pageSize));
 
   return (
     <section className="page claims-search-page">
@@ -95,8 +123,8 @@ export function SearchPage({ onOpenCase }: { onOpenCase: (caseId: string, label?
             <div>
               <h3>搜尋結果</h3>
               <span>
-                {results.data
-                  ? `共 ${results.data.total.toLocaleString("zh-TW")} 件，第 ${page} / ${totalPages} 頁`
+                {activeResults
+                  ? `共 ${activeResults.total.toLocaleString("zh-TW")} 件，第 ${page} / ${totalPages} 頁`
                   : "查詢中"}
               </span>
             </div>
@@ -109,6 +137,19 @@ export function SearchPage({ onOpenCase }: { onOpenCase: (caseId: string, label?
                 <Info size={16} />
                 相似度怎麼看
               </button>
+              <label className="result-size-control sort-control">
+                <span>排序方式</span>
+                <select
+                  value={sortMode}
+                  onChange={(event) => {
+                    setPage(1);
+                    setSortMode(event.target.value as SearchSortMode);
+                  }}
+                >
+                  <option value="keyword">關鍵字相關性</option>
+                  <option value="similarity">相似度：高到低</option>
+                </select>
+              </label>
               <label className="result-size-control">
                 <span>每頁顯示</span>
                 <select
@@ -125,17 +166,25 @@ export function SearchPage({ onOpenCase }: { onOpenCase: (caseId: string, label?
               </label>
             </div>
           </div>
-          {!results.loading && scoreCaseIds && semanticScores.loading && (
+          {sortMode === "similarity" && rankedResults.loading && (
+            <div className="semantic-status-note">正在計算全部命中案件的相似度並重新排序</div>
+          )}
+          {fallbackToKeyword && (
+            <div className="semantic-unavailable-note" title={rankedResults.error ?? undefined}>
+              全域相似度排序目前無法使用，已改用關鍵字相關性排序。
+            </div>
+          )}
+          {!activeLoading && scoreCaseIds && semanticScores.loading && (
             <div className="semantic-status-note">正在補上每筆案件的相似度</div>
           )}
-          {!results.loading && semanticScores.error && (
+          {!activeLoading && usesKeywordResults && semanticScores.error && (
             <div className="semantic-unavailable-note" title={semanticScores.error}>
               相似度目前無法使用，全文搜尋與翻頁仍可正常使用。
             </div>
           )}
-          <AsyncBlock loading={results.loading} error={results.error}>
+          <AsyncBlock loading={activeLoading} error={activeError}>
             <div className="claims-search-results">
-              {(results.data?.items ?? []).map((item) => (
+              {(activeResults?.items ?? []).map((item) => (
                 <button
                   key={item.case_id}
                   className="claims-search-row"
@@ -144,7 +193,10 @@ export function SearchPage({ onOpenCase }: { onOpenCase: (caseId: string, label?
                 >
                   <span className="search-row-heading">
                     <strong>{item.case_number}</strong>
-                    <SimilarityValue score={scoreByCase.get(item.case_id)} loading={semanticScores.loading} />
+                    <SimilarityValue
+                      score={similarityForItem(item, scoreByCase)}
+                      loading={usesKeywordResults && semanticScores.loading}
+                    />
                   </span>
                   <span className="search-row-meta">
                     <span>
@@ -158,16 +210,16 @@ export function SearchPage({ onOpenCase }: { onOpenCase: (caseId: string, label?
                   <p>{item.snippet || "此案件沒有可顯示的命中片段。"}</p>
                 </button>
               ))}
-              {results.data?.items.length === 0 && (
+              {activeResults?.items.length === 0 && (
                 <div className="state-box">目前沒有符合「{submittedQuery}」的案件，請嘗試較短的關鍵字。</div>
               )}
             </div>
-            {(results.data?.total ?? 0) > 0 && (
+            {(activeResults?.total ?? 0) > 0 && (
               <div className="pagination compact-pagination search-pagination">
                 <button
                   className="icon-button"
                   type="button"
-                  disabled={page <= 1 || results.loading}
+                  disabled={page <= 1 || activeLoading}
                   onClick={() => setPage((value) => Math.max(1, value - 1))}
                   aria-label="上一頁"
                   title="上一頁"
@@ -178,7 +230,7 @@ export function SearchPage({ onOpenCase }: { onOpenCase: (caseId: string, label?
                 <button
                   className="icon-button"
                   type="button"
-                  disabled={page >= totalPages || results.loading}
+                  disabled={page >= totalPages || activeLoading}
                   onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
                   aria-label="下一頁"
                   title="下一頁"
@@ -199,19 +251,41 @@ export function SearchPage({ onOpenCase }: { onOpenCase: (caseId: string, label?
   );
 }
 
-function SimilarityValue({ score, loading }: { score: SemanticCaseScore | undefined; loading: boolean }) {
+// 只有查詢、頁碼及每頁筆數都一致時，資料才屬於目前畫面。
+function isCurrentPage<T extends { query: string; page: number; page_size: number }>(
+  data: T | null,
+  query: string,
+  page: number,
+  pageSize: number
+): data is T {
+  return Boolean(data && data.query === query && data.page === page && data.page_size === pageSize);
+}
+
+// 全域排序結果直接帶分數；一般搜尋結果則使用當頁補算的分數表。
+function similarityForItem(
+  item: SearchResult | SemanticRankedSearchResult,
+  scoreByCase: Map<string, number>
+) {
+  if ("similarity_score" in item) return item.similarity_score;
+  return scoreByCase.get(item.case_id) ?? null;
+}
+
+function SimilarityValue({ score, loading }: { score: number | null; loading: boolean }) {
+  // 後端保留原始 cosine score，畫面只做 0 到 100 的保守百分比轉換。
   if (loading) return <span className="search-similarity pending">相似度計算中</span>;
-  if (!score) return null;
-  const percentage = Math.round(Math.min(Math.max(score.score, 0), 1) * 100);
+  if (score === null) return null;
+  const percentage = Math.round(Math.min(Math.max(score, 0), 1) * 100);
   return <span className="search-similarity">與搜尋內容相近 {percentage}%</span>;
 }
 
 function meaningfulDecisionResult(value: string | null) {
+  // metadata 的「全部」是查詢條件，不是案件結論，因此不可直接呈現為評議結果。
   const cleaned = value?.trim();
   return cleaned && cleaned !== "全部" ? cleaned : "尚未整理";
 }
 
 function decisionTone(value: string | null) {
+  // 色彩只協助掃讀，不改變或推論後端提供的評議結果文字。
   if (!value) return "neutral";
   if (/部分有理由/.test(value)) return "partial";
   if (/無理由|駁回|不受理/.test(value)) return "adverse";

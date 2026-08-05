@@ -103,12 +103,13 @@ export function CaseDetailView({
         )}
       </section>
 
+      {/* 法源區只呈現法規引用；個別保單與契約內容留在案件原文供人工核對。 */}
       <section className="case-reading-section">
         <div className="reading-section-heading">
           <Landmark size={19} />
           <div>
-            <h3>法源與契約條款</h3>
-            <p>由決定書原文辨識法規與保單條款，提供核對片段。</p>
+            <h3>法源依據</h3>
+            <p>僅列出決定書明確引用的法規條文，不顯示個別保單或契約條款。</p>
           </div>
         </div>
         {legalReferences.length > 0 ? (
@@ -119,16 +120,15 @@ export function CaseDetailView({
                   <span>{reference.category}</span>
                   <strong>{reference.title}</strong>
                 </div>
-                <p>{reference.excerpt}</p>
               </article>
             ))}
           </div>
         ) : (
-          <div className="state-box compact">目前未從原文辨識到明確法規或保單條款。</div>
+          <div className="state-box compact">目前未從原文辨識到明確法規條文。</div>
         )}
         <div className="source-caution">
           <Scale size={16} />
-          <span>此區為原文規則擷取，不是法律意見；實際適用內容請以正式評議決定書為準。</span>
+          <span>此區僅整理法規引用，不是法律意見；實際適用內容請以正式評議決定書與現行法規為準。</span>
         </div>
       </section>
 

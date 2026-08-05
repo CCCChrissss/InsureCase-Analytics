@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.app.services import embedding_service
+from backend.app.services import search_service
 
 
 def insert_case_with_chunks(
@@ -611,6 +612,78 @@ def test_semantic_case_scores_returns_best_chunk_for_each_requested_case(
     assert scores["case_cancer"]["score"] > scores["case_hospital"]["score"]
     assert "癌症" in scores["case_cancer"]["chunk_text"]
     assert result["total_candidates"] == 3
+
+
+def test_semantic_ranked_search_sorts_all_matches_before_pagination_and_uses_cache(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    # 兩案都命中關鍵字，但只有 case_high 的 chunk 與查詢高度接近。
+    db_path = tmp_path / "insurance_cases.db"
+    with make_connection(db_path) as connection:
+        connection.executescript((Path(__file__).resolve().parents[1] / "schema.sql").read_text(encoding="utf-8"))
+        insert_case_with_chunks(
+            connection,
+            case_id="case_low",
+            case_number="115年評字第000001號",
+            dispute_type="癌症理賠",
+            chunks=["住院日額與住院天數計算爭議。"],
+        )
+        insert_case_with_chunks(
+            connection,
+            case_id="case_high",
+            case_number="115年評字第000002號",
+            dispute_type="癌症理賠",
+            chunks=["癌症標靶治療後申請癌症保險金。"],
+        )
+        for case_id, case_number, normalized_text in (
+            ("case_low", "115年評字第000001號", "癌症保險金爭議，涉及住院日數。"),
+            ("case_high", "115年評字第000002號", "癌症標靶治療後申請癌症保險金。"),
+        ):
+            connection.execute(
+                "INSERT INTO case_texts (case_id, normalized_text) VALUES (?, ?);",
+                (case_id, normalized_text),
+            )
+            connection.execute(
+                "INSERT INTO case_summaries (case_id, holding) VALUES (?, '本中心就申請人之請求尚難為有利之認定。');",
+                (case_id,),
+            )
+            connection.execute(
+                """
+                INSERT INTO case_search (case_id, case_number, dispute_type, normalized_text)
+                VALUES (?, ?, '癌症理賠', ?);
+                """,
+                (case_id, case_number, normalized_text),
+            )
+    embedding_service.build_chunk_embeddings(db_path)
+
+    monkeypatch.setattr(embedding_service, "connect", lambda: make_connection(db_path))
+    monkeypatch.setattr(search_service, "connect", lambda: make_connection(db_path))
+    monkeypatch.setattr(embedding_service, "DEFAULT_DB_PATH", db_path)
+    embedding_service.clear_semantic_ranked_search_cache()
+
+    # 第二頁必須沿用同一份全域排名；若先分頁再評分，這個順序就無法成立。
+    first_page = embedding_service.semantic_ranked_search(
+        "癌症",
+        page=1,
+        page_size=1,
+        provider_name="local",
+        model_name=embedding_service.LOCAL_MODEL_NAME,
+    )
+    second_page = embedding_service.semantic_ranked_search(
+        "癌症",
+        page=2,
+        page_size=1,
+        provider_name="local",
+        model_name=embedding_service.LOCAL_MODEL_NAME,
+    )
+
+    assert first_page["total"] == 2
+    assert first_page["items"][0]["case_id"] == "case_high"
+    assert first_page["cached"] is False
+    assert second_page["items"][0]["case_id"] == "case_low"
+    assert second_page["cached"] is True
+    assert first_page["items"][0]["similarity_score"] > second_page["items"][0]["similarity_score"]
 
 
 def test_semantic_search_uses_stored_dims_when_global_dims_differ(tmp_path: Path, monkeypatch) -> None:

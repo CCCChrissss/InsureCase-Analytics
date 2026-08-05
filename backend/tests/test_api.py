@@ -326,6 +326,64 @@ def test_semantic_case_scores_rejects_more_than_twenty_cases() -> None:
     assert response.json()["detail"] == "At most 20 case IDs can be scored at once."
 
 
+def test_semantic_ranked_search_accepts_pagination_and_model_params(monkeypatch) -> None:
+    # Router 測試隔離本機模型，只驗證參數轉交與 response schema。
+    captured = {}
+
+    def fake_semantic_ranked_search(query: str, **kwargs):
+        captured["query"] = query
+        captured.update(kwargs)
+        return {
+            "query": query,
+            "embedding_provider": kwargs["provider_name"],
+            "embedding_model": kwargs["model_name"],
+            "embedding_dims": 1024,
+            "embedding_device": "cuda",
+            "elapsed_ms": 7.5,
+            "cached": False,
+            "items": [
+                {
+                    "case_id": "case_1",
+                    "case_number": "115年評字第000001號",
+                    "decision_date": "115.01.09",
+                    "dispute_type": "癌症理賠",
+                    "decision_result": "無理由",
+                    "snippet": "癌症保險金爭議。",
+                    "match_source": "fts5",
+                    "similarity_score": 0.8123,
+                    "section_hint": "判斷理由",
+                    "chunk_index": 2,
+                    "semantic_snippet": "癌症住院治療是否符合約定。",
+                }
+            ],
+            "total": 21,
+            "total_candidates": 120,
+            "match_source": "fts5",
+            "page": kwargs["page"],
+            "page_size": kwargs["page_size"],
+        }
+
+    monkeypatch.setattr(semantic_search_router, "semantic_ranked_search", fake_semantic_ranked_search)
+
+    response = client.get(
+        "/api/semantic-ranked-search",
+        params={
+            "q": "癌症",
+            "page": 2,
+            "page_size": 15,
+            "embedding_model": "BAAI/bge-large-zh-v1.5-local",
+            "embedding_provider": "local_bge",
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["query"] == "癌症"
+    assert captured["page"] == 2
+    assert captured["page_size"] == 15
+    assert response.json()["items"][0]["similarity_score"] == 0.8123
+    assert response.json()["total"] == 21
+
+
 def test_embedding_status_reports_available_models(monkeypatch) -> None:
     monkeypatch.setattr(
         semantic_search_router,

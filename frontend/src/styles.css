@@ -1507,6 +1507,10 @@ button {
   background: #ffffff;
 }
 
+.result-size-control.sort-control select {
+  min-width: 148px;
+}
+
 .case-index .case-list {
   min-height: 0;
   overflow-y: auto;
@@ -1772,7 +1776,8 @@ button {
 
 .legal-reference {
   display: grid;
-  grid-template-columns: minmax(180px, 0.42fr) minmax(0, 1fr);
+  /* 法源區只顯示法規名稱，不再為契約摘錄保留第二欄。 */
+  grid-template-columns: 1fr;
   gap: 14px;
   padding: 12px;
   border: 1px solid #dde4e2;
@@ -2436,5 +2441,231 @@ button {
 
   .original-document-view {
     padding: 16px;
+  }
+}
+
+/* 計算方法頁採連續文件式版面，讓理賠人員可以依主題掃讀與核對公式。 */
+.methodology-page {
+  max-width: 1120px;
+  gap: 18px;
+}
+
+.method-status-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid #d2dbd9;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.method-status-strip > div {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 9px;
+  align-items: center;
+  min-width: 0;
+  padding: 14px 16px;
+  border-right: 1px solid #e1e7e5;
+}
+
+.method-status-strip > div:last-child {
+  border-right: 0;
+}
+
+.method-status-strip svg {
+  grid-row: 1 / 3;
+  color: #8a6427;
+}
+
+.method-status-strip span {
+  color: #687672;
+  font-size: 0.78rem;
+}
+
+.method-status-strip strong {
+  min-width: 0;
+  /* 技術名稱可能很長；單行省略可避免只剩副檔名末字落到下一行。 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #2e3b38;
+  font-size: 0.88rem;
+}
+
+.method-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding: 11px 2px;
+  border-bottom: 1px solid #cdd7d4;
+}
+
+.method-toc a,
+.method-source-link {
+  color: #315f59;
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.method-toc a:hover,
+.method-source-link:hover {
+  text-decoration: underline;
+}
+
+.method-section {
+  scroll-margin-top: 20px;
+  padding: 22px 0 26px;
+  border-bottom: 1px solid #d8e0de;
+}
+
+.method-section > header {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+}
+
+.method-section > header svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: #8a6427;
+}
+
+.method-section h3 {
+  margin: 0;
+  color: #263431;
+  font-size: 1.08rem;
+}
+
+.method-section header p {
+  max-width: 840px;
+  margin: 5px 0 0;
+  color: #596762;
+  font-size: 0.92rem;
+  line-height: 1.65;
+}
+
+.method-section-content {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+  padding-left: 31px;
+}
+
+.method-steps,
+.method-limit-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 22px;
+  color: #3e4a47;
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+
+.formula-block {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-left: 3px solid #b7822f;
+  background: #f7f9f8;
+}
+
+.formula-block strong {
+  color: #2e3b38;
+  font-size: 0.9rem;
+}
+
+.formula-block code {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 8px 10px;
+  color: #243633;
+  background: #ffffff;
+  font-size: 0.84rem;
+  line-height: 1.55;
+  white-space: nowrap;
+}
+
+.formula-block span,
+.method-note,
+.method-warning {
+  margin: 0;
+  color: #596762;
+  font-size: 0.86rem;
+  line-height: 1.65;
+}
+
+.method-warning {
+  padding: 12px 14px;
+  border: 1px solid #e2d3b4;
+  border-radius: 6px;
+  color: #6f5729;
+  background: #fffaf0;
+}
+
+.decision-rule-table {
+  border-top: 1px solid #d8e0de;
+}
+
+.decision-rule-table > div {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 14px;
+  padding: 11px 8px;
+  border-bottom: 1px solid #e2e8e6;
+  color: #485651;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.decision-rule-table strong {
+  color: #2d4540;
+}
+
+@media (max-width: 920px) {
+  /* 窄螢幕將狀態列與搜尋控制改為直向，避免選單互相擠壓。 */
+  .method-status-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .method-status-strip > div {
+    border-right: 0;
+    border-bottom: 1px solid #e1e7e5;
+  }
+
+  .method-status-strip > div:last-child {
+    border-bottom: 0;
+  }
+
+  .search-results-header,
+  .search-results-controls {
+    align-items: stretch;
+  }
+
+  .search-results-header {
+    flex-direction: column;
+  }
+
+  .search-results-controls {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 620px) {
+  .method-section-content {
+    padding-left: 0;
+  }
+
+  .decision-rule-table > div {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+
+  .result-size-control,
+  .result-size-control select,
+  .result-size-control.sort-control select {
+    width: 100%;
   }
 }

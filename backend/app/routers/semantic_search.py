@@ -4,10 +4,12 @@ from fastapi import APIRouter, HTTPException, Query
 
 from backend.app.schemas import EmbeddingStatusResponse
 from backend.app.schemas import SemanticCaseScoresResponse
+from backend.app.schemas import SemanticRankedSearchResponse
 from backend.app.schemas import SemanticSearchResponse
 from backend.app.services.embedding_service import EmbeddingProviderError
 from backend.app.services.embedding_service import get_embedding_status
 from backend.app.services.embedding_service import semantic_case_scores
+from backend.app.services.embedding_service import semantic_ranked_search
 from backend.app.services.embedding_service import semantic_search
 
 
@@ -55,6 +57,27 @@ def get_semantic_case_scores(
         return semantic_case_scores(
             q,
             case_ids=parsed_case_ids,
+            model_name=embedding_model,
+            provider_name=embedding_provider,
+        )
+    except EmbeddingProviderError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@router.get("/semantic-ranked-search", response_model=SemanticRankedSearchResponse)
+def get_semantic_ranked_search(
+    q: str = Query(..., min_length=1),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=20),
+    embedding_model: str | None = Query(None, min_length=1),
+    embedding_provider: str | None = Query(None, min_length=1),
+) -> dict:
+    """Expose global semantic ordering while keeping pagination bounded to 20 cases."""
+    try:
+        return semantic_ranked_search(
+            q,
+            page=page,
+            page_size=page_size,
             model_name=embedding_model,
             provider_name=embedding_provider,
         )

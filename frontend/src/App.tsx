@@ -1,17 +1,19 @@
 import React from "react";
-import { BriefcaseBusiness, Files, FileSearch, LayoutDashboard } from "lucide-react";
+import { BriefcaseBusiness, Calculator, Files, FileSearch, LayoutDashboard } from "lucide-react";
 
 import { apiGet } from "./api/client";
 import { CaseWorkspaceModal } from "./components/CaseWorkspaceModal";
 import { useAsyncData } from "./hooks/useAsyncData";
 import { useOpenCases } from "./hooks/useOpenCases";
 import { CasesPage } from "./pages/CasesPage";
+import { CalculationMethodPage } from "./pages/CalculationMethodPage";
 import { QualityPage } from "./pages/QualityPage";
 import { SearchPage } from "./pages/SearchPage";
 import { SemanticSearchPage } from "./pages/SemanticSearchPage";
 import type { HealthResponse, Route } from "./types";
 
-const ROUTES: Route[] = ["dashboard", "cases", "search", "semantic", "quality"];
+// methodology 是面向使用者的公開說明頁；semantic 與 quality 保留為內部驗證路由。
+const ROUTES: Route[] = ["dashboard", "cases", "search", "methodology", "semantic", "quality"];
 
 function parseRoute(value: string | null): Route | null {
   return ROUTES.includes(value as Route) ? (value as Route) : null;
@@ -64,6 +66,7 @@ export function App() {
   const navItems: Array<{ route: Route; label: string; icon: React.ReactNode }> = [
     { route: "dashboard", label: "案件工作台", icon: <LayoutDashboard size={18} /> },
     { route: "search", label: "全文搜尋", icon: <FileSearch size={18} /> },
+    { route: "methodology", label: "計算方法", icon: <Calculator size={18} /> },
   ];
 
   return (
@@ -111,6 +114,7 @@ export function App() {
             />
           )}
           {route === "search" && <SearchPage onOpenCase={caseWorkspace.openCase} />}
+          {route === "methodology" && <CalculationMethodPage />}
           {route === "semantic" && <SemanticSearchPage onOpenCase={caseWorkspace.openCase} />}
           {route === "quality" && <QualityPage />}
         </main>

@@ -7,7 +7,7 @@ import sqlite3
 import struct
 import threading
 import time
-from collections import Counter
+from collections import Counter, OrderedDict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +20,8 @@ from backend.app.config import LOCAL_BGE_BATCH_SIZE
 from backend.app.config import LOCAL_BGE_DEVICE
 from backend.app.database import connect
 from backend.app.database import DEFAULT_DB_PATH
+from backend.app.services.case_service import clamp_pagination
+from backend.app.services.search_service import search_all_cases
 
 LOCAL_PROVIDER_NAME = "local"
 LOCAL_MODEL_NAME = "local_hashing_cjk_v1"
@@ -43,6 +45,10 @@ CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
 _LOCAL_BGE_MODEL_CACHE: dict[tuple[str, str], Any] = {}
 _LOCAL_BGE_MODEL_CACHE_LOCK = threading.Lock()
 _LOCAL_BGE_INFERENCE_LOCK = threading.Lock()
+# 全域排序成本較高；LRU 只保留最近 16 組完整排名，避免記憶體無限制成長。
+_SEMANTIC_RANKED_SEARCH_CACHE: OrderedDict[tuple[Any, ...], dict[str, Any]] = OrderedDict()
+_SEMANTIC_RANKED_SEARCH_CACHE_LOCK = threading.Lock()
+SEMANTIC_RANKED_SEARCH_CACHE_SIZE = 16
 
 
 class EmbeddingProviderError(RuntimeError):
@@ -852,6 +858,193 @@ def semantic_case_scores(
         "elapsed_ms": round((time.perf_counter() - started_at) * 1000, 2),
         "items": items,
         "total_candidates": len(rows),
+    }
+
+
+def clear_semantic_ranked_search_cache() -> None:
+    """Clear process-local ranked results after tests or an explicit data refresh."""
+    with _SEMANTIC_RANKED_SEARCH_CACHE_LOCK:
+        _SEMANTIC_RANKED_SEARCH_CACHE.clear()
+
+
+def semantic_ranked_database_key() -> tuple[str, int | None, int | None]:
+    """Include DB identity in cache keys so replacing the database invalidates old rankings."""
+    try:
+        stat = DEFAULT_DB_PATH.stat()
+    except OSError:
+        return str(DEFAULT_DB_PATH), None, None
+    return str(DEFAULT_DB_PATH.resolve()), stat.st_mtime_ns, stat.st_size
+
+
+def semantic_ranked_search(
+    query: str,
+    *,
+    page: int = 1,
+    page_size: int = 20,
+    model_name: str | None = None,
+    provider_name: str | None = None,
+) -> dict[str, Any]:
+    """Score all keyword matches, sort globally, then return the requested page."""
+    started_at = time.perf_counter()
+    cleaned_query = query.strip()
+    safe_page, safe_page_size, offset = clamp_pagination(page, page_size)
+    resolved_provider_name = (provider_name or EMBEDDING_PROVIDER).strip().lower()
+    resolved_model_name = (model_name or EMBEDDING_MODEL).strip()
+    if resolved_provider_name in LOCAL_BGE_PROVIDER_ALIASES and resolved_model_name in {
+        LOCAL_MODEL_NAME,
+        HUGGINGFACE_DEFAULT_MODEL_NAME,
+    }:
+        resolved_model_name = LOCAL_BGE_MODEL_NAME
+
+    cache_key = (
+        cleaned_query,
+        resolved_provider_name,
+        resolved_model_name,
+        semantic_ranked_database_key(),
+    )
+    with _SEMANTIC_RANKED_SEARCH_CACHE_LOCK:
+        cached_result = _SEMANTIC_RANKED_SEARCH_CACHE.get(cache_key)
+        if cached_result is not None:
+            _SEMANTIC_RANKED_SEARCH_CACHE.move_to_end(cache_key)
+
+    cache_hit = cached_result is not None
+    if cached_result is None:
+        keyword_matches = search_all_cases(cleaned_query)
+        with connect() as connection:
+            inventory_row = connection.execute(
+                """
+                SELECT COUNT(*) AS embedding_count,
+                       MIN(embedding_dims) AS min_dims,
+                       MAX(embedding_dims) AS max_dims
+                FROM chunk_embeddings
+                WHERE embedding_model = ?;
+                """,
+                (resolved_model_name,),
+            ).fetchone()
+
+        embedding_count = int(inventory_row["embedding_count"])
+        if embedding_count == 0:
+            raise EmbeddingProviderError(
+                f"No stored embeddings were found for model '{resolved_model_name}' in database "
+                f"'{DEFAULT_DB_PATH.name}'. Start the API with a database that contains this model."
+            )
+        min_dims = int(inventory_row["min_dims"])
+        max_dims = int(inventory_row["max_dims"])
+        if min_dims != max_dims:
+            raise EmbeddingProviderError(
+                f"Stored embeddings for model '{resolved_model_name}' contain mixed dimensions: "
+                f"{min_dims} and {max_dims}. Rebuild the model embeddings before searching."
+            )
+
+        provider = create_embedding_provider(
+            provider_name=resolved_provider_name,
+            model_name=resolved_model_name,
+            dims=min_dims,
+        )
+        if min_dims != provider.dims:
+            raise EmbeddingProviderError(
+                f"Stored embeddings for model '{provider.model_name}' have {min_dims} dimensions, "
+                f"but query provider '{provider.provider_name}' produces {provider.dims} dimensions. "
+                "Use a matching embedding_provider for the selected embedding_model."
+            )
+
+        query_embeddings = provider.embed_texts([cleaned_query])
+        validate_provider_embeddings(
+            provider,
+            query_embeddings,
+            expected_count=1,
+            context_ids=["query"],
+        )
+        embedded_query = query_embeddings[0]
+        matched_case_ids = {item["case_id"] for item in keyword_matches["items"]}
+        rows: list[sqlite3.Row] = []
+        if matched_case_ids and embedded_query.token_count > 0 and embedded_query.norm > 0:
+            ordered_case_ids = sorted(matched_case_ids)
+            with connect() as connection:
+                # 分批建立 IN 查詢，避免一次帶入過多 SQLite bind parameters。
+                for start in range(0, len(ordered_case_ids), 500):
+                    batch_case_ids = ordered_case_ids[start : start + 500]
+                    placeholders = ", ".join("?" for _ in batch_case_ids)
+                    rows.extend(
+                        connection.execute(
+                            f"""
+                            SELECT chunk_embeddings.embedding, chunk_embeddings.embedding_dims,
+                                   case_chunks.case_id, case_chunks.chunk_index,
+                                   case_chunks.section_hint, case_chunks.chunk_text
+                            FROM chunk_embeddings
+                            JOIN case_chunks ON case_chunks.chunk_id = chunk_embeddings.chunk_id
+                            WHERE chunk_embeddings.embedding_model = ?
+                              AND case_chunks.case_id IN ({placeholders});
+                            """,
+                            (provider.model_name, *batch_case_ids),
+                        ).fetchall()
+                    )
+
+        # 查詢對案件分數採用最高 chunk 分數，保留最能說明命中的段落。
+        best_by_case: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            candidate_vector = unpack_vector(row["embedding"], row["embedding_dims"])
+            score = dot_product(embedded_query.vector, candidate_vector)
+            current = best_by_case.get(row["case_id"])
+            if current is None or score > current["similarity_score"]:
+                best_by_case[row["case_id"]] = {
+                    "similarity_score": score,
+                    "section_hint": row["section_hint"],
+                    "chunk_index": row["chunk_index"],
+                    "semantic_snippet": row["chunk_text"],
+                }
+
+        ranked_items = []
+        for item in keyword_matches["items"]:
+            semantic_match = best_by_case.get(item["case_id"])
+            ranked_items.append(
+                {
+                    **item,
+                    "similarity_score": (
+                        round(semantic_match["similarity_score"], 4) if semantic_match is not None else None
+                    ),
+                    "section_hint": semantic_match["section_hint"] if semantic_match is not None else None,
+                    "chunk_index": semantic_match["chunk_index"] if semantic_match is not None else None,
+                    "semantic_snippet": semantic_match["semantic_snippet"] if semantic_match is not None else None,
+                }
+            )
+
+        # 缺少 embedding 的案件仍保留，但會排在所有有分數的案件之後。
+        ranked_items.sort(
+            key=lambda item: (
+                item["similarity_score"] is not None,
+                item["similarity_score"] if item["similarity_score"] is not None else -1.0,
+                item["decision_date"] or "",
+                item["case_number"] or "",
+            ),
+            reverse=True,
+        )
+        cached_result = {
+            "query": query,
+            "embedding_provider": provider.provider_name,
+            "embedding_model": provider.model_name,
+            "embedding_dims": provider.dims,
+            "embedding_device": embedding_device(provider),
+            "items": ranked_items,
+            "total": keyword_matches["total"],
+            "total_candidates": len(rows),
+            "match_source": keyword_matches["match_source"],
+        }
+        with _SEMANTIC_RANKED_SEARCH_CACHE_LOCK:
+            _SEMANTIC_RANKED_SEARCH_CACHE[cache_key] = cached_result
+            _SEMANTIC_RANKED_SEARCH_CACHE.move_to_end(cache_key)
+            # OrderedDict 最前方是最久未使用的結果，超量時逐筆淘汰。
+            while len(_SEMANTIC_RANKED_SEARCH_CACHE) > SEMANTIC_RANKED_SEARCH_CACHE_SIZE:
+                _SEMANTIC_RANKED_SEARCH_CACHE.popitem(last=False)
+
+    assert cached_result is not None
+    return {
+        **{key: value for key, value in cached_result.items() if key != "items"},
+        "items": cached_result["items"][offset : offset + safe_page_size],
+        "page": safe_page,
+        "page_size": safe_page_size,
+        "elapsed_ms": round((time.perf_counter() - started_at) * 1000, 2),
+        "cached": cache_hit,
     }
 
 

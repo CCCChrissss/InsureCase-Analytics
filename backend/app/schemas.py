@@ -127,6 +127,31 @@ class SemanticCaseScoresResponse(BaseModel):
     total_candidates: int
 
 
+class SemanticRankedSearchResult(SearchResult):
+    """Keyword search item enriched with its best matching semantic chunk."""
+    similarity_score: float | None
+    section_hint: str | None
+    chunk_index: int | None
+    semantic_snippet: str | None
+
+
+class SemanticRankedSearchResponse(BaseModel):
+    """Globally ranked semantic results after keyword filtering and pagination."""
+    query: str
+    embedding_provider: str
+    embedding_model: str
+    embedding_dims: int
+    embedding_device: str
+    elapsed_ms: float
+    cached: bool
+    items: list[SemanticRankedSearchResult]
+    total: int
+    total_candidates: int
+    match_source: str
+    page: int
+    page_size: int
+
+
 class EmbeddingModelStatus(BaseModel):
     embedding_model: str
     embedding_dims: int

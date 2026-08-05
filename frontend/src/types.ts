@@ -135,6 +135,30 @@ export type SemanticCaseScoresResponse = {
   total_candidates: number;
 };
 
+export type SemanticRankedSearchResult = SearchResult & {
+  // 分數與段落皆來自該案件中最接近查詢的 chunk。
+  similarity_score: number | null;
+  section_hint: string | null;
+  chunk_index: number | null;
+  semantic_snippet: string | null;
+};
+
+export type SemanticRankedSearchResponse = {
+  query: string;
+  embedding_provider: string;
+  embedding_model: string;
+  embedding_dims: number;
+  embedding_device: string;
+  elapsed_ms: number;
+  cached: boolean;
+  items: SemanticRankedSearchResult[];
+  total: number;
+  total_candidates: number;
+  match_source: string;
+  page: number;
+  page_size: number;
+};
+
 export type EmbeddingModelStatus = {
   embedding_model: string;
   embedding_dims: number;
@@ -245,4 +269,4 @@ export type QualityReport = {
   next_steps: string[];
 };
 
-export type Route = "dashboard" | "cases" | "search" | "semantic" | "quality";
+export type Route = "dashboard" | "cases" | "search" | "methodology" | "semantic" | "quality";

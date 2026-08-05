@@ -126,3 +126,41 @@ def test_like_fallback_searches_dispute_type_when_fts5_returns_empty(
     assert result["total"] == 1
     assert result["items"][0]["dispute_type"] == "保險金給付"
     assert result["items"][0]["match_source"] == "like_fallback_empty_fts5"
+
+
+def test_search_all_cases_returns_every_keyword_match(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    # 全域語意排序需要完整命中集合，不能沿用一般搜尋的 LIMIT/OFFSET。
+    db_path = tmp_path / "test_cases.db"
+    create_search_fixture(db_path)
+
+    with connect_test_db(db_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO cases (
+              case_id, case_number, roc_year, decision_date, dispute_type, decision_result
+            ) VALUES ('case_2', '115年評字第000002號', 115, '115.01.10', '癌症理賠', '有理由');
+            """
+        )
+        connection.execute(
+            "INSERT INTO case_texts (case_id, normalized_text) VALUES ('case_2', '癌症標靶治療理賠爭議。');"
+        )
+        connection.execute(
+            "INSERT INTO case_summaries (case_id, holding) VALUES ('case_2', '相對人應給付保險金。');"
+        )
+        connection.execute(
+            """
+            INSERT INTO case_search (case_id, case_number, dispute_type, normalized_text)
+            VALUES ('case_2', '115年評字第000002號', '癌症理賠', '癌症標靶治療理賠爭議。');
+            """
+        )
+
+    monkeypatch.setattr(search_service, "connect", lambda: connect_test_db(db_path))
+
+    result = search_service.search_all_cases("癌症")
+
+    assert result["total"] == 2
+    assert {item["case_id"] for item in result["items"]} == {"case_1", "case_2"}
+    assert result["match_source"] in {"fts5", "like_fallback_empty_fts5"}
