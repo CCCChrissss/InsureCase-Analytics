@@ -211,7 +211,7 @@ GET /api/statistics/overview
 
 ### Search
 
-全文搜尋採用 SQLite FTS5，並加入 LIKE fallback：
+關鍵字搜尋採用 SQLite FTS5，並加入 LIKE fallback：
 
 ```text
 FTS5 有結果 → 回傳 FTS5 結果
@@ -225,11 +225,24 @@ FTS5 與 LIKE fallback 的搜尋範圍皆包含：
 - 爭議類型 `dispute_type`
 - 正規化全文 `normalized_text`
 
-前端全文搜尋頁會展示：
+理賠人員使用的前端搜尋頁採混合式查找：
 
-- 查詢文字、總命中案件、本頁顯示筆數。
+```text
+FTS5 / LIKE 關鍵字結果
+  +
+本機 BAAI/bge-large-zh-v1.5 語意候選
+  ↓
+依案件去重並交錯顯示
+```
+
+前端搜尋頁會展示：
+
+- 查詢文字、關鍵字命中數、語意候選數，並可選擇顯示 10、15 或 20 筆。
 - 每筆結果的案號、決定日期、爭議類型與命中文字片段。
+- 每筆結果標示「關鍵字命中」、「語意相關」或「關鍵字與語意」。
 - 點擊案件後直接開啟彈出式案件 Dashboard，背景仍保留原查詢與結果。
+
+語意查詢固定指定 `local_bge` 與 `BAAI/bge-large-zh-v1.5-local`，只讀取本機模型快取與目前後端連線 DB 的既有 embeddings，不呼叫 Hugging Face API。若本機 BGE 或對應 embeddings 無法使用，前端保留關鍵字結果並提示語意補充暫時不可用。
 
 `match_source` 與 FTS5 / LIKE fallback 技術資訊仍由 API 保留，但不放在理賠人員的主要畫面；需要驗證搜尋來源時可由 API response 或後端測試確認。
 
@@ -247,7 +260,7 @@ created_at
 
 ### Similar Cases
 
-目前相似案件推薦為規則式 baseline，依據包含：
+後端仍保留規則式相似案件 baseline，依據包含：
 
 ```text
 相同爭議類型
@@ -256,7 +269,7 @@ created_at
 摘要文字中的保險關鍵詞重疊
 ```
 
-此方法具可解釋性，但尚不等同於語意相似度或法律判斷。後續可升級為 embedding / pgvector。
+此規則式 endpoint 供既有測試與比較使用；理賠人員的案件 Dashboard 已改用本機 BGE 案件層級語意相似 API。畫面顯示的相似度百分比是 cosine similarity 轉成百分比後的易讀表示，不是相關機率、理賠正確率或法律判斷。
 
 ### Semantic Search
 

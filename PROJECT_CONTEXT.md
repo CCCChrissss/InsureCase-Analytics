@@ -167,6 +167,8 @@
       │  ├─ CaseDetailView.tsx
       │  ├─ CaseWorkspaceModal.tsx
       │  └─ ui.tsx
+      ├─ config/
+      │  └─ semantic.ts
       ├─ hooks/
       │  ├─ useAsyncData.ts
       │  └─ useOpenCases.ts
@@ -311,6 +313,7 @@ frontend/dist/
 - `frontend/src/main.tsx`：React app 掛載入口。
 - `frontend/src/App.tsx`：主版面、側邊欄導覽、背景頁面 route 與全域案件工作區整合。
 - `frontend/src/api/client.ts`：API base URL、`apiGet`、`apiGetOptional`。
+- `frontend/src/config/semantic.ts`：理賠人員主搜尋與案件 Dashboard 共用的本機 BGE provider、模型名稱與語意候選上限。
 - `frontend/src/types.ts`：前端 API response 型別，包含查詢建議回應。
 - `frontend/src/hooks/useAsyncData.ts`：共用非同步資料載入 hook。
 - `frontend/src/hooks/useOpenCases.ts`：已開啟案件分頁、切換、關閉、最小化與 `sessionStorage` 狀態保存。
@@ -433,9 +436,9 @@ VITE_API_BASE_URL 若存在則使用該值
 主要 UI：
 
 - 側邊欄主要導覽：案件工作台、全文搜尋；另有已開啟案件數量與還原按鈕。
-- 案件工作台：年度、爭議類型、案號篩選與案件列表。
-- 全文搜尋：關鍵字搜尋、命中片段與案件基本資料；點擊結果時在目前頁面上開啟案件工作區，不切換背景 route。
-- 案件工作區：瀏覽器式案件分頁、關閉、切換、最小化、摘要、評議結論、申請人主張、判斷理由、法源與契約條款、相關案件、查看原文及正式 PDF。
+- 案件工作台：年度、爭議類型、案號篩選與案件列表，可選擇每頁顯示 10、15 或 20 筆。
+- 全文搜尋：同時執行 FTS5 / LIKE 關鍵字搜尋與本機 BGE 語意搜尋，將案件去重後交錯顯示，標示關鍵字、語意或兩者皆命中；可選擇顯示 10、15 或 20 筆。語意服務失敗時仍保留關鍵字結果。
+- 案件工作區：瀏覽器式案件分頁、關閉、切換、最小化、摘要、評議結論、申請人主張、判斷理由、法源與契約條款、本機 BGE 語意相似案件與相似度、查看原文及正式 PDF。相似度為 cosine similarity 的百分比表示，不是相關機率或理賠正確率。
 - 語意搜尋：輸入查詢文字，展示 embedding 模型、候選 chunk、cosine similarity、score bar、段落提示、命中段落與案件來源。
 - 統計分析：目前保留 direct route 與後端 API 作為輔助檢查，不放在主要導覽。
 - 分析驗證：展示 ROC 114 摘要覆蓋率、截段污染檢查、相似度計分規則、抽樣案件、已知例外與限制。
@@ -761,6 +764,14 @@ GET /api/cases/{case_id}/similar?limit=5
 - `score`
 - `matched_reasons`
 - top N 相似案件基本資料。
+
+規則式 `/similar` endpoint 目前保留供 baseline 與測試比較；理賠人員案件 Dashboard 實際使用下列本機 BGE endpoint：
+
+```text
+GET /api/cases/{case_id}/semantic-similar?limit=5&chunks_per_case=1&embedding_provider=local_bge&embedding_model=BAAI/bge-large-zh-v1.5-local
+```
+
+前端將回傳 cosine similarity 轉為百分比顯示，並附上主要相近段落類型。該數字只表示向量內容相近程度，不代表理賠判斷正確率或法律結論一致率。
 
 ### Quality
 
@@ -1457,6 +1468,8 @@ http://127.0.0.1:5173
 - 已建立 embedding provider 介面，目前只啟用 `local` 與 `local_bge`；`huggingface` / `hf`、`openai` / `ai` 均會明確拒絕執行。
 - 已完成本機 `BAAI/bge-large-zh-v1.5` CUDA provider、模型快取、17254 chunks / 1024 維全量 trial 與 15 詞／75 結果的完全離線 benchmark；RTX 4050 GPU 長時間推論已驗證，正式 DB 未切換。
 - 已將前端主流程改為理賠案件工作台與全文搜尋；案件以彈出式 Dashboard 開啟，不改變搜尋背景 route，並支援瀏覽器式多案件分頁、關閉、最小化、重新整理還原、原文切換與正式 PDF。
+- 已將理賠人員主搜尋改為 FTS5 / LIKE 與本機 BGE 的混合式查找；結果依案件去重並標示命中來源，搜尋與案件清單皆可選擇顯示 10、15 或 20 筆。語意服務失敗時會降級保留關鍵字結果。
+- 案件 Dashboard 的相關案件已切換為本機 BGE 案件層級語意相似 API，畫面顯示相似度百分比與主要相近內容；規則式 `/similar` endpoint 僅保留為 baseline 與測試用途。
 - 已完成全量 17254-candidate 的 75 筆 Codex-assisted 第一輪標註與評測；69 筆相關、4 筆部分相關、2 筆不相關，Strict P@5 `0.9200`、Lenient P@5 `0.9733`。最低分查詢為 `違反告知義務`，Strict P@5 `0.2000`，主要混淆來自不同角色的說明／告知義務及保費催告內容。
 - 曾完成 Hugging Face API provider 與小批量試測；目前遠端 HTTP provider、response parser、retry 與 Token 設定已從 production code 移除，歷史結果只保留在文件與 trial DB。
 - 已完成 Hugging Face `BAAI/bge-large-zh-v1.5` 20 筆、100 筆與 1000 筆 trial DB 試跑，trial DB 中 BGE embeddings 為 1000 筆，正式 DB 未切換。

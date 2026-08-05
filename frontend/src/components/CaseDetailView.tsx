@@ -2,7 +2,7 @@ import React from "react";
 import { BookOpen, ExternalLink, FileText, Landmark, Scale, Users } from "lucide-react";
 
 import { API_BASE } from "../api/client";
-import type { CaseDetail, CaseSummaryDetail, SimilarCasesResponse } from "../types";
+import type { CaseDetail, CaseSummaryDetail, SemanticSimilarCasesResponse } from "../types";
 import { extractLegalReferences } from "../utils/legalReferences";
 
 export function CaseDetailView({
@@ -19,13 +19,13 @@ export function CaseDetailView({
   summary: CaseSummaryDetail | null;
   summaryError: string | null;
   summaryLoading: boolean;
-  similar: SimilarCasesResponse | null;
+  similar: SemanticSimilarCasesResponse | null;
   similarError: string | null;
   similarLoading: boolean;
   onOpenCase: (caseId: string, label?: string) => void;
 }) {
   const [showOriginal, setShowOriginal] = React.useState(false);
-  const similarConfidence = getSimilarConfidence(caseDetail, similar);
+  const similarConfidence = getSimilarConfidence(similar);
   const legalReferences = extractLegalReferences(caseDetail.normalized_text || caseDetail.raw_text);
   const decisionResult = resolveDecisionResult(caseDetail.decision_result, summary?.holding);
 
@@ -137,11 +137,13 @@ export function CaseDetailView({
           <Users size={19} />
           <div>
             <h3>相關案件</h3>
-            <p>依爭議類型、評議結果與案件關鍵內容整理。</p>
+            <p>依案件內容的語意相近程度排列。</p>
           </div>
         </div>
         {similarLoading && <div className="state-box compact">相關案件載入中</div>}
-        {!similarLoading && similarError && <div className="state-box error compact">相關案件讀取失敗：{similarError}</div>}
+        {!similarLoading && similarError && (
+          <div className="state-box error compact" title={similarError}>語意相似案件目前無法使用，請稍後再試。</div>
+        )}
         {!similarLoading && !similarError && similar && similar.items.length === 0 && (
           <div className="state-box compact">目前沒有找到相關案件。</div>
         )}
@@ -164,8 +166,11 @@ export function CaseDetailView({
                   <strong>{item.case_number}</strong>
                   <span>{item.decision_date || "日期未標示"}</span>
                 </span>
-                <span>{item.dispute_type || "爭議類型未標示"}</span>
-                <small>{item.matched_reasons.join("、") || "案件條件相近"}</small>
+                <span className="related-case-meta">
+                  <span>{item.dispute_type || "爭議類型未標示"}</span>
+                  <strong className="similarity-value">相似度 {formatSimilarity(item.score)}</strong>
+                </span>
+                <small>{semanticReason(item.matched_chunks[0]?.section_hint)}</small>
               </button>
             ))}
           </div>
@@ -177,25 +182,14 @@ export function CaseDetailView({
   );
 }
 
-function getSimilarConfidence(caseDetail: CaseDetail, similar: SimilarCasesResponse | null) {
+function getSimilarConfidence(similar: SemanticSimilarCasesResponse | null) {
   if (!similar || similar.items.length === 0) {
     return { isLowConfidence: false, reason: "" };
   }
 
-  const sourceDisputeType = caseDetail.dispute_type;
-  const sameDisputeTypeCount = sourceDisputeType
-    ? similar.items.filter((item) => item.dispute_type === sourceDisputeType).length
-    : 0;
   const topScore = similar.items[0]?.score ?? 0;
 
-  if (sameDisputeTypeCount === 0) {
-    return {
-      isLowConfidence: true,
-      reason: "目前結果沒有相同爭議類型，可能是同類型案件數較少，請回到原文判斷。",
-    };
-  }
-
-  if (topScore <= 20) {
+  if (topScore < 0.45) {
     return {
       isLowConfidence: true,
       reason: "目前僅找到少量共同條件，相關案件僅供初步查找參考。",
@@ -203,6 +197,14 @@ function getSimilarConfidence(caseDetail: CaseDetail, similar: SimilarCasesRespo
   }
 
   return { isLowConfidence: false, reason: "" };
+}
+
+function formatSimilarity(score: number) {
+  return `${Math.round(Math.min(Math.max(score, 0), 1) * 100)}%`;
+}
+
+function semanticReason(sectionHint: string | null | undefined) {
+  return sectionHint ? `主要相近內容：${sectionHint}` : "案件內容語意相近";
 }
 
 function decisionTone(value: string | null) {

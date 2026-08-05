@@ -1,10 +1,11 @@
 import React from "react";
 import { Minus, X } from "lucide-react";
 
-import { apiGet, apiGetOptional } from "../api/client";
+import { apiGet, apiGetOptional, apiPath } from "../api/client";
+import { LOCAL_BGE_MODEL, LOCAL_BGE_PROVIDER } from "../config/semantic";
 import { useAsyncData } from "../hooks/useAsyncData";
 import type { OpenCaseTab } from "../hooks/useOpenCases";
-import type { CaseDetail, CaseSummaryDetail, SimilarCasesResponse } from "../types";
+import type { CaseDetail, CaseSummaryDetail, SemanticSimilarCasesResponse } from "../types";
 import { CaseDetailView } from "./CaseDetailView";
 import { AsyncBlock } from "./ui";
 
@@ -32,7 +33,12 @@ export function CaseWorkspaceModal({
     [activeCaseId]
   );
   const similar = useAsyncData(
-    () => apiGet<SimilarCasesResponse>(`/cases/${activeCaseId}/similar?limit=5`),
+    () => apiGet<SemanticSimilarCasesResponse>(apiPath(`/cases/${activeCaseId}/semantic-similar`, {
+      limit: 5,
+      chunks_per_case: 1,
+      embedding_provider: LOCAL_BGE_PROVIDER,
+      embedding_model: LOCAL_BGE_MODEL,
+    })),
     [activeCaseId]
   );
 

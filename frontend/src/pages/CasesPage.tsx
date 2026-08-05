@@ -10,6 +10,8 @@ import type {
   PaginatedCases,
 } from "../types";
 
+const PAGE_SIZE_OPTIONS = [10, 15, 20] as const;
+
 export function CasesPage({
   onOpenCase,
   onOpenSearch,
@@ -18,6 +20,7 @@ export function CasesPage({
   onOpenSearch: () => void;
 }) {
   const [page, setPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(15);
   const [caseNumberInput, setCaseNumberInput] = React.useState("");
   const [caseNumber, setCaseNumber] = React.useState("");
   const [disputeType, setDisputeType] = React.useState("");
@@ -25,17 +28,17 @@ export function CasesPage({
 
   const cases = useAsyncData(() => apiGet<PaginatedCases>(apiPath("/cases", {
     page,
-    page_size: 15,
+    page_size: pageSize,
     roc_year: rocYear,
     dispute_type: disputeType,
     case_number: caseNumber,
-  })), [page, caseNumber, disputeType, rocYear]);
+  })), [page, pageSize, caseNumber, disputeType, rocYear]);
   const overview = useAsyncData(() => apiGet<OverviewStatistics>("/statistics/overview"), []);
   const disputeTypes = useAsyncData(
     () => apiGet<CountItem[]>(apiPath("/dispute-types", { roc_year: rocYear })),
     [rocYear]
   );
-  const totalPages = Math.max(1, Math.ceil((cases.data?.total ?? 0) / (cases.data?.page_size ?? 15)));
+  const totalPages = Math.max(1, Math.ceil((cases.data?.total ?? 0) / (cases.data?.page_size ?? pageSize)));
   const years = overview.data?.roc_years ?? [];
   const hasFilters = Boolean(caseNumber || disputeType || rocYear);
 
@@ -115,6 +118,20 @@ export function CasesPage({
               <h3>案件清單</h3>
               <span>{cases.data ? `共 ${cases.data.total.toLocaleString("zh-TW")} 件` : "讀取中"}</span>
             </div>
+            <label className="result-size-control">
+              <span>每頁顯示</span>
+              <select
+                value={pageSize}
+                onChange={(event) => {
+                  setPage(1);
+                  setPageSize(Number(event.target.value));
+                }}
+              >
+                {PAGE_SIZE_OPTIONS.map((value) => (
+                  <option key={value} value={value}>{value} 筆</option>
+                ))}
+              </select>
+            </label>
           </div>
           <AsyncBlock loading={cases.loading} error={cases.error}>
             <div className="case-list">
