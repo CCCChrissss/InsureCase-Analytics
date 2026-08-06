@@ -285,7 +285,7 @@ frontend/dist/
 - `backend/app/services/search_service.py`：FTS5 搜尋、LIKE fallback、snippet 產生；FTS5 報錯或 0 筆時會進 LIKE fallback，且 fallback 會查案號、爭議類型與 normalized text。
 - `backend/app/services/similar_case_service.py`：規則式相似案件計分。
 - `backend/app/services/statistics_service.py`：案件總數、爭議類型數、年度與日期範圍總覽，支援可選年度條件。
-- `backend/app/services/summary_generation_service.py`：本機 Ollama 生成式摘要 POC；只接受 loopback URL 與本機模型，將完整案件按真正句界分區，限制輸出 token，驗證原文引文與角色類別，過濾表格／不完整句，以規則訊號排序評議理由並排除契約型法源。單次 packet 失敗可留下診斷並降級，此 service 不寫入資料庫。
+- `backend/app/services/summary_generation_service.py`：本機 Ollama 生成式摘要 POC；只接受 loopback URL 與本機模型，將完整案件按真正句界分區，限制輸出 token，驗證原文引文與角色類別，過濾表格／不完整句，以規則訊號排序評議理由並排除契約型法源。v5 會在仍可逐字回查原文的前提下移除句首法條引文殘片 `…」`。單次 packet 失敗可留下診斷並降級，此 service 不寫入資料庫。
 - `backend/app/services/ai_summary_service.py`：管理版本化 AI 摘要匯入、讀取與人工審核狀態；重複匯入保留既有 reviewer 與核准結果，API 優先回傳 approved、否則回傳最新 unreviewed，rejected 不對 Dashboard 顯示。
 - `backend/app/services/summary_service.py`：案件摘要查詢。
 - `backend/scripts/extract_case_summaries.py`：從 normalized text 產生規則式摘要並寫入 `case_summaries`；已支援「二、申請人主張」與非固定序號的「判斷理由」標題。
@@ -559,7 +559,7 @@ FOREIGN KEY(case_id) REFERENCES cases(case_id) ON DELETE CASCADE
 
 ### `case_ai_summaries`
 
-本機生成式摘要的版本與人工審核表。目前只存在於 Local BGE Trial DB，共 5 筆且皆為 `unreviewed`；正式 DB 未建立或匯入此表。摘要內容與生成診斷分開保存，人工欄位不會因重複匯入而重設。
+本機生成式摘要的版本與人工審核表。目前只存在於 Local BGE Trial DB，共 6 筆版本：第一案 v4 為 rejected、第一案 v5 與其餘四案為 unreviewed；正式 DB 未建立或匯入此表。摘要內容與生成診斷分開保存，人工欄位不會因重複匯入而重設。
 
 ```sql
 summary_id TEXT PRIMARY KEY
@@ -1041,7 +1041,7 @@ Query parameters：
 - 一致性比較工具與 POC 混合式第二輪已完成；正式第二位獨立標註與有效的跨標註者信度估計仍未完成。
 - OpenAI 或其他外部 AI embedding provider 尚未實作。
 - 實務級向量資料庫或 ANN index。
-- 本機 AI 摘要目前只有 5 件 POC 且全部 `unreviewed`；尚未逐案人工核准、全量生成或切換成正式摘要來源。
+- 本機 AI 摘要目前只有 5 件 POC；第一案曾退回 v4 並建立待審 v5，目前尚無 approved 版本，也未全量生成或切換成正式摘要來源。
 - 系統尚無登入與角色權限，因此審核寫入只提供本機 CLI；若要建立網頁審核介面，必須先完成身分驗證與操作稽核。
 
 ## 10. 目前可能的 bug 或技術債
@@ -1157,7 +1157,7 @@ Local BGE trial API 已可實際查詢 17254 個 candidates，暖機後 API 約 
 
 ### 摘要與相似案件規則需要持續抽樣校正
 
-目前正式規則式摘要 API 與規則式相似案件 baseline 仍保留。本機 Qwen3 五案 POC 已完成來源回查、獨立版本表、唯讀 API、Dashboard 顯示與本機審核 CLI，但 5 件仍全部為 `unreviewed`；正式採用前仍需逐案人工核准、擴大抽樣與登入權限設計。
+目前正式規則式摘要 API 與規則式相似案件 baseline 仍保留。本機 Qwen3 五案 POC 已完成來源回查、獨立版本表、唯讀 API、Dashboard 顯示與本機審核 CLI；第一案 v4 已退回並建立待審 v5，其餘四案仍 unreviewed。正式採用前仍需逐案人工核准、擴大抽樣與登入權限設計。
 
 已知已修正格式變異：
 
@@ -1652,6 +1652,15 @@ http://127.0.0.1:5173
 - `py -m pytest -q`：151 passed；`node --test tests/caseText.test.ts tests/legalReferences.test.ts`：3 passed。
 - `pnpm build`：1686 modules transformed，TypeScript 與 Vite production build 通過。
 - 瀏覽器人工驗證：摘要六類內容、未審核警示、8 則 evidence 展開正常；1280px 與 390px 均無水平溢位，console 無 error 或 warning。
+
+2026-08-06 第一案摘要 v5 修正後，另完成以下檢查：
+
+- v4 因第二段理由以 `…」` 開頭而標記 rejected；完整退回原因、reviewer identifier 與時間保留於 Trial DB。
+- 新增保守句首清理：只在移除法條引文尾端後的內容仍逐字存在原文時才採用；句中省略號不受影響。
+- 第一案以本機 `qwen3:4b` 重跑 9 次 request，失敗 0、final fallback 0，prompt version 為 `local_llm_summary_v5`。
+- v5 validator：1 案、8 段 evidence、2 筆法源、`violations = []`；新版本目前為 unreviewed。
+- Trial DB 共 6 筆版本，狀態為 rejected 1、unreviewed 5，`integrity_check = ok`；正式 DB 未修改。
+- `py -m pytest -q`：153 passed，新增法條引文尾端清理與句中省略號保留 regression tests。
 
 注意：Local BGE 語意搜尋第一次載入模型實測約 66.65 秒；暖機後仍需約 2.5 至 2.8 秒計算 17254 筆 chunk similarity。POC 展示前應先暖機，正式切換前需處理 cold start。
 

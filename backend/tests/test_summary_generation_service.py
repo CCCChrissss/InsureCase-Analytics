@@ -156,6 +156,26 @@ def test_quote_fragment_expands_to_exact_source_sentence() -> None:
     assert expanded == "經查相對人已給付，足認請求標的已獲滿足。"
 
 
+def test_quote_expansion_removes_prior_statutory_quote_tail() -> None:
+    source = (
+        "又依保險法規定：「清償保險費後恢復效力。…」"
+        "而相對人既已同意保單復效，申請人仍應繳清保險費，併予敘明。"
+    )
+
+    expanded = _expand_quote_to_sentence("而相對人既已同意保單復效", source)
+
+    assert expanded == "而相對人既已同意保單復效，申請人仍應繳清保險費，併予敘明。"
+    assert expanded in source
+
+
+def test_quote_expansion_preserves_ellipsis_inside_reasoning() -> None:
+    source = "經查申請人所述…尚無其他證據可佐，難認其請求有據。"
+
+    expanded = _expand_quote_to_sentence("申請人所述…尚無其他證據可佐", source)
+
+    assert expanded == source
+
+
 def test_rule_based_reasoning_keeps_complete_case_application_sentence() -> None:
     document = {
         "sections": [

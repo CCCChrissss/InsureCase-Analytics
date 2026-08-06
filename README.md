@@ -290,7 +290,7 @@ SUMMARY_SECTION_MAX_CHARS=2000
   --report .\outputs\local_llm_summary_trial_qwen3_4b_final_v4.json
 ```
 
-2026-08-06 實測 5 件、57 次本機請求全數完成；自動回查 47 段 evidence 與 11 筆法源均無違規。五件已匯入 Trial DB 並接入 Dashboard，但仍全部標示為 `unreviewed`，需要逐案人工核准。
+2026-08-06 實測 5 件、57 次本機請求全數完成；自動回查 47 段 evidence 與 11 筆法源均無違規。五件已匯入 Trial DB 並接入 Dashboard。第一案 v4 因理由句首殘留 `…」` 而退回；修正後的 `local_llm_summary_v5` 單案版本已重新生成，8 段 evidence 與 2 筆法源驗證無違規，目前仍為 `unreviewed`。Trial DB 共保留 6 筆版本紀錄：1 筆 rejected、5 筆 unreviewed。
 
 匯入五案至 Trial DB 並查看審核佇列：
 
@@ -768,7 +768,7 @@ node --test .\frontend\tests\caseText.test.ts .\frontend\tests\legalReferences.t
 - 部署設定
 - 前端自動化測試
 - 規則式摘要與法源擷取不是 LLM 法律判斷，可能有截段或漏抓，正式使用必須回查原文與官方 PDF
-- 本機 Qwen3 摘要目前仍是五案 POC；尚未寫入正式 DB、接入摘要 API、完成全資料建置或人工核准流程
+- 本機 Qwen3 摘要目前仍是五案 POC；已接入 Trial API 與 Dashboard，但尚未寫入正式 DB、完成全資料建置或逐案人工核准
 - 案件分頁目前只用 `sessionStorage` 保存，不支援帳號同步、跨裝置或永久工作清單
 - PostgreSQL / pgvector 實務版
 

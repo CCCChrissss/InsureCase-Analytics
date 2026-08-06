@@ -20,7 +20,7 @@ from backend.app.config import SUMMARY_REQUEST_TIMEOUT_SECONDS
 from backend.app.config import SUMMARY_SECTION_MAX_CHARS
 
 
-PROMPT_VERSION = "local_llm_summary_v4"
+PROMPT_VERSION = "local_llm_summary_v5"
 OLLAMA_LOCAL_PROVIDER = "ollama_local"
 ALLOWED_LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 SUMMARY_CATEGORIES = {
@@ -526,7 +526,22 @@ def _expand_quote_to_sentence(quote: str, source_text: str) -> str:
         ]
         sentence_end = min(following_boundaries) + 1 if following_boundaries else quote_end
     expanded = normalized_source[sentence_start:sentence_end]
-    return expanded if len(expanded) <= MAX_EVIDENCE_QUOTE_CHARS else normalized_quote
+    bounded = expanded if len(expanded) <= MAX_EVIDENCE_QUOTE_CHARS else normalized_quote
+    return _trim_leading_quote_tail(bounded, normalized_source)
+
+
+def _trim_leading_quote_tail(value: str, normalized_source: str) -> str:
+    """Remove a prior quotation's closing marks only when the remainder is exact source text."""
+
+    # PDF text often places a statutory quotation and the case-specific
+    # application in one line, for example `…」而相對人...`. Sentence expansion
+    # correctly starts after the prior full stop but can retain the quotation
+    # tail. The source-membership check prevents this display cleanup from
+    # turning into an unverified paraphrase.
+    trimmed = re.sub(r"^(?:[.…⋯]+)?[」』”’]+", "", value).lstrip()
+    if trimmed == value or len(trimmed) < 20 or trimmed not in normalized_source:
+        return value
+    return trimmed
 
 
 def _is_table_like_statement(value: str) -> bool:
