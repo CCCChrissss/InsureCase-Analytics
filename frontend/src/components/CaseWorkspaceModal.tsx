@@ -1,11 +1,11 @@
 import React from "react";
 import { Minus, X } from "lucide-react";
 
-import { apiGet, apiGetOptional, apiPath } from "../api/client";
+import { apiGet, apiPath } from "../api/client";
 import { LOCAL_BGE_MODEL, LOCAL_BGE_PROVIDER } from "../config/semantic";
 import { useAsyncData } from "../hooks/useAsyncData";
 import type { OpenCaseTab } from "../hooks/useOpenCases";
-import type { CaseDetail, CaseSummaryDetail, SemanticSimilarCasesResponse } from "../types";
+import type { CaseDetail, CaseDocumentSections, SemanticSimilarCasesResponse } from "../types";
 import { CaseDetailView } from "./CaseDetailView";
 import { AsyncBlock } from "./ui";
 
@@ -28,8 +28,8 @@ export function CaseWorkspaceModal({
 }) {
   const contentRef = React.useRef<HTMLDivElement>(null);
   const detail = useAsyncData(() => apiGet<CaseDetail>(`/cases/${activeCaseId}`), [activeCaseId]);
-  const summary = useAsyncData(
-    () => apiGetOptional<CaseSummaryDetail>(`/cases/${activeCaseId}/summary`),
+  const documentSections = useAsyncData(
+    () => apiGet<CaseDocumentSections>(`/cases/${activeCaseId}/document-sections`),
     [activeCaseId]
   );
   const similar = useAsyncData(
@@ -102,9 +102,9 @@ export function CaseWorkspaceModal({
             {detail.data && (
               <CaseDetailView
                 caseDetail={detail.data}
-                summary={summary.data}
-                summaryError={summary.error}
-                summaryLoading={summary.loading}
+                documentSections={documentSections.data}
+                documentError={documentSections.error}
+                documentLoading={documentSections.loading}
                 similar={similar.data}
                 similarError={similar.error}
                 similarLoading={similar.loading}

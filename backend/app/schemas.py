@@ -42,6 +42,27 @@ class CaseDetail(CaseSummary):
     extraction_method: str | None
 
 
+class DocumentSection(BaseModel):
+    section_id: str
+    section_type: str
+    title: str
+    heading: str | None
+    content: str
+    order: int
+    char_count: int
+    start_offset: int
+    end_offset: int
+
+
+class CaseDocumentSections(BaseModel):
+    case_id: str
+    source_type: str
+    source_chars: int
+    covered_chars: int
+    complete_coverage: bool
+    sections: list[DocumentSection]
+
+
 class CaseSummaryDetail(BaseModel):
     case_id: str
     holding: str | None

@@ -257,7 +257,7 @@ frontend/dist/
 - `backend/app/database.py`：SQLite 連線與預設 DB 路徑。
 - `backend/app/schemas.py`：Pydantic response models。
 - `backend/app/routers/health.py`：健康檢查 API。
-- `backend/app/routers/cases.py`：案件列表、案件詳情、爭議類型、PDF 讀取 API。
+- `backend/app/routers/cases.py`：案件列表、案件詳情、完整原文結構化區塊、爭議類型與 PDF 讀取 API。
 - `backend/app/routers/quality.py`：分析驗證 API，回傳 ROC 114 摘要與相似案件品質檢查結果。
 - `backend/app/routers/query_suggestions.py`：唯讀查詢建議 API；區分有建議與無建議，拒絕空白輸入，且不會自動執行建議查詢。
 - `backend/app/routers/search.py`：全文搜尋 API。
@@ -266,6 +266,7 @@ frontend/dist/
 - `backend/app/routers/statistics.py`：首頁與案件篩選使用的輕量總覽 API，支援可選 `roc_year`。
 - `backend/app/routers/summaries.py`：案件摘要 API。
 - `backend/app/services/case_service.py`：案件查詢、篩選、分頁、PDF path resolver。
+- `backend/app/services/document_section_service.py`：依評議書正式標題切分 normalized/raw text；每段保留原文起訖 offset，所有段落串接後必須逐字還原來源文字。
 - `backend/app/services/embedding_service.py`：embedding provider 介面、本機 CJK hashing、本機 Sentence Transformers BGE、chunk embedding 建置、語意搜尋、案件層級語意相似與全文命中案件全域排序；全域排名最多快取最近 16 組查詢，DB 檔案變更會形成新快取 key。
 - `backend/app/services/quality_service.py`：ROC 114 分析驗證報告資料。
 - `backend/app/services/query_suggestion_service.py`：選擇性查詢建議服務；目前只收錄 4 個已在離線實驗改善的短查詢，以精確詞彙觸發，回傳原查詢、建議查詢、規則編號與理由，並固定標示不自動套用。
@@ -285,7 +286,8 @@ frontend/dist/
 - `backend/scripts/import_cases_to_db.py`：讀取單一或多個 metadata 與文字檔，匯入 SQLite。
 - `backend/scripts/verify_case_db.py`：驗證 SQLite 筆數、搜尋、路徑與 sample case；可用 `--require-chunks` 與 `--require-embeddings` 檢查 chunk 與 embedding 完整性。
 - `backend/scripts/check_data_quality.py`：檢查 metadata 與 SQLite DB 是否含 mojibake 類異常字元。
-- `backend/tests/test_api.py`：API smoke tests，覆蓋 health、statistics、cases、case detail、PDF、search、summary、similar、semantic-similar、semantic model params 與 quality。
+- `backend/tests/test_api.py`：API smoke tests，覆蓋 health、statistics、cases、case detail、完整原文結構化與字元涵蓋、PDF、search、summary、similar、semantic-similar、semantic model params 與 quality。
+- `backend/tests/test_document_section_service.py`：原文結構化單元測試，驗證逐字還原、相對人主張與非標準格式 fallback。
 - `backend/tests/test_build_case_chunks.py`：chunking 邏輯、section hint 與 SQLite 寫入測試。
 - `backend/tests/test_build_chunk_embeddings.py`：embedding build CLI 測試，覆蓋 resume / write batch 參數與 stderr 批次進度輸出。
 - `backend/tests/test_cross_year_pipeline_defaults.py`：跨年度 pipeline 預設輸出路徑測試。
@@ -313,19 +315,21 @@ frontend/dist/
 - `frontend/tsconfig.node.json`：Vite config 使用的 TypeScript 設定。
 - `frontend/src/main.tsx`：React app 掛載入口。
 - `frontend/src/App.tsx`：主版面、側邊欄導覽、背景頁面 route 與全域案件工作區整合。
-- `frontend/src/api/client.ts`：API base URL、`apiGet`、`apiGetOptional`。
+- `frontend/src/api/client.ts`：API base URL 與共用 `apiGet`。
 - `frontend/src/config/semantic.ts`：理賠人員主搜尋與案件 Dashboard 共用的本機 BGE provider 與模型名稱。
 - `frontend/src/types.ts`：前端 API response 型別，包含查詢建議回應。
 - `frontend/src/hooks/useAsyncData.ts`：共用非同步資料載入 hook。
 - `frontend/src/hooks/useOpenCases.ts`：已開啟案件分頁、切換、關閉、最小化與 `sessionStorage` 狀態保存。
-- `frontend/src/components/CaseDetailView.tsx`：理賠人員導向的案件摘要、判斷理由、法源、相關案件及原文閱讀區。
+- `frontend/src/components/CaseDetailView.tsx`：理賠人員導向的完整案件結構化區塊、評議結果、法源、相關案件及逐字全文閱讀區；主文與爭點預設展開，其他區塊可個別或全部展開。
 - `frontend/src/components/CaseWorkspaceModal.tsx`：不離開搜尋背景頁的彈出式案件 Dashboard 與瀏覽器式案件分頁。
 - `frontend/src/components/SimilarityExplanationDialog.tsx`：以理賠人員可理解的白話說明相似度用途、產生方式與限制。
 - `frontend/src/components/ui.tsx`：PageHeader、PanelHeader、Metric、AsyncBlock、EmptyState。
 - `frontend/src/pages/CalculationMethodPage.tsx`：公開 chunking、FTS5/BM25、query-to-case、相關案件、百分比、評議結果與 Precision@5 的公式、流程及限制。
 - `frontend/src/pages/`：案件工作台、全文搜尋、計算方法、語意搜尋與分析驗證頁；前三者為主要使用流程，技術驗證頁保留 direct route。
 - `frontend/src/utils/legalReferences.ts`：使用法規名稱白名單擷取法規條號，刻意排除保單、附約與契約條款。
+- `frontend/src/utils/caseText.ts`：選擇完整 normalized/raw 案件文字、fallback 揭露與 Unicode 字數完整性核對，不做內容切片。
 - `frontend/tests/legalReferences.test.ts`：以 Node 內建測試確認法規保留且契約條款不進入法源依據。
+- `frontend/tests/caseText.test.ts`：確認長案件文字的開頭、中段、結尾均保留，並驗證文字來源 fallback 與字數核對。
 - `frontend/src/styles.css`：前端全域樣式與 responsive layout。
 - `frontend/src/vite-env.d.ts`：Vite TypeScript 型別宣告。
 
@@ -443,7 +447,7 @@ Vite dev server 預設將 `/api` 代理到 `http://127.0.0.1:8000`，可透過 `
 - 側邊欄主要導覽：案件工作台、全文搜尋、計算方法；另有已開啟案件數量與還原按鈕。
 - 案件工作台：年度、爭議類型、案號篩選與案件列表，可選擇每頁顯示 10、15 或 20 筆。
 - 全文搜尋：每頁可選擇 10、15 或 20 筆，排序可選「關鍵字相關性」或「相似度：高到低」。相似度排序先評分全部關鍵字命中案件，完成全域排序後才分頁；模型失敗時退回關鍵字排序。
-- 案件工作區：瀏覽器式案件分頁、摘要、評議結論、判斷理由、只含法規條文的法源依據、本機 BGE 相關案件、查看原文及正式 PDF；個別保單與契約條款只留在原文，不放在法源區。
+- 案件工作區：瀏覽器式案件分頁、評議結果、完整原文結構化區塊、只含法規條文的法源依據、本機 BGE 相關案件、逐字全文及正式 PDF。結構化區塊包含相對人主張，保留完整內容、原始順序與字元涵蓋核對；個別保單與契約條款只留在案件內容，不放在法源區。
 - 計算方法：公開 BM25、query-to-case、案件對案件、百分比換算、評議結果分類、Precision@5、快取與已知限制。
 - 語意搜尋：輸入查詢文字，展示 embedding 模型、候選 chunk、cosine similarity、score bar、段落提示、命中段落與案件來源。
 - 統計分析：目前保留 direct route 與後端 API 作為輔助檢查，不放在主要導覽。
@@ -647,6 +651,12 @@ GET /api/cases/{case_id}
 ```
 
 用途：取得單一案件詳情，包含 metadata、raw text、normalized text、文字統計與本地資料路徑。
+
+```text
+GET /api/cases/{case_id}/document-sections
+```
+
+用途：以 normalized text 優先、raw text fallback，回傳案件完整原文的有序結構化區塊。每段包含類型、標題、原始 heading、完整內容、字數與起訖 offset；`source_chars`、`covered_chars` 與 `complete_coverage` 用於確認切分沒有漏字。若原始格式缺少標準標題，內容會併入相鄰段落或 `other`，不會被丟棄。
 
 ```text
 GET /api/dispute-types
@@ -891,6 +901,7 @@ Query parameters：
 - 健康檢查。
 - 案件列表 API。
 - 案件詳情 API。
+- 案件完整原文結構化 API，包含相對人主張與逐字涵蓋驗證。
 - 爭議類型 API。
 - PDF 回傳 API。
 - 全文搜尋 API。
@@ -903,7 +914,7 @@ Query parameters：
 - 案件總覽與爭議類型 API，支援年度篩選。
 - 4 個已驗證低分短查詢的選擇性建議 service 與唯讀 API；目前不自動套用，也尚未接前端。
 - 後端 pytest 測試。
-- 案件詳情展示鏈 API 測試，覆蓋詳情、PDF、摘要、規則式相似案件與語意相似案件。
+- 案件詳情展示鏈 API 測試，覆蓋詳情、結構化原文、PDF、摘要、規則式相似案件與語意相似案件。
 - OpenAPI docs 可由 FastAPI 自動產生。
 
 ### 前端
@@ -921,7 +932,7 @@ Query parameters：
 - 一般案件工作區顯示規則式相關案件與業務理由，不顯示相似度分數或模型參數；語意技術細節留在 direct route 的語意搜尋頁。
 - 統計分析頁仍保留 direct route，但不作為主導覽項目。
 - 分析驗證頁。
-- 案件摘要區塊。
+- 完整案件結構化區塊，支援個別展開、全部展開與全部收合。
 - 相似案件區塊。
 - PDF 連結。
 - Responsive layout。
@@ -959,7 +970,7 @@ Query parameters：
 - 部署設定。
 - API 錯誤回應格式統一。
 - 正式 React Router。
-- 完整前端元件與端對端自動化測試；目前只有法源過濾的 Node 單元測試、production build 與人工瀏覽器驗證。
+- 完整前端元件與端對端自動化測試；目前有法源過濾與完整文字選擇的 Node 單元測試、production build 與人工瀏覽器驗證。
 - 規則式摘要與法源名稱擷取仍可能漏抓；正式理賠判斷必須回查原文、PDF 與現行法規，不可把前端整理內容當成法律結論。
 - 案件工作區使用 `sessionStorage`，不是帳號層級或跨裝置保存；關閉瀏覽器分頁後不保證留存。
 - 遠端 Hugging Face embeddings 不再建置；本機 BGE 已在獨立 trial DB 完成全量 17254 筆，正式 DB 仍未切換。
@@ -1519,6 +1530,17 @@ http://127.0.0.1:5173
 - 本機 BGE 全域排序實測：「癌症」共 62 件，先完成全部命中案件計分，再依相似度排序及分頁；第 2 頁使用查詢快取。
 - 瀏覽器人工驗證：相似度排序由高到低、計算方法頁公式、法源依據法規白名單及 console 無 error 均通過。
 
+2026-08-06 完整案件結構化修正後，完成以下檢查：
+
+- 根因確認：`case_summaries` 的申請人主張與判斷理由是規則式節錄，且沒有相對人主張欄位，因此不適合作為案件 Dashboard 的完整內容來源。
+- 新增 `/api/cases/{case_id}/document-sections`，直接由完整 normalized/raw text 切分；所有區塊是連續 source slice，可逐字串接還原原文。
+- 全資料 2,992 件逐案驗證：字元涵蓋失敗 0 件，2,992 件均辨識到相對人主張；標題變形不影響內容保留。
+- 最長案件 `113年評字第003819號`：SQLite 與案件詳情 API 的 normalized text 均為 23,669 字，開頭、中段與結尾逐字一致。
+- `py -m pytest -q`：128 passed；`node --test tests/caseText.test.ts tests/legalReferences.test.ts`：3 passed。
+- `pnpm run build`：TypeScript 與 Vite production build 通過，1686 modules transformed。
+- Trial DB 驗證 passed：2,992 案、17,254 chunks、34,508 embeddings，案件路徑錯誤 0。
+- 瀏覽器人工驗證：預設只展開主文與本件爭點；相對人主張可獨立展開；全部區塊字數合計與 API `source_chars` 一致，逐字全文保留最後頁尾。桌面與 390px 行動版均無水平溢位。
+
 注意：Local BGE 語意搜尋第一次載入模型實測約 66.65 秒；暖機後仍需約 2.5 至 2.8 秒計算 17254 筆 chunk similarity。POC 展示前應先暖機，正式切換前需處理 cold start。
 
 ## 13. 建議下一步開發順序
@@ -1554,6 +1576,7 @@ http://127.0.0.1:5173
 - 已建立 embedding provider 介面，目前只啟用 `local` 與 `local_bge`；`huggingface` / `hf`、`openai` / `ai` 均會明確拒絕執行。
 - 已完成本機 `BAAI/bge-large-zh-v1.5` CUDA provider、模型快取、17254 chunks / 1024 維全量 trial 與 15 詞／75 結果的完全離線 benchmark；RTX 4050 GPU 長時間推論已驗證，正式 DB 未切換。
 - 已將前端主流程改為理賠案件工作台與全文搜尋；案件以彈出式 Dashboard 開啟，不改變搜尋背景 route，並支援瀏覽器式多案件分頁、關閉、最小化、重新整理還原、原文切換與正式 PDF。
+- 已將案件 Dashboard 改為完整原文結構化呈現：包含相對人主張、原始順序、區塊字數與完整涵蓋狀態；規則式摘要 API 保留供品質分析，但不再作為 Dashboard 主要內容。
 - 已將理賠人員主搜尋改為完整 FTS5 / LIKE 分頁，每頁可選擇 10、15 或 20 筆；可依關鍵字相關性或全域 query-to-case 相似度排序，後者先完成全部命中案件評分再分頁，並以 bounded LRU cache 支援翻頁。語意服務失敗時會退回關鍵字排序。
 - 已新增「相似度怎麼看」白話說明視窗，明確說明數字用於查找排序，不是理賠機率或法律結論。
 - 已新增「計算方法」主要導覽頁，公開 FTS5/BM25、chunking、搜尋相似度、Dashboard 相關案件、百分比換算、評議結果分類與 Precision@5 限制。

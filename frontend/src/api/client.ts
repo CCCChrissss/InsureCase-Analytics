@@ -20,17 +20,6 @@ export async function apiGet<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function apiGetOptional<T>(path: string): Promise<T | null> {
-  const response = await fetch(`${API_BASE}${path}`);
-  if (response.status === 404) {
-    return null;
-  }
-  if (!response.ok) {
-    throw new Error(await apiErrorMessage(response));
-  }
-  return response.json() as Promise<T>;
-}
-
 async function apiErrorMessage(response: Response): Promise<string> {
   let detail = response.statusText || "Request failed";
   try {

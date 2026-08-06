@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
+from backend.app.database import connect
 from backend.app.routers import semantic_search as semantic_search_router
 from backend.app.routers import similar_cases as similar_cases_router
 
@@ -81,8 +82,68 @@ def test_case_detail_includes_metadata_and_text() -> None:
     assert data["raw_text_chars"] >= data["normalized_text_chars"]
 
 
+def test_case_detail_returns_complete_longest_normalized_text() -> None:
+    # 使用目前資料庫最長案件，比短樣本更容易抓到 API 或序列化層的靜默截斷。
+    with connect() as connection:
+        row = connection.execute(
+            """
+            SELECT case_id, normalized_text, normalized_text_chars
+            FROM case_texts
+            WHERE normalized_text IS NOT NULL
+            ORDER BY LENGTH(normalized_text) DESC
+            LIMIT 1;
+            """
+        ).fetchone()
+
+    assert row is not None
+    response = client.get(f"/api/cases/{row['case_id']}")
+
+    assert response.status_code == 200
+    returned_text = response.json()["normalized_text"]
+    assert returned_text == row["normalized_text"]
+    assert len(returned_text) == row["normalized_text_chars"]
+    assert returned_text[:200] == row["normalized_text"][:200]
+    assert returned_text[len(returned_text) // 2 - 100 : len(returned_text) // 2 + 100] == (
+        row["normalized_text"][len(row["normalized_text"]) // 2 - 100 : len(row["normalized_text"]) // 2 + 100]
+    )
+    assert returned_text[-200:] == row["normalized_text"][-200:]
+
+
 def test_case_detail_not_found() -> None:
     response = client.get("/api/cases/not-a-real-case-id")
+
+    assert response.status_code == 404
+
+
+def test_case_document_sections_preserve_source_and_respondent_claim() -> None:
+    # Select a real decision with the respondent heading so the API test covers
+    # the exact field that was previously absent from the Dashboard.
+    with connect() as connection:
+        row = connection.execute(
+            """
+            SELECT case_id, normalized_text
+            FROM case_texts
+            WHERE normalized_text LIKE '%三、相對人之主張%'
+            ORDER BY LENGTH(normalized_text) DESC
+            LIMIT 1;
+            """
+        ).fetchone()
+
+    assert row is not None
+    response = client.get(f"/api/cases/{row['case_id']}/document-sections")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["source_type"] == "normalized"
+    assert data["complete_coverage"] is True
+    assert data["source_chars"] == len(row["normalized_text"])
+    assert data["covered_chars"] == data["source_chars"]
+    assert "".join(section["content"] for section in data["sections"]) == row["normalized_text"]
+    assert any(section["section_type"] == "respondent_claim" for section in data["sections"])
+
+
+def test_case_document_sections_not_found() -> None:
+    response = client.get("/api/cases/not-a-real-case-id/document-sections")
 
     assert response.status_code == 404
 

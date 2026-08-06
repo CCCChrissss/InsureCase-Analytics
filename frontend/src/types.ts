@@ -50,13 +50,25 @@ export type CaseDetail = CaseSummary & {
   extraction_method: string | null;
 };
 
-export type CaseSummaryDetail = {
+export type DocumentSection = {
+  section_id: string;
+  section_type: string;
+  title: string;
+  heading: string | null;
+  content: string;
+  order: number;
+  char_count: number;
+  start_offset: number;
+  end_offset: number;
+};
+
+export type CaseDocumentSections = {
   case_id: string;
-  holding: string | null;
-  applicant_claim: string | null;
-  reasoning: string | null;
-  summary_method: string | null;
-  created_at: string | null;
+  source_type: "normalized" | "raw";
+  source_chars: number;
+  covered_chars: number;
+  complete_coverage: boolean;
+  sections: DocumentSection[];
 };
 
 export type SimilarCase = {

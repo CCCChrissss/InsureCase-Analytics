@@ -1710,62 +1710,115 @@ button {
   font-size: 0.84rem;
 }
 
-.claims-summary {
-  display: grid;
-  gap: 12px;
-}
-
-.claims-summary-columns {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.claim-summary-block {
-  min-width: 0;
-  padding: 14px;
-  border: 1px solid #dde4e2;
+.document-section-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 12px;
+  border: 1px solid #d8e0de;
   border-radius: 6px;
+  background: #f7f9f8;
+}
+
+.document-coverage {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+  color: #35714d;
+}
+
+.document-coverage.mismatch {
+  color: #a2453e;
+}
+
+.document-coverage > div {
+  display: grid;
+  gap: 2px;
+}
+
+.document-coverage strong {
+  color: #35423f;
+  font-size: 0.9rem;
+}
+
+.document-coverage span {
+  color: #66736f;
+  font-size: 0.82rem;
+}
+
+.document-section-list {
+  display: grid;
+  gap: 8px;
+}
+
+.document-section-item {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #dce4e2;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.document-section-item.expanded {
+  border-color: #b7c6c2;
+}
+
+.document-section-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 12px;
+  border: 0;
+  color: #35423f;
+  background: #ffffff;
+  text-align: left;
+}
+
+.document-section-toggle:hover {
+  background: #f5f8f7;
+}
+
+.document-section-toggle > span {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-width: 0;
+}
+
+.document-section-toggle strong {
+  overflow-wrap: anywhere;
+  font-size: 0.94rem;
+}
+
+.document-section-toggle small {
+  color: #71807c;
+}
+
+.document-section-toggle > svg {
+  flex: 0 0 auto;
+  color: #64736f;
+}
+
+.document-section-content {
+  padding: 14px;
+  border-top: 1px solid #e1e7e5;
   background: #fafbfb;
 }
 
-.claim-summary-block.emphasis {
-  border-color: #ddc99e;
-  background: #fffaf0;
-}
-
-.claim-summary-block h4 {
-  margin: 0 0 7px;
-  color: #2e3b38;
-  font-size: 0.92rem;
-}
-
-.claim-summary-block p {
+.document-section-content pre {
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  color: #3e4a47;
+  color: #35423f;
+  font-family: inherit;
   font-size: 0.92rem;
-  line-height: 1.7;
-}
-
-.claim-summary-block details {
-  margin-top: 10px;
-  border-top: 1px solid #e0e6e4;
-  padding-top: 8px;
-}
-
-.claim-summary-block summary,
-.source-document summary {
-  width: fit-content;
-  cursor: pointer;
-  color: #315f59;
-  font-size: 0.86rem;
-  font-weight: 700;
-}
-
-.claim-summary-block details p {
-  margin-top: 10px;
+  line-height: 1.75;
 }
 
 .legal-reference-list,
@@ -2131,7 +2184,6 @@ button {
     grid-template-columns: minmax(220px, 1fr) 140px minmax(190px, 0.8fr) auto auto;
   }
 
-  .claims-summary-columns,
   .legal-reference {
     grid-template-columns: 1fr;
   }
@@ -2222,7 +2274,6 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .claims-summary-columns,
   .legal-reference {
     grid-template-columns: 1fr;
   }
@@ -2409,9 +2460,75 @@ button {
   padding: 20px;
 }
 
+.original-document-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid #d8e0de;
+  border-radius: 6px;
+  background: #f7f9f8;
+}
+
+.text-integrity > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  margin-right: auto;
+}
+
+.text-integrity span {
+  color: #66736f;
+  font-size: 0.82rem;
+}
+
+.text-source-switch {
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding: 3px;
+  border: 1px solid #cbd5d2;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.text-source-switch button {
+  min-height: 34px;
+  padding: 6px 11px;
+  border: 0;
+  border-radius: 4px;
+  color: #53615d;
+  background: transparent;
+  font-weight: 700;
+}
+
+.text-source-switch button.active {
+  color: #ffffff;
+  background: #315f59;
+}
+
+.text-integrity {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+  color: #35714d;
+}
+
+.text-integrity.mismatch {
+  color: #a2453e;
+}
+
+.text-integrity strong {
+  color: #35423f;
+  font-size: 0.9rem;
+}
+
 .original-text-viewer {
   max-height: none;
   min-height: 560px;
+  /* 完整原文由 Dashboard 外層統一捲動，避免雙重捲軸造成內容已到底的錯覺。 */
+  overflow: visible;
 }
 
 @media (max-width: 760px) {
@@ -2441,6 +2558,21 @@ button {
 
   .original-document-view {
     padding: 16px;
+  }
+
+  .original-document-toolbar,
+  .document-section-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .document-section-toolbar .secondary-button,
+  .text-source-switch {
+    width: 100%;
+  }
+
+  .text-source-switch button {
+    flex: 1 1 0;
   }
 }
 

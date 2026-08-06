@@ -248,6 +248,8 @@ FTS5 / LIKE 關鍵字結果
 - 「相似度怎麼看」以白話說明搜尋文字、案件內容與接近程度的關係，不在理賠人員主畫面呈現模型公式。
 - 點擊案件後直接開啟彈出式案件 Dashboard，背景仍保留原查詢與結果。
 
+案件 Dashboard 以 `GET /api/cases/{case_id}/document-sections` 回傳的完整原文為主要內容，依「主文、程序事項、申請人主張、相對人主張、不爭執事項、爭點、判斷理由、綜上所述、據上論結、附註」分段。各區塊保留完整文字與原始順序，不使用規則式摘要的字數上限；後端同時回傳來源字數、涵蓋字數與 `complete_coverage` 供核對。畫面預設只展開主文與本件爭點，也可全部展開／收合。逐字全文可切換 normalized text 與 raw text，正式頁碼、表格與排版仍以 PDF 為準。
+
 關鍵字排序時，語意評分只針對目前頁面的 10 至 20 件案件；相似度排序時，`GET /api/semantic-ranked-search` 會先取得全部關鍵字命中案件，逐案取最高 chunk cosine similarity，完成全域排序後才分頁。後端以 DB 檔案身分、查詢、provider 與 model 作為 key，最多快取最近 16 組完整排名。查詢固定指定 `local_bge` 與 `BAAI/bge-large-zh-v1.5-local`，只讀取本機模型快取與目前後端連線 DB 的既有 embeddings，不呼叫 Hugging Face API；若全域排序失敗，前端會退回關鍵字排序。
 
 案件 Dashboard 的相關案件使用不同公式：先將來源案件全部 chunks 向量相加並正規化，再與其他案件的每個 chunk 比較，候選案件取最高分。此計算具有方向性，且制式文字可能拉高分數，因此只能作為查找提示。完整公式、BM25、百分比換算、評議結果分類與 Precision@5 限制可由側邊欄「計算方法」查看。
@@ -669,10 +671,10 @@ cd frontend
 pnpm build
 ```
 
-法源過濾可使用 Node 內建測試，不需新增前端測試套件：
+法源過濾與完整案件文字可使用 Node 內建測試，不需新增前端測試套件：
 
 ```powershell
-node --test .\frontend\tests\legalReferences.test.ts
+node --test .\frontend\tests\caseText.test.ts .\frontend\tests\legalReferences.test.ts
 ```
 
 若目前 shell 找不到 `node`，需先確認 Node.js 已在 PATH，或使用 Codex bundled Node runtime。

@@ -3,8 +3,9 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 
-from backend.app.schemas import CaseDetail, CountItem, PaginatedCases
+from backend.app.schemas import CaseDetail, CaseDocumentSections, CountItem, PaginatedCases
 from backend.app.services.case_service import get_case, get_pdf_path, list_cases, list_dispute_types
+from backend.app.services.document_section_service import structure_case_document
 
 
 router = APIRouter(prefix="/api", tags=["cases"])
@@ -33,6 +34,18 @@ def get_case_detail(case_id: str) -> dict:
     if case is None:
         raise HTTPException(status_code=404, detail="Case not found.")
     return case
+
+
+@router.get("/cases/{case_id}/document-sections", response_model=CaseDocumentSections)
+def get_case_document_sections(case_id: str) -> dict:
+    """Return complete source text as ordered sections for the case workspace."""
+
+    case = get_case(case_id)
+    if case is None:
+        raise HTTPException(status_code=404, detail="Case not found.")
+    if not case.get("normalized_text") and not case.get("raw_text"):
+        raise HTTPException(status_code=404, detail="Case text not found.")
+    return structure_case_document(case)
 
 
 @router.get("/dispute-types", response_model=list[CountItem])
