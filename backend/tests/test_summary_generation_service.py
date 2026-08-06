@@ -21,6 +21,8 @@ from backend.app.services.summary_generation_service import _has_complete_statem
 from backend.app.services.summary_generation_service import _expand_quote_to_sentence
 from backend.app.services.summary_generation_service import _extract_reasoning_signal_statements
 from backend.app.services.summary_generation_service import _ranked_grounded_items
+from backend.app.services.summary_generation_service import _grounded_item
+from backend.app.services.summary_generation_service import _summary_display_text
 from backend.app.services.summary_generation_service import _source_fallback_statement
 from backend.app.services.summary_generation_service import build_source_packets
 from backend.app.services.summary_generation_service import generate_case_summary
@@ -174,6 +176,48 @@ def test_quote_expansion_preserves_ellipsis_inside_reasoning() -> None:
     expanded = _expand_quote_to_sentence("申請人所述…尚無其他證據可佐", source)
 
     assert expanded == source
+
+
+@pytest.mark.parametrize(
+    ("section_type", "source_text", "expected"),
+    [
+        ("holding", "主文本中心就申請人之請求尚難為有利之認定。", "本中心就申請人之請求尚難為有利之認定。"),
+        ("undisputed_facts", "四、兩造不爭執之事實：相對人同意恢復保單效力。", "相對人同意恢復保單效力。"),
+        ("issues", "五、本件爭點：申請人請求恢復保單效力，是否有據？", "申請人請求恢復保單效力，是否有據？"),
+        ("respondent_claim", "(二)陳述：相對人已同意恢復保單效力。", "相對人已同意恢復保單效力。"),
+        ("disposition", "八、據上論結，本件評議申請為無理由。", "本件評議申請為無理由。"),
+    ],
+)
+def test_summary_display_removes_only_known_section_prefixes(
+    section_type: str,
+    source_text: str,
+    expected: str,
+) -> None:
+    statement = {"text": source_text, "section_type": section_type}
+
+    assert _summary_display_text(statement) == expected
+    assert statement["text"] == source_text
+
+
+def test_grounded_item_cleans_display_text_but_preserves_evidence() -> None:
+    source_text = "八、據上論結，本件評議申請為無理由。"
+    statement_map = {
+        "statement_0001": {
+            "category": "decision_result",
+            "section_type": "disposition",
+            "text": source_text,
+            "evidence_quote": source_text,
+        }
+    }
+
+    item = _grounded_item(
+        {"statement_ids": ["statement_0001"]},
+        statement_map,
+        allowed_categories={"decision_result"},
+    )
+
+    assert item["text"] == "本件評議申請為無理由。"
+    assert statement_map["statement_0001"]["evidence_quote"] == source_text
 
 
 def test_rule_based_reasoning_keeps_complete_case_application_sentence() -> None:
@@ -408,11 +452,13 @@ def test_generate_case_summary_keeps_only_source_grounded_content() -> None:
     )
 
     summary = result["summary"]
-    assert summary["applicant_position"] == "申請人主張：申請人請求給付住院保險金。"
+    assert summary["applicant_position"] == "申請人請求給付住院保險金。"
     assert summary["respondent_position"] == "相對人主張不符合住院定義。"
     assert summary["reasoning_points"] == []
     assert summary["legal_references"] == []
     assert len(summary["evidence"]) == 2
+    # Display cleanup must not alter the verbatim statement retained for audit.
+    assert summary["evidence"][0]["evidence_quote"] == "申請人主張：申請人請求給付住院保險金。"
     assert result["generation"]["validated_statement_count"] == 2
     assert result["generation"]["corrected_category_count"] == 2
     assert result["generation"]["extractive_fallback_count"] == 1
@@ -448,8 +494,9 @@ def test_case_summary_keeps_partial_result_when_one_packet_fails() -> None:
         max_section_chars=1000,
     )
 
-    assert result["summary"]["applicant_position"] == "申請人主張：申請人請求給付住院保險金。"
+    assert result["summary"]["applicant_position"] == "申請人請求給付住院保險金。"
     assert result["summary"]["respondent_position"] == "相對人主張不符合住院定義。"
+    assert result["summary"]["evidence"][0]["evidence_quote"] == "申請人主張：申請人請求給付住院保險金。"
     assert result["generation"]["attempted_request_count"] == 3
     assert result["generation"]["failed_request_count"] == 1
     assert result["generation"]["request_errors"][0]["section_type"] == "applicant_claim"

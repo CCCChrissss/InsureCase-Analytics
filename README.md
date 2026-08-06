@@ -290,7 +290,7 @@ SUMMARY_SECTION_MAX_CHARS=2000
   --report .\outputs\local_llm_summary_trial_qwen3_4b_final_v4.json
 ```
 
-2026-08-06 實測 5 件、57 次本機請求全數完成；自動回查 47 段 evidence 與 11 筆法源均無違規。五件已匯入 Trial DB 並接入 Dashboard。第一案 v4 因理由句首殘留 `…」` 而退回；修正後的 `local_llm_summary_v5` 單案版本已重新生成，8 段 evidence 與 2 筆法源驗證無違規，目前仍為 `unreviewed`。Trial DB 共保留 6 筆版本紀錄：1 筆 rejected、5 筆 unreviewed。
+2026-08-06 實測 5 件、57 次本機請求全數完成；自動回查 47 段 evidence 與 11 筆法源均無違規。五件已匯入 Trial DB 並接入 Dashboard。第一案 v4 因理由句首殘留 `…」` 而退回；v5 修正引文尾端，v6 再移除摘要顯示中的 `主文`、`本件爭點`、`據上論結` 等結構標題，逐字 evidence 不變。v6 單案的 8 段 evidence 與 2 筆法源驗證無違規，目前仍為 `unreviewed`。Trial DB 共保留 7 筆版本紀錄：1 筆 rejected、6 筆 unreviewed。
 
 匯入五案至 Trial DB 並查看審核佇列：
 

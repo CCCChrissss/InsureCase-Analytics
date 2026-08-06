@@ -20,7 +20,7 @@ from backend.app.config import SUMMARY_REQUEST_TIMEOUT_SECONDS
 from backend.app.config import SUMMARY_SECTION_MAX_CHARS
 
 
-PROMPT_VERSION = "local_llm_summary_v5"
+PROMPT_VERSION = "local_llm_summary_v6"
 OLLAMA_LOCAL_PROVIDER = "ollama_local"
 ALLOWED_LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 SUMMARY_CATEGORIES = {
@@ -78,6 +78,38 @@ MAX_STATEMENTS_BY_CATEGORY = {
 REASONING_SIGNAL_RE = re.compile(r"經查|從而|是以|準此|足認|應認|尚難|尚非無據|本中心|職故|綜上")
 CASE_APPLICATION_SIGNAL_RE = re.compile(r"由上可知|從而|足認|難認|尚難|尚非無據|無請求權|有據|無理由|有理由")
 POSITION_SIGNAL_RE = re.compile(r"請求|主張|拒絕|爭議|無理由|應給付|應返還|不同意")
+CHINESE_SECTION_NUMBER_PATTERN = r"[一二三四五六七八九十百零〇0-9]+"
+# These patterns remove parser-owned document labels only from summary display
+# text. The validated statement and evidence quote remain verbatim for audit.
+DISPLAY_PREFIX_PATTERNS_BY_SECTION_TYPE = {
+    "holding": (re.compile(r"^\s*主文[：:]?\s*"),),
+    "applicant_claim": (
+        re.compile(rf"^\s*(?:{CHINESE_SECTION_NUMBER_PATTERN}、\s*)?申請人之?主張[：:]\s*"),
+        re.compile(rf"^\s*[（(]{CHINESE_SECTION_NUMBER_PATTERN}[）)]\s*(?:請求標的|請求事項|陳述)[：:]\s*"),
+    ),
+    "respondent_claim": (
+        re.compile(rf"^\s*(?:{CHINESE_SECTION_NUMBER_PATTERN}、\s*)?相對人之?主張[：:]\s*"),
+        re.compile(rf"^\s*[（(]{CHINESE_SECTION_NUMBER_PATTERN}[）)]\s*(?:請求標的|請求事項|陳述)[：:]\s*"),
+    ),
+    "undisputed_facts": (
+        re.compile(
+            rf"^\s*(?:{CHINESE_SECTION_NUMBER_PATTERN}、\s*)?(?:兩造)?不爭執(?:之事實|事項)?[：:]\s*"
+        ),
+    ),
+    "issues": (
+        re.compile(rf"^\s*(?:{CHINESE_SECTION_NUMBER_PATTERN}、\s*)?本件爭點[：:]\s*"),
+    ),
+    "reasoning": (
+        re.compile(rf"^\s*(?:{CHINESE_SECTION_NUMBER_PATTERN}、\s*)?判斷理由[：:]\s*"),
+    ),
+    "conclusion": (
+        re.compile(rf"^\s*(?:{CHINESE_SECTION_NUMBER_PATTERN}、\s*)?據上論結[，,:：]?\s*"),
+    ),
+    "disposition": (
+        re.compile(r"^\s*主文[：:]?\s*"),
+        re.compile(rf"^\s*(?:{CHINESE_SECTION_NUMBER_PATTERN}、\s*)?據上論結[，,:：]?\s*"),
+    ),
+}
 
 
 SECTION_EXTRACTION_SCHEMA: dict[str, Any] = {
@@ -794,14 +826,32 @@ def _grounded_item(
     statement_ids = statement_ids[:max_statement_count]
     texts = list(
         dict.fromkeys(
-            statement_map[statement_id]["text"].strip()
+            _summary_display_text(statement_map[statement_id])
             for statement_id in statement_ids
-            if statement_map[statement_id]["text"].strip()
+            if _summary_display_text(statement_map[statement_id])
         )
     )
     if not texts or not statement_ids:
         return {"text": None, "statement_ids": []}
     return {"text": " ".join(texts), "statement_ids": statement_ids}
+
+
+def _summary_display_text(statement: dict[str, Any]) -> str:
+    """Remove known document headings without changing auditable evidence text.
+
+    Structured decision documents often attach labels such as `主文` or
+    `五、本件爭點：` to the first sentence. Removing only section-specific
+    prefixes improves the claims-workbench display while `statement["text"]`
+    and `evidence_quote` remain untouched in the evidence payload.
+    """
+
+    value = normalize_evidence(str(statement.get("text") or "")).strip()
+    section_type = str(statement.get("section_type") or "")
+    for pattern in DISPLAY_PREFIX_PATTERNS_BY_SECTION_TYPE.get(section_type, ()):
+        cleaned = pattern.sub("", value, count=1).strip()
+        if cleaned and cleaned != value:
+            return cleaned
+    return value
 
 
 def _grounded_items(
@@ -826,9 +876,9 @@ def _grounded_items(
     if not items:
         # Keep separate bullets when the merge model omits a list entirely.
         items = [
-            {"text": statement["text"], "statement_ids": [statement_id]}
+            {"text": _summary_display_text(statement), "statement_ids": [statement_id]}
             for statement_id, statement in statement_map.items()
-            if statement["category"] in allowed_categories
+            if statement["category"] in allowed_categories and _summary_display_text(statement)
         ]
 
     deduplicated: list[dict[str, Any]] = []
