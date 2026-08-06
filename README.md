@@ -268,6 +268,30 @@ summary_method
 created_at
 ```
 
+另已完成本機生成式摘要五案 POC，但尚未替換既有 API 或前端。`backend/app/services/summary_generation_service.py` 只允許連線到本機 Ollama，拒絕 `:cloud` 模型；摘要採角色區塊約束、原文引文驗證、完整句擴展、表格過濾、規則式理由排序與正式法規過濾。`backend/scripts/run_summary_trial.py` 以唯讀 SQLite 試跑，`backend/scripts/validate_summary_trial.py` 會逐筆回查證據、角色與法源。完整結果見 `docs/local_llm_summary_trial.md`。
+
+本機摘要設定：
+
+```text
+SUMMARY_PROVIDER=ollama_local
+SUMMARY_MODEL=qwen3:4b
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+SUMMARY_NUM_CTX=8192
+SUMMARY_MAX_OUTPUT_TOKENS=2048
+SUMMARY_SECTION_MAX_CHARS=2000
+```
+
+試跑不會寫入正式 DB，預設輸出到 `outputs/local_llm_summary_trial_qwen3_4b.json`：
+
+```powershell
+.\.venv\Scripts\python.exe .\backend\scripts\run_summary_trial.py --limit 5 --dry-run
+.\.venv\Scripts\python.exe .\backend\scripts\run_summary_trial.py --limit 5
+.\.venv\Scripts\python.exe .\backend\scripts\validate_summary_trial.py `
+  --report .\outputs\local_llm_summary_trial_qwen3_4b_final_v4.json
+```
+
+2026-08-06 實測 5 件、57 次本機請求全數完成；自動回查 47 段 evidence 與 11 筆法源均無違規。結果仍標示為 `unreviewed`，正式接入前需要人工審核流程。
+
 ### Similar Cases
 
 後端仍保留規則式相似案件 baseline，依據包含：
@@ -695,6 +719,7 @@ node --test .\frontend\tests\caseText.test.ts .\frontend\tests\legalReferences.t
 - `docs/embedding_pipeline.md`：本機 embedding MVP、語意搜尋 API 與後續升級路線
 - `docs/ai_embedding_provider_plan.md`：正式 AI embedding provider 接入規格，包含本機執行、重建、費用控制與測試策略
 - `docs/local_bge_provider.md`：本機 BGE provider、CPU / CUDA 安裝、離線模型快取、1000 chunks trial 與正式切換條件
+- `docs/local_llm_summary_trial.md`：Qwen3 4B + Ollama 本機案件摘要 POC、證據驗證、唯讀試跑與費用邊界
 - `docs/local_bge_semantic_query_trial_100.md`：本機 BGE 100 candidates、15 詞 Top 5 結果、20/100 涵蓋比較與限制
 - `docs/local_bge_semantic_query_trial_1000.md`：本機 BGE 1000 candidates、15 詞 Top 5 結果、100/1000 排名穩定性與限制
 - `docs/hf_embedding_trial_comparison.md`：Hugging Face BGE trial embeddings、local hashing 離線 anchor-based 比較與 query-to-document 小樣本試測報告
@@ -723,6 +748,7 @@ node --test .\frontend\tests\caseText.test.ts .\frontend\tests\legalReferences.t
 - 部署設定
 - 前端自動化測試
 - 規則式摘要與法源擷取不是 LLM 法律判斷，可能有截段或漏抓，正式使用必須回查原文與官方 PDF
+- 本機 Qwen3 摘要目前仍是五案 POC；尚未寫入正式 DB、接入摘要 API、完成全資料建置或人工核准流程
 - 案件分頁目前只用 `sessionStorage` 保存，不支援帳號同步、跨裝置或永久工作清單
 - PostgreSQL / pgvector 實務版
 

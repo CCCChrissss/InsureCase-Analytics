@@ -70,6 +70,7 @@
 │  ├─ embedding_pipeline.md
 │  ├─ ai_embedding_provider_plan.md
 │  ├─ local_bge_provider.md
+│  ├─ local_llm_summary_trial.md
 │  ├─ local_bge_api_frontend_trial.md
 │  ├─ local_bge_semantic_query_trial_100.md
 │  ├─ local_bge_semantic_query_trial_1000.md
@@ -117,6 +118,7 @@
 │  │     ├─ search_service.py
 │  │     ├─ similar_case_service.py
 │  │     ├─ statistics_service.py
+│  │     ├─ summary_generation_service.py
 │  │     └─ summary_service.py
 │  ├─ scripts/
 │  │  ├─ annotate_semantic_benchmark.py
@@ -129,6 +131,8 @@
 │  │  ├─ import_cases_to_db.py
 │  │  ├─ run_semantic_query_suggestion_trial.py
 │  │  ├─ run_semantic_query_trial.py
+│  │  ├─ run_summary_trial.py
+│  │  ├─ validate_summary_trial.py
 │  │  └─ verify_case_db.py
 │  └─ tests/
 │     ├─ test_semantic_annotation_cli.py
@@ -145,6 +149,7 @@
 │     ├─ test_semantic_benchmark.py
 │     ├─ test_semantic_query_suggestions.py
 │     ├─ test_similar_case_service.py
+│     ├─ test_summary_generation_service.py
 │     └─ test_summary_service.py
 └─ frontend/
    ├─ index.html
@@ -225,6 +230,7 @@ frontend/dist/
 - `docs/embedding_pipeline.md`：本機 chunk embedding MVP、語意搜尋 API、provider 狀態與後續正式 AI provider 升級路線。
 - `docs/ai_embedding_provider_plan.md`：正式 AI embedding provider 接入規格與本機 BGE 狀態，包含 provider 介面、環境變數、模型重建、費用控制、DB model version、測試與展示說法。
 - `docs/local_bge_provider.md`：本機 BGE provider、CPU / CUDA 安裝、離線模型快取、17254 chunks 全量實測結果、查詢 trial 與正式切換條件。
+- `docs/local_llm_summary_trial.md`：Qwen3 4B + Ollama 本機案件摘要 POC，記錄唯讀資料流、原文證據驗證、角色限制、法源過濾、費用邊界、五案實測結果與限制。
 - `docs/local_bge_api_frontend_trial.md`：Local BGE trial DB 的 API / 前端實際切換、模型庫存、冷暖查詢耗時、GPU 觀察限制、錯誤處理與瀏覽器驗證報告。
 - `docs/local_bge_semantic_query_trial_100.md`：本機 BGE 100 candidates 的 15 詞 Top 5 結果、20/100 候選涵蓋比較、執行證據與限制。
 - `docs/local_bge_semantic_query_trial_1000.md`：本機 BGE 1000 candidates 的 15 詞 Top 5 結果、100/1000 排名穩定性、執行證據與限制。
@@ -252,7 +258,7 @@ frontend/dist/
 ### backend
 
 - `backend/schema.sql`：SQLite schema，定義 `cases`、`case_texts`、`case_summaries`、`case_chunks`、`chunk_embeddings`、`case_search` 與索引。
-- `backend/app/config.py`：後端集中設定，支援由環境變數覆蓋 DB path、CORS origins 與 embedding provider 設定。
+- `backend/app/config.py`：後端集中設定，支援由環境變數覆蓋 DB path、CORS origins、embedding provider 與本機摘要 provider 設定。
 - `backend/app/main.py`：FastAPI app 入口，設定 CORS 與註冊 routers。
 - `backend/app/database.py`：SQLite 連線與預設 DB 路徑。
 - `backend/app/schemas.py`：Pydantic response models。
@@ -273,6 +279,7 @@ frontend/dist/
 - `backend/app/services/search_service.py`：FTS5 搜尋、LIKE fallback、snippet 產生；FTS5 報錯或 0 筆時會進 LIKE fallback，且 fallback 會查案號、爭議類型與 normalized text。
 - `backend/app/services/similar_case_service.py`：規則式相似案件計分。
 - `backend/app/services/statistics_service.py`：案件總數、爭議類型數、年度與日期範圍總覽，支援可選年度條件。
+- `backend/app/services/summary_generation_service.py`：本機 Ollama 生成式摘要 POC；只接受 loopback URL 與本機模型，將完整案件按真正句界分區，限制輸出 token，驗證原文引文與角色類別，過濾表格／不完整句，以規則訊號排序評議理由並排除契約型法源。單次 packet 失敗可留下診斷並降級，此 service 不寫入資料庫。
 - `backend/app/services/summary_service.py`：案件摘要查詢。
 - `backend/scripts/extract_case_summaries.py`：從 normalized text 產生規則式摘要並寫入 `case_summaries`；已支援「二、申請人主張」與非固定序號的「判斷理由」標題。
 - `backend/scripts/annotate_semantic_benchmark.py`：本機互動式人工標註工具，逐筆顯示 benchmark 命中內容與相鄰 chunks，支援相關／部分相關／不相關、略過、離開、指定查詢與指定序號；每筆完成後即原子寫入 UTF-8 JSON，不呼叫外部 API。
@@ -282,6 +289,8 @@ frontend/dist/
 - `backend/scripts/compare_semantic_annotations.py`：驗證並比較兩份完整 benchmark 標註，計算原始一致率、Cohen's Kappa、混淆矩陣與各查詢一致率，並輸出待仲裁衝突清單。
 - `backend/scripts/run_semantic_query_trial.py`：在指定 SQLite trial DB 上執行 query-to-document 語意搜尋試測，預設使用本機 BGE，支援重複 `--query`、固定 `benchmark-v1`、JSON 與 Markdown 輸出；查詢不修改 DB，也不使用外部 API。
 - `backend/scripts/run_semantic_query_suggestion_trial.py`：為 benchmark v1 的 15 個短查詢執行固定、可解釋的離線建議試驗；只使用本機 BGE、以唯讀模式開啟 trial DB，輸出原查詢、建議查詢、規則編號、原因與 Top 5。
+- `backend/scripts/run_summary_trial.py`：以 SQLite `mode=ro` 選取五件不同長度與爭議類型案件，執行 Qwen3 4B 本機摘要；支援 `--dry-run`、指定案號與 JSON 原子輸出，不會改寫 `case_summaries`。
+- `backend/scripts/validate_summary_trial.py`：對摘要試跑 JSON 逐案回查唯讀 DB，驗證必要欄位、角色區塊、evidence quote、正式法規、內部 request error 與 merge fallback；有違規時以 exit code 1 結束。
 - `backend/scripts/evaluate_semantic_benchmark.py`：由 query trial JSON 產生人工標註模板，驗證每筆 label 與 evidence summary 完整性，並輸出 strict / lenient、macro / micro Precision@5 與逐筆證據報告。
 - `backend/scripts/import_cases_to_db.py`：讀取單一或多個 metadata 與文字檔，匯入 SQLite。
 - `backend/scripts/verify_case_db.py`：驗證 SQLite 筆數、搜尋、路徑與 sample case；可用 `--require-chunks` 與 `--require-embeddings` 檢查 chunk 與 embedding 完整性。
@@ -302,6 +311,7 @@ frontend/dist/
 - `backend/tests/test_semantic_query_suggestions.py`：查詢建議 15 詞覆蓋與順序、規則完整性、SQLite 唯讀連線及本機 BGE provider/model 固定行為測試。
 - `backend/tests/test_similar_case_service.py`：相似案件 service 單元測試。
 - `backend/tests/test_summary_service.py`：摘要擷取與 summary service 測試，包含 FOI 標題格式變異的 regression tests。
+- `backend/tests/test_summary_generation_service.py`：本機摘要安全與可追溯性測試，覆蓋遠端 URL／cloud model 阻擋、無 Authorization header、structured output、輸出上限、PDF 換行分段、證據句界、角色類別、表格排除、法規擷取、部分 request 降級與理由訊號排序。
 
 ### frontend
 
@@ -1095,7 +1105,7 @@ Local BGE trial API 已可實際查詢 17254 個 candidates，暖機後 API 約 
 
 ### 摘要與相似案件規則需要持續抽樣校正
 
-目前摘要與相似案件都採規則式方法，已可展示，但遇到新年度或格式變異時仍可能需要調整規則。
+目前正式摘要 API 與規則式相似案件 baseline 仍採規則式方法，已可展示，但遇到新年度或格式變異時仍可能需要調整規則。本機 Qwen3 生成式摘要已完成唯讀五案 POC 與來源回查，尚未替換正式摘要；產出仍為 `unreviewed`，正式接入前需要人工審核狀態與擴大抽樣。
 
 已知已修正格式變異：
 
@@ -1138,6 +1148,13 @@ EMBEDDING_MODEL=local_hashing_cjk_v1
 EMBEDDING_DIMS=384
 LOCAL_BGE_DEVICE=auto
 LOCAL_BGE_BATCH_SIZE=4
+SUMMARY_PROVIDER=ollama_local
+SUMMARY_MODEL=qwen3:4b
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+SUMMARY_REQUEST_TIMEOUT_SECONDS=240
+SUMMARY_NUM_CTX=8192
+SUMMARY_MAX_OUTPUT_TOKENS=2048
+SUMMARY_SECTION_MAX_CHARS=2000
 ```
 
 前端支援：
@@ -1147,6 +1164,8 @@ VITE_API_BASE_URL=http://127.0.0.1:8000/api
 ```
 
 注意：目前後端沒有新增自動讀取 `.env` 的套件。若要套用設定，請在啟動指令前於 shell 或部署平台設定環境變數。
+
+Ollama 另外以 Windows 使用者環境變數設定 `OLLAMA_MODELS=D:\Models\Ollama`、`OLLAMA_NO_CLOUD=1` 與 `OLLAMA_HOST=127.0.0.1:11434`。模型下載需要網路，但摘要推論不使用 Hugging Face Inference API、Token 或 Ollama cloud model。
 
 ### 建立 SQLite DB
 
@@ -1222,6 +1241,28 @@ py .\backend\scripts\extract_case_summaries.py
 - `holding` = 2992
 - `applicant_claim` = 2992
 - `reasoning` = 2992
+
+### 本機生成式摘要五案 POC
+
+先確認代表案件，不呼叫模型：
+
+```powershell
+.\.venv\Scripts\python.exe .\backend\scripts\run_summary_trial.py --limit 5 --dry-run
+```
+
+本機 `qwen3:4b` 已安裝且 Ollama 啟動後執行：
+
+```powershell
+.\.venv\Scripts\python.exe .\backend\scripts\run_summary_trial.py `
+  --db .\backend\data\insurance_cases_local_bge_trial.db `
+  --limit 5 `
+  --output .\outputs\local_llm_summary_trial_qwen3_4b_final_v4.json
+
+.\.venv\Scripts\python.exe .\backend\scripts\validate_summary_trial.py `
+  --report .\outputs\local_llm_summary_trial_qwen3_4b_final_v4.json
+```
+
+試跑只讀取 DB，結果寫入 Git 忽略的 `outputs/`；不會改寫正式摘要表。2026-08-06 實測 5 件、57 次本機請求失敗 0；驗證腳本回查 47 段 evidence 與 11 筆法源，`violations = []`。每案仍需人工核對雙方主張、主文、判斷理由與表格脈絡。
 
 ### 建立案件文字 chunks
 
@@ -1405,6 +1446,7 @@ py -m pytest
 - chunking pipeline tests。
 - embedding service tests。
 - 摘要擷取與 summary service tests，包含「申請人主張」標題缺少「之」與「判斷理由」非第六段的 regression tests。
+- 本機生成式摘要 tests，包含 loopback URL、cloud model 阻擋、Ollama structured output、輸出上限、來源切分、角色類別、evidence quote、表格排除、法規、降級與理由排序。
 - 相似案件 service tests。
 - 人工標註 CLI tests，包含續作、原子儲存與唯讀相鄰 chunk 查詢。
 - 匯入腳本多 metadata tests。
@@ -1540,6 +1582,15 @@ http://127.0.0.1:5173
 - `pnpm run build`：TypeScript 與 Vite production build 通過，1686 modules transformed。
 - Trial DB 驗證 passed：2,992 案、17,254 chunks、34,508 embeddings，案件路徑錯誤 0。
 - 瀏覽器人工驗證：預設只展開主文與本件爭點；相對人主張可獨立展開；全部區塊字數合計與 API `source_chars` 一致，逐字全文保留最後頁尾。桌面與 390px 行動版均無水平溢位。
+
+2026-08-06 本機生成式摘要 POC 完成後，另完成以下檢查：
+
+- Ollama 0.32.6 只監聽 `127.0.0.1:11434`，並設定 `OLLAMA_NO_CLOUD=1`；摘要程式拒絕非 loopback URL 與 `:cloud` 模型。
+- `qwen3:4b` 使用 Qwen 官方 `Qwen3-4B-Q4_K_M.gguf`，原始檔 SHA-256 為 `7485FE6F11AF29433BC51CAB58009521F205840F5B4AE3A32FA7F92E8534FDF5`。
+- 五件代表案件共執行 57 次本機請求，失敗 0、最終合併 fallback 0；Ollama 顯示模型以 `100% GPU`、8192 context 執行。
+- `validate_summary_trial.py` 回查 47 段 evidence 與 11 筆正式法源，`violations = []`；所有產出仍標示為 `unreviewed`。
+- `py -m pytest -q`：147 passed；生成式摘要相關模組 `py_compile` 通過。
+- Trial DB 於試跑前後皆為 336,064,512 bytes，最後修改時間維持 `2026-08-05T01:03:40.3062243Z`，確認試跑未寫入 DB。
 
 注意：Local BGE 語意搜尋第一次載入模型實測約 66.65 秒；暖機後仍需約 2.5 至 2.8 秒計算 17254 筆 chunk similarity。POC 展示前應先暖機，正式切換前需處理 cold start。
 
