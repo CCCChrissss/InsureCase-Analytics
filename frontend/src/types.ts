@@ -71,6 +71,51 @@ export type CaseDocumentSections = {
   sections: DocumentSection[];
 };
 
+export type AiSummaryLegalReference = {
+  law_name: string;
+  article: string;
+  section_title: string | null;
+  evidence_quote: string;
+};
+
+export type AiSummaryEvidence = {
+  category: string;
+  text: string;
+  section_title: string | null;
+  evidence_quote: string;
+};
+
+// This type mirrors the read-only review response; no browser-side mutation
+// contract exists until authentication and audit logging are implemented.
+export type AiCaseSummaryDetail = {
+  summary_id: string;
+  case_id: string;
+  summary: {
+    background: string;
+    applicant_position: string;
+    respondent_position: string;
+    core_issues: string[];
+    reasoning_points: string[];
+    decision_result: string;
+    legal_references: AiSummaryLegalReference[];
+    evidence: AiSummaryEvidence[];
+  };
+  provider: string;
+  model: string;
+  prompt_version: string;
+  source_sha256: string;
+  review_status: "unreviewed" | "approved" | "rejected";
+  official: boolean;
+  generated_at: string;
+  reviewed_at: string | null;
+};
+
+export type AiCaseSummaryResponse = {
+  case_id: string;
+  available: boolean;
+  item: AiCaseSummaryDetail | null;
+};
+
 export type SimilarCase = {
   case_id: string;
   case_number: string;

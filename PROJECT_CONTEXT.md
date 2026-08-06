@@ -100,6 +100,7 @@
 │  │  ├─ schemas.py
 │  │  ├─ routers/
 │  │  │  ├─ __init__.py
+│  │  │  ├─ ai_summaries.py
 │  │  │  ├─ health.py
 │  │  │  ├─ cases.py
 │  │  │  ├─ quality.py
@@ -111,6 +112,7 @@
 │  │  │  └─ summaries.py
 │  │  └─ services/
 │  │     ├─ __init__.py
+│  │     ├─ ai_summary_service.py
 │  │     ├─ case_service.py
 │  │     ├─ embedding_service.py
 │  │     ├─ quality_service.py
@@ -128,13 +130,16 @@
 │  │  ├─ compare_embedding_models.py
 │  │  ├─ extract_case_summaries.py
 │  │  ├─ evaluate_semantic_benchmark.py
+│  │  ├─ import_summary_trial.py
 │  │  ├─ import_cases_to_db.py
+│  │  ├─ review_ai_summary.py
 │  │  ├─ run_semantic_query_suggestion_trial.py
 │  │  ├─ run_semantic_query_trial.py
 │  │  ├─ run_summary_trial.py
 │  │  ├─ validate_summary_trial.py
 │  │  └─ verify_case_db.py
 │  └─ tests/
+│     ├─ test_ai_summary_service.py
 │     ├─ test_semantic_annotation_cli.py
 │     ├─ test_api.py
 │     ├─ test_build_chunk_embeddings.py
@@ -271,6 +276,7 @@ frontend/dist/
 - `backend/app/routers/similar_cases.py`：相似案件 API；案件層級語意相似 API 支援 `embedding_model` / `embedding_provider` 可選參數。
 - `backend/app/routers/statistics.py`：首頁與案件篩選使用的輕量總覽 API，支援可選 `roc_year`。
 - `backend/app/routers/summaries.py`：案件摘要 API。
+- `backend/app/routers/ai_summaries.py`：本機 AI 摘要唯讀 API；不存在案件回傳 404，尚無可用版本則回傳 `available = false`。
 - `backend/app/services/case_service.py`：案件查詢、篩選、分頁、PDF path resolver。
 - `backend/app/services/document_section_service.py`：依評議書正式標題切分 normalized/raw text；每段保留原文起訖 offset，所有段落串接後必須逐字還原來源文字。
 - `backend/app/services/embedding_service.py`：embedding provider 介面、本機 CJK hashing、本機 Sentence Transformers BGE、chunk embedding 建置、語意搜尋、案件層級語意相似與全文命中案件全域排序；全域排名最多快取最近 16 組查詢，DB 檔案變更會形成新快取 key。
@@ -280,6 +286,7 @@ frontend/dist/
 - `backend/app/services/similar_case_service.py`：規則式相似案件計分。
 - `backend/app/services/statistics_service.py`：案件總數、爭議類型數、年度與日期範圍總覽，支援可選年度條件。
 - `backend/app/services/summary_generation_service.py`：本機 Ollama 生成式摘要 POC；只接受 loopback URL 與本機模型，將完整案件按真正句界分區，限制輸出 token，驗證原文引文與角色類別，過濾表格／不完整句，以規則訊號排序評議理由並排除契約型法源。單次 packet 失敗可留下診斷並降級，此 service 不寫入資料庫。
+- `backend/app/services/ai_summary_service.py`：管理版本化 AI 摘要匯入、讀取與人工審核狀態；重複匯入保留既有 reviewer 與核准結果，API 優先回傳 approved、否則回傳最新 unreviewed，rejected 不對 Dashboard 顯示。
 - `backend/app/services/summary_service.py`：案件摘要查詢。
 - `backend/scripts/extract_case_summaries.py`：從 normalized text 產生規則式摘要並寫入 `case_summaries`；已支援「二、申請人主張」與非固定序號的「判斷理由」標題。
 - `backend/scripts/annotate_semantic_benchmark.py`：本機互動式人工標註工具，逐筆顯示 benchmark 命中內容與相鄰 chunks，支援相關／部分相關／不相關、略過、離開、指定查詢與指定序號；每筆完成後即原子寫入 UTF-8 JSON，不呼叫外部 API。
@@ -291,6 +298,8 @@ frontend/dist/
 - `backend/scripts/run_semantic_query_suggestion_trial.py`：為 benchmark v1 的 15 個短查詢執行固定、可解釋的離線建議試驗；只使用本機 BGE、以唯讀模式開啟 trial DB，輸出原查詢、建議查詢、規則編號、原因與 Top 5。
 - `backend/scripts/run_summary_trial.py`：以 SQLite `mode=ro` 選取五件不同長度與爭議類型案件，執行 Qwen3 4B 本機摘要；支援 `--dry-run`、指定案號與 JSON 原子輸出，不會改寫 `case_summaries`。
 - `backend/scripts/validate_summary_trial.py`：對摘要試跑 JSON 逐案回查唯讀 DB，驗證必要欄位、角色區塊、evidence quote、正式法規、內部 request error 與 merge fallback；有違規時以 exit code 1 結束。
+- `backend/scripts/import_summary_trial.py`：將已驗證試跑報告交易式匯入 Trial DB 的 `case_ai_summaries`；預設拒絕正式 DB，同一版本可安全重跑。
+- `backend/scripts/review_ai_summary.py`：本機人工審核 CLI，可列出佇列、查看完整摘要，並以 reviewer、note 將版本標記為 unreviewed、approved 或 rejected。
 - `backend/scripts/evaluate_semantic_benchmark.py`：由 query trial JSON 產生人工標註模板，驗證每筆 label 與 evidence summary 完整性，並輸出 strict / lenient、macro / micro Precision@5 與逐筆證據報告。
 - `backend/scripts/import_cases_to_db.py`：讀取單一或多個 metadata 與文字檔，匯入 SQLite。
 - `backend/scripts/verify_case_db.py`：驗證 SQLite 筆數、搜尋、路徑與 sample case；可用 `--require-chunks` 與 `--require-embeddings` 檢查 chunk 與 embedding 完整性。
@@ -312,6 +321,7 @@ frontend/dist/
 - `backend/tests/test_similar_case_service.py`：相似案件 service 單元測試。
 - `backend/tests/test_summary_service.py`：摘要擷取與 summary service 測試，包含 FOI 標題格式變異的 regression tests。
 - `backend/tests/test_summary_generation_service.py`：本機摘要安全與可追溯性測試，覆蓋遠端 URL／cloud model 阻擋、無 Authorization header、structured output、輸出上限、PDF 換行分段、證據句界、角色類別、表格排除、法規擷取、部分 request 降級與理由訊號排序。
+- `backend/tests/test_ai_summary_service.py`：版本匯入、審核保留、approved 優先、rejected 隱藏與 API availability wrapper 測試。
 
 ### frontend
 
@@ -545,6 +555,29 @@ reasoning TEXT
 summary_method TEXT
 created_at TEXT
 FOREIGN KEY(case_id) REFERENCES cases(case_id) ON DELETE CASCADE
+```
+
+### `case_ai_summaries`
+
+本機生成式摘要的版本與人工審核表。目前只存在於 Local BGE Trial DB，共 5 筆且皆為 `unreviewed`；正式 DB 未建立或匯入此表。摘要內容與生成診斷分開保存，人工欄位不會因重複匯入而重設。
+
+```sql
+summary_id TEXT PRIMARY KEY
+case_id TEXT NOT NULL
+summary_json TEXT NOT NULL
+generation_json TEXT NOT NULL
+provider TEXT NOT NULL
+model TEXT NOT NULL
+prompt_version TEXT NOT NULL
+source_sha256 TEXT NOT NULL
+review_status TEXT NOT NULL
+reviewer TEXT
+review_note TEXT
+generated_at TEXT NOT NULL
+reviewed_at TEXT
+imported_at TEXT NOT NULL
+FOREIGN KEY(case_id) REFERENCES cases(case_id) ON DELETE CASCADE
+UNIQUE(case_id, model, prompt_version, source_sha256)
 ```
 
 ### `case_chunks`
@@ -808,6 +841,22 @@ GET /api/cases/{case_id}/summary
 - `summary_method`
 - `created_at`
 
+```text
+GET /api/cases/{case_id}/ai-summary
+```
+
+用途：提供案件 Dashboard 讀取經原文驗證的本機 AI 摘要與人工審核狀態。
+
+安全邊界：公開 response 不包含 reviewer 與 review note；兩者只保存在 DB 並由本機 CLI 顯示。
+
+回傳行為：
+
+- 案件不存在：HTTP 404。
+- 案件存在但沒有 approved 或 unreviewed 版本：HTTP 200、`available = false`。
+- 有 approved 版本：優先回傳並標記 `official = true`。
+- 只有 unreviewed 版本：回傳並標記 `official = false`，前端顯示人工確認警示。
+- rejected 版本不回傳；API 沒有審核寫入 endpoint。
+
 ### Similar Cases
 
 ```text
@@ -952,6 +1001,7 @@ Query parameters：
 - 已開啟案件以 `sessionStorage` 保存，同一瀏覽器分頁重新整理後可還原。
 - 案件整理內容與原文可在同一彈窗內切換，並保留正式 PDF 連結。
 - 法源依據只顯示辨識到的法規條文；保單、附約及契約條款不在法源區呈現，完整內容仍可由原文或 PDF 核對。
+- 案件 Dashboard 已接入版本化本機 AI 摘要，顯示雙方主張、爭點、理由、結果、審核狀態與可展開 evidence；未審核版本有醒目警示。
 
 ### Git
 
@@ -991,6 +1041,8 @@ Query parameters：
 - 一致性比較工具與 POC 混合式第二輪已完成；正式第二位獨立標註與有效的跨標註者信度估計仍未完成。
 - OpenAI 或其他外部 AI embedding provider 尚未實作。
 - 實務級向量資料庫或 ANN index。
+- 本機 AI 摘要目前只有 5 件 POC 且全部 `unreviewed`；尚未逐案人工核准、全量生成或切換成正式摘要來源。
+- 系統尚無登入與角色權限，因此審核寫入只提供本機 CLI；若要建立網頁審核介面，必須先完成身分驗證與操作稽核。
 
 ## 10. 目前可能的 bug 或技術債
 
@@ -1105,7 +1157,7 @@ Local BGE trial API 已可實際查詢 17254 個 candidates，暖機後 API 約 
 
 ### 摘要與相似案件規則需要持續抽樣校正
 
-目前正式摘要 API 與規則式相似案件 baseline 仍採規則式方法，已可展示，但遇到新年度或格式變異時仍可能需要調整規則。本機 Qwen3 生成式摘要已完成唯讀五案 POC 與來源回查，尚未替換正式摘要；產出仍為 `unreviewed`，正式接入前需要人工審核狀態與擴大抽樣。
+目前正式規則式摘要 API 與規則式相似案件 baseline 仍保留。本機 Qwen3 五案 POC 已完成來源回查、獨立版本表、唯讀 API、Dashboard 顯示與本機審核 CLI，但 5 件仍全部為 `unreviewed`；正式採用前仍需逐案人工核准、擴大抽樣與登入權限設計。
 
 已知已修正格式變異：
 
@@ -1592,6 +1644,15 @@ http://127.0.0.1:5173
 - `py -m pytest -q`：147 passed；生成式摘要相關模組 `py_compile` 通過。
 - Trial DB 於試跑前後皆為 336,064,512 bytes，最後修改時間維持 `2026-08-05T01:03:40.3062243Z`，確認試跑未寫入 DB。
 
+2026-08-06 AI 摘要人工審核流程接入後，另完成以下檢查：
+
+- 五案已交易式匯入 Trial DB 的 `case_ai_summaries`，共 5 筆且全部為 `unreviewed`；`PRAGMA integrity_check = ok`。
+- 正式 `insurance_cases.db` 維持 254,672,896 bytes 與原修改時間，未建立 AI 摘要表或寫入摘要。
+- 唯讀 `/api/cases/{case_id}/ai-summary` 實測：有摘要回傳 unreviewed、無摘要回傳 `available = false`、不存在案件回傳 404。
+- `py -m pytest -q`：151 passed；`node --test tests/caseText.test.ts tests/legalReferences.test.ts`：3 passed。
+- `pnpm build`：1686 modules transformed，TypeScript 與 Vite production build 通過。
+- 瀏覽器人工驗證：摘要六類內容、未審核警示、8 則 evidence 展開正常；1280px 與 390px 均無水平溢位，console 無 error 或 warning。
+
 注意：Local BGE 語意搜尋第一次載入模型實測約 66.65 秒；暖機後仍需約 2.5 至 2.8 秒計算 17254 筆 chunk similarity。POC 展示前應先暖機，正式切換前需處理 cold start。
 
 ## 13. 建議下一步開發順序
@@ -1628,6 +1689,7 @@ http://127.0.0.1:5173
 - 已完成本機 `BAAI/bge-large-zh-v1.5` CUDA provider、模型快取、17254 chunks / 1024 維全量 trial 與 15 詞／75 結果的完全離線 benchmark；RTX 4050 GPU 長時間推論已驗證，正式 DB 未切換。
 - 已將前端主流程改為理賠案件工作台與全文搜尋；案件以彈出式 Dashboard 開啟，不改變搜尋背景 route，並支援瀏覽器式多案件分頁、關閉、最小化、重新整理還原、原文切換與正式 PDF。
 - 已將案件 Dashboard 改為完整原文結構化呈現：包含相對人主張、原始順序、區塊字數與完整涵蓋狀態；規則式摘要 API 保留供品質分析，但不再作為 Dashboard 主要內容。
+- 已建立 `case_ai_summaries` 版本表、交易式五案匯入、本機審核 CLI 與唯讀 `/api/cases/{case_id}/ai-summary`；Dashboard 顯示摘要與審核狀態，rejected 版本不顯示，重複匯入不會清除人工結果。
 - 已將理賠人員主搜尋改為完整 FTS5 / LIKE 分頁，每頁可選擇 10、15 或 20 筆；可依關鍵字相關性或全域 query-to-case 相似度排序，後者先完成全部命中案件評分再分頁，並以 bounded LRU cache 支援翻頁。語意服務失敗時會退回關鍵字排序。
 - 已新增「相似度怎麼看」白話說明視窗，明確說明數字用於查找排序，不是理賠機率或法律結論。
 - 已新增「計算方法」主要導覽頁，公開 FTS5/BM25、chunking、搜尋相似度、Dashboard 相關案件、百分比換算、評議結果分類與 Precision@5 限制。

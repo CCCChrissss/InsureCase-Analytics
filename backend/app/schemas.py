@@ -72,6 +72,55 @@ class CaseSummaryDetail(BaseModel):
     created_at: str | None
 
 
+class AiSummaryLegalReference(BaseModel):
+    law_name: str
+    article: str
+    section_title: str | None = None
+    evidence_quote: str
+
+
+class AiSummaryEvidence(BaseModel):
+    category: str
+    text: str
+    section_title: str | None = None
+    evidence_quote: str
+
+
+class AiSummaryContent(BaseModel):
+    """User-facing fields only; model diagnostics remain in generation_json."""
+
+    background: str
+    applicant_position: str
+    respondent_position: str
+    core_issues: list[str]
+    reasoning_points: list[str]
+    decision_result: str
+    legal_references: list[AiSummaryLegalReference]
+    evidence: list[AiSummaryEvidence]
+
+
+class AiCaseSummaryDetail(BaseModel):
+    summary_id: str
+    case_id: str
+    summary: AiSummaryContent
+    provider: str
+    model: str
+    prompt_version: str
+    source_sha256: str
+    review_status: str
+    official: bool
+    generated_at: str
+    reviewed_at: str | None
+
+
+class AiCaseSummaryResponse(BaseModel):
+    """Use an availability wrapper so missing POC summaries are not API errors."""
+
+    case_id: str
+    available: bool
+    item: AiCaseSummaryDetail | None
+
+
 class SimilarCase(BaseModel):
     case_id: str
     case_number: str

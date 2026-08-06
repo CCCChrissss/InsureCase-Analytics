@@ -5,7 +5,12 @@ import { apiGet, apiPath } from "../api/client";
 import { LOCAL_BGE_MODEL, LOCAL_BGE_PROVIDER } from "../config/semantic";
 import { useAsyncData } from "../hooks/useAsyncData";
 import type { OpenCaseTab } from "../hooks/useOpenCases";
-import type { CaseDetail, CaseDocumentSections, SemanticSimilarCasesResponse } from "../types";
+import type {
+  AiCaseSummaryResponse,
+  CaseDetail,
+  CaseDocumentSections,
+  SemanticSimilarCasesResponse,
+} from "../types";
 import { CaseDetailView } from "./CaseDetailView";
 import { AsyncBlock } from "./ui";
 
@@ -30,6 +35,12 @@ export function CaseWorkspaceModal({
   const detail = useAsyncData(() => apiGet<CaseDetail>(`/cases/${activeCaseId}`), [activeCaseId]);
   const documentSections = useAsyncData(
     () => apiGet<CaseDocumentSections>(`/cases/${activeCaseId}/document-sections`),
+    [activeCaseId]
+  );
+  // Review changes are intentionally absent from the browser API. The public
+  // workspace only reads the version selected by the backend review policy.
+  const aiSummary = useAsyncData(
+    () => apiGet<AiCaseSummaryResponse>(`/cases/${activeCaseId}/ai-summary`),
     [activeCaseId]
   );
   const similar = useAsyncData(
@@ -102,6 +113,9 @@ export function CaseWorkspaceModal({
             {detail.data && (
               <CaseDetailView
                 caseDetail={detail.data}
+                aiSummary={aiSummary.data}
+                aiSummaryError={aiSummary.error}
+                aiSummaryLoading={aiSummary.loading}
                 documentSections={documentSections.data}
                 documentError={documentSections.error}
                 documentLoading={documentSections.loading}

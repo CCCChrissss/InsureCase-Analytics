@@ -41,6 +41,29 @@ CREATE TABLE IF NOT EXISTS case_summaries (
   FOREIGN KEY(case_id) REFERENCES cases(case_id) ON DELETE CASCADE
 );
 
+-- AI summaries are versioned separately from the rule-based production summary.
+-- Review fields are intentionally stored outside summary_json so a re-import can
+-- refresh generated content without silently discarding a human decision.
+CREATE TABLE IF NOT EXISTS case_ai_summaries (
+  summary_id TEXT PRIMARY KEY,
+  case_id TEXT NOT NULL,
+  summary_json TEXT NOT NULL,
+  generation_json TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  model TEXT NOT NULL,
+  prompt_version TEXT NOT NULL,
+  source_sha256 TEXT NOT NULL,
+  review_status TEXT NOT NULL DEFAULT 'unreviewed'
+    CHECK(review_status IN ('unreviewed', 'approved', 'rejected')),
+  reviewer TEXT,
+  review_note TEXT,
+  generated_at TEXT NOT NULL,
+  reviewed_at TEXT,
+  imported_at TEXT NOT NULL,
+  FOREIGN KEY(case_id) REFERENCES cases(case_id) ON DELETE CASCADE,
+  UNIQUE(case_id, model, prompt_version, source_sha256)
+);
+
 CREATE TABLE IF NOT EXISTS case_chunks (
   chunk_id TEXT PRIMARY KEY,
   case_id TEXT NOT NULL,
@@ -79,3 +102,5 @@ CREATE INDEX IF NOT EXISTS idx_cases_dispute_type ON cases(dispute_type);
 CREATE INDEX IF NOT EXISTS idx_cases_case_number ON cases(case_number);
 CREATE INDEX IF NOT EXISTS idx_case_chunks_case_id ON case_chunks(case_id);
 CREATE INDEX IF NOT EXISTS idx_chunk_embeddings_model ON chunk_embeddings(embedding_model);
+CREATE INDEX IF NOT EXISTS idx_case_ai_summaries_case_status
+  ON case_ai_summaries(case_id, review_status, generated_at DESC);

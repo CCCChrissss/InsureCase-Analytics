@@ -107,4 +107,37 @@ POC 已證明 `qwen3:4b` 可在目前硬體上離線完成有來源證據的案�
 - 五案樣本不足以代表 2,992 件資料，正式建置前仍需擴大抽樣與人工標註。
 - 長主張可能以完整原文補位，文字仍偏長；表格與正式排版應回看 PDF。
 - 規則式理由訊號需隨年度與文件格式持續校正。
-- 下一階段應先建立人工審核／核准狀態，再考慮寫入摘要表與接入案件 Dashboard。
+- 五案已匯入 Trial DB 的獨立版本表並接入案件 Dashboard；全部仍為 `unreviewed`，不會冒充正式人工判斷。
+- 五案樣本與審核介面仍屬 POC；正式全量建置前需要擴大抽樣、逐案人工核准及登入權限設計。
+
+## 人工審核流程
+
+AI 摘要使用獨立的 `case_ai_summaries` 表，不會覆蓋既有規則式 `case_summaries`。API 只有 GET；人工狀態寫入只能在本機 CLI 執行，避免 Cloudflare Tunnel 公開時讓未登入使用者修改資料。
+
+```powershell
+# 匯入已通過 validate_summary_trial.py 的五案報告
+py .\backend\scripts\import_summary_trial.py
+
+# 查看全部待審案件
+py .\backend\scripts\review_ai_summary.py --list
+
+# 查看一案完整摘要、法源與 evidence
+py .\backend\scripts\review_ai_summary.py `
+  --case-number "114年評字第004802號" `
+  --show
+
+# 核對 Dashboard、完整原文與正式 PDF 後核准
+py .\backend\scripts\review_ai_summary.py `
+  --case-number "114年評字第004802號" `
+  --status approved `
+  --reviewer "reviewer-id" `
+  --note "已核對雙方主張、爭點、理由與主文"
+```
+
+審核狀態：
+
+- `unreviewed`：Dashboard 顯示黃色警示，只能作為閱讀方向。
+- `approved`：Dashboard 顯示「已人工確認」，且同案有多個版本時優先採用。
+- `rejected`：API 不回傳該版本；若同案沒有其他可用版本，Dashboard 顯示尚無摘要。
+
+匯入與審核腳本預設只操作 `insurance_cases_local_bge_trial.db`，並拒絕正式 `insurance_cases.db`。同一個 case、model、prompt 與 source hash 重複匯入時會更新生成內容，但保留 reviewer、note 與 review status。

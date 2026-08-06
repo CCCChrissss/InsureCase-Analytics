@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.config import CORS_ORIGINS
 from backend.app.routers import (
+    ai_summaries,
     cases,
     health,
     quality,
@@ -39,4 +40,5 @@ app.include_router(semantic_search.router)
 app.include_router(similar_cases.router)
 app.include_router(statistics.router)
 app.include_router(summaries.router)
+app.include_router(ai_summaries.router)
 app.include_router(quality.router)

@@ -2,6 +2,7 @@ import React from "react";
 import {
   BookOpen,
   CheckCircle2,
+  ClipboardCheck,
   ChevronDown,
   ChevronUp,
   ChevronsDown,
@@ -17,6 +18,7 @@ import {
 
 import { API_BASE } from "../api/client";
 import type {
+  AiCaseSummaryResponse,
   CaseDetail,
   CaseDocumentSections,
   DocumentSection,
@@ -29,6 +31,9 @@ const DEFAULT_EXPANDED_SECTION_TYPES = new Set(["holding", "issues"]);
 
 export function CaseDetailView({
   caseDetail,
+  aiSummary,
+  aiSummaryError,
+  aiSummaryLoading,
   documentSections,
   documentError,
   documentLoading,
@@ -38,6 +43,9 @@ export function CaseDetailView({
   onOpenCase,
 }: {
   caseDetail: CaseDetail;
+  aiSummary: AiCaseSummaryResponse | null;
+  aiSummaryError: string | null;
+  aiSummaryLoading: boolean;
   documentSections: CaseDocumentSections | null;
   documentError: string | null;
   documentLoading: boolean;
@@ -140,6 +148,12 @@ export function CaseDetailView({
             <span>評議結果</span>
             <strong>{decisionResult}</strong>
           </section>
+
+          <AiSummarySection
+            response={aiSummary}
+            error={aiSummaryError}
+            loading={aiSummaryLoading}
+          />
 
           <section className="case-reading-section">
             <div className="reading-section-heading">
@@ -250,6 +264,120 @@ export function CaseDetailView({
       )}
     </article>
   );
+}
+
+function AiSummarySection({
+  response,
+  error,
+  loading,
+}: {
+  response: AiCaseSummaryResponse | null;
+  error: string | null;
+  loading: boolean;
+}) {
+  const item = response?.item ?? null;
+  const summary = item?.summary;
+  const statusLabel = item?.official ? "已人工確認" : "AI 產生，尚未人工確認";
+
+  return (
+    <section className="case-reading-section ai-case-summary">
+      <div className="ai-summary-heading">
+        <div className="reading-section-heading">
+          <ClipboardCheck size={19} />
+          <div>
+            <h3>案件摘要</h3>
+            <p>整理雙方主張、爭點、判斷理由與結果，重要內容仍應回查原文。</p>
+          </div>
+        </div>
+        {item && (
+          <span className={item.official ? "review-status approved" : "review-status unreviewed"}>
+            {item.official && <CheckCircle2 size={15} />}
+            {statusLabel}
+          </span>
+        )}
+      </div>
+
+      {loading && <div className="state-box compact">案件摘要載入中</div>}
+      {!loading && error && (
+        <div className="state-box error compact" title={error}>案件摘要目前無法使用，請直接查看完整案件內容。</div>
+      )}
+      {!loading && !error && !response?.available && (
+        <div className="state-box compact">此案件尚未建立經來源核對的摘要。</div>
+      )}
+      {!loading && !error && summary && item && (
+        <>
+          {/* Unreviewed POC output stays inspectable, but cannot be mistaken for a human decision. */}
+          {!item.official && (
+            <div className="ai-summary-warning">
+              <TriangleAlert size={17} />
+              <span>此摘要尚未經人工確認，只能作為閱讀方向，不可取代評議決定書原文。</span>
+            </div>
+          )}
+          <div className="ai-summary-grid">
+            <SummaryTextBlock title="案件背景" value={summary.background} />
+            <SummaryTextBlock title="申請人主張" value={summary.applicant_position} />
+            <SummaryTextBlock title="相對人主張" value={summary.respondent_position} />
+            <SummaryListBlock title="本件爭點" items={summary.core_issues} />
+            <SummaryListBlock title="判斷理由" items={summary.reasoning_points} wide />
+            <SummaryTextBlock title="摘要結果" value={summary.decision_result} wide />
+          </div>
+          {summary.evidence.length > 0 && (
+            <details className="summary-evidence">
+              <summary>查看摘要引用原文（{summary.evidence.length} 則）</summary>
+              <div className="summary-evidence-list">
+                {summary.evidence.map((evidence, index) => (
+                  <article key={`${evidence.category}-${evidence.section_title}-${index}`}>
+                    <span>{evidence.section_title || evidenceCategoryLabel(evidence.category)}</span>
+                    <p>{evidence.evidence_quote}</p>
+                  </article>
+                ))}
+              </div>
+            </details>
+          )}
+          <div className="source-caution">
+            <Info size={16} />
+            <span>摘要內容附有原文引用，可展開核對；正式判斷仍以完整評議決定書為準。</span>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function SummaryTextBlock({ title, value, wide = false }: { title: string; value: string; wide?: boolean }) {
+  return (
+    <article className={wide ? "ai-summary-block wide" : "ai-summary-block"}>
+      <h4>{title}</h4>
+      <p>{value}</p>
+    </article>
+  );
+}
+
+function SummaryListBlock({ title, items, wide = false }: { title: string; items: string[]; wide?: boolean }) {
+  return (
+    <article className={wide ? "ai-summary-block wide" : "ai-summary-block"}>
+      <h4>{title}</h4>
+      {items.length > 0 ? (
+        <ol>
+          {items.map((item, index) => <li key={`${title}-${index}`}>{item}</li>)}
+        </ol>
+      ) : (
+        <p>目前沒有可顯示的內容。</p>
+      )}
+    </article>
+  );
+}
+
+function evidenceCategoryLabel(category: string) {
+  const labels: Record<string, string> = {
+    background: "案件背景",
+    applicant_position: "申請人主張",
+    respondent_position: "相對人主張",
+    core_issue: "本件爭點",
+    reasoning: "判斷理由",
+    decision_result: "評議結果",
+  };
+  return labels[category] || "原文依據";
 }
 
 function OriginalDocumentView({

@@ -268,7 +268,7 @@ summary_method
 created_at
 ```
 
-另已完成本機生成式摘要五案 POC，但尚未替換既有 API 或前端。`backend/app/services/summary_generation_service.py` 只允許連線到本機 Ollama，拒絕 `:cloud` 模型；摘要採角色區塊約束、原文引文驗證、完整句擴展、表格過濾、規則式理由排序與正式法規過濾。`backend/scripts/run_summary_trial.py` 以唯讀 SQLite 試跑，`backend/scripts/validate_summary_trial.py` 會逐筆回查證據、角色與法源。完整結果見 `docs/local_llm_summary_trial.md`。
+另已完成本機生成式摘要五案 POC 與人工審核資料流。`backend/app/services/summary_generation_service.py` 只允許連線到本機 Ollama，拒絕 `:cloud` 模型；摘要採角色區塊約束、原文引文驗證、完整句擴展、表格過濾、規則式理由排序與正式法規過濾。驗證後的摘要版本存入 Trial DB 的 `case_ai_summaries`，不會覆蓋既有 `case_summaries`。案件 Dashboard 會顯示摘要、審核狀態與可展開的原文引用；公開 API 維持唯讀，核准或拒絕只能由本機 CLI 操作。完整結果見 `docs/local_llm_summary_trial.md`。
 
 本機摘要設定：
 
@@ -290,7 +290,27 @@ SUMMARY_SECTION_MAX_CHARS=2000
   --report .\outputs\local_llm_summary_trial_qwen3_4b_final_v4.json
 ```
 
-2026-08-06 實測 5 件、57 次本機請求全數完成；自動回查 47 段 evidence 與 11 筆法源均無違規。結果仍標示為 `unreviewed`，正式接入前需要人工審核流程。
+2026-08-06 實測 5 件、57 次本機請求全數完成；自動回查 47 段 evidence 與 11 筆法源均無違規。五件已匯入 Trial DB 並接入 Dashboard，但仍全部標示為 `unreviewed`，需要逐案人工核准。
+
+匯入五案至 Trial DB 並查看審核佇列：
+
+```powershell
+py .\backend\scripts\import_summary_trial.py
+py .\backend\scripts\review_ai_summary.py --list
+py .\backend\scripts\review_ai_summary.py --case-number "114年評字第004802號" --show
+```
+
+核對 Dashboard、完整原文與 PDF 後，才執行人工決定：
+
+```powershell
+py .\backend\scripts\review_ai_summary.py `
+  --case-number "114年評字第004802號" `
+  --status approved `
+  --reviewer "reviewer-id" `
+  --note "已核對雙方主張、爭點、理由與主文"
+```
+
+`approved` 會成為 Dashboard 優先版本；`rejected` 不會出現在 Dashboard；再次匯入同一版本不會清除既有人工審核結果。兩個寫入腳本預設拒絕操作正式 `insurance_cases.db`。
 
 ### Similar Cases
 
