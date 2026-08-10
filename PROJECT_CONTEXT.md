@@ -559,7 +559,7 @@ FOREIGN KEY(case_id) REFERENCES cases(case_id) ON DELETE CASCADE
 
 ### `case_ai_summaries`
 
-本機生成式摘要的版本與人工審核表。目前只存在於 Local BGE Trial DB，共 11 筆版本：`approved = 1`、`rejected = 1`、`unreviewed = 9`。第一案 v6 為 approved；其餘四案最新版本為 v7、v8、v9、v11，均為 unreviewed；舊 v4 與第一案 v5 保留供稽核。正式 DB 未建立或匯入此表。摘要內容與生成診斷分開保存，人工欄位不會因重複匯入而重設。
+本機生成式摘要的版本與人工審核表。目前只存在於 Local BGE Trial DB，共 11 筆版本：`approved = 5`、`rejected = 1`、`unreviewed = 5`。五案最新版本 v6、v7、v8、v9、v11 均為 approved；舊 v4 與第一案 v5 等版本保留供稽核。正式 DB 未建立或匯入此表。摘要內容與生成診斷分開保存，人工欄位不會因重複匯入而重設。
 
 ```sql
 summary_id TEXT PRIMARY KEY
@@ -1041,7 +1041,7 @@ Query parameters：
 - 一致性比較工具與 POC 混合式第二輪已完成；正式第二位獨立標註與有效的跨標註者信度估計仍未完成。
 - OpenAI 或其他外部 AI embedding provider 尚未實作。
 - 實務級向量資料庫或 ANN index。
-- 本機 AI 摘要目前只有 5 件 POC；第一案 v6 已核准，其餘四案已完成品質修正、來源驗證與 Trial DB 匯入，但仍需人工核准，也未全量生成或切換成正式摘要來源。
+- 本機 AI 摘要目前只有 5 件 POC；五案最新版本均已完成人工核准，但仍未全量生成或切換成正式摘要來源。
 - 系統尚無登入與角色權限，因此審核寫入只提供本機 CLI；若要建立網頁審核介面，必須先完成身分驗證與操作稽核。
 
 ## 10. 目前可能的 bug 或技術債
@@ -1157,7 +1157,7 @@ Local BGE trial API 已可實際查詢 17254 個 candidates，暖機後 API 約 
 
 ### 摘要與相似案件規則需要持續抽樣校正
 
-目前正式規則式摘要 API 與規則式相似案件 baseline 仍保留。本機 Qwen3 五案 POC 已完成來源回查、獨立版本表、唯讀 API、Dashboard 顯示與本機審核 CLI；第一案 v6 已核准，其餘四案最新 v7、v8、v9、v11 已通過來源驗證但仍 unreviewed。正式採用前仍需逐案人工核准、擴大抽樣與登入權限設計。
+目前正式規則式摘要 API 與規則式相似案件 baseline 仍保留。本機 Qwen3 五案 POC 已完成來源回查、獨立版本表、唯讀 API、Dashboard 顯示與本機審核 CLI；五案最新 v6、v7、v8、v9、v11 均已人工核准。正式採用前仍需擴大抽樣與登入權限設計。
 
 已知已修正格式變異：
 
@@ -1676,7 +1676,7 @@ http://127.0.0.1:5173
 - `validate_summary_trial.py` 逐案回查合計 37 段 evidence 與 8 筆評議方正式法源，四案皆 `valid = true`、`violations = []`。
 - 顯示組裝已清理巢狀章節標題、未閉合引號、段首標點、純爭點理由與重複否准結論；相對人補位優先採具體抗辯，申請人純投保歷程不再與背景重複。
 - 法源只採主文、判斷理由、結論與處分區塊，避免把當事人自行引用的法條顯示為評議依據；契約條款仍只保留在原文證據，不列入法源清單。
-- Trial DB 共 11 筆版本，狀態為 approved 1、rejected 1、unreviewed 9；服務層確認四案會取用最新 v7、v8、v9、v11。正式 DB 維持 254,672,896 bytes 與原修改時間。
+- Trial DB 完成品質修正匯入時共 11 筆版本，狀態為 approved 1、rejected 1、unreviewed 9；服務層確認四案會取用最新 v7、v8、v9、v11。使用者驗收後，最新狀態為 approved 5、rejected 1、unreviewed 5。正式 DB 維持 254,672,896 bytes 與原修改時間。
 - `py -m pytest backend/tests/test_summary_generation_service.py -q`：48 passed；`py -m pytest -q`：180 passed；摘要服務 `py_compile` 與 `git diff --check` 通過。
 
 注意：Local BGE 語意搜尋第一次載入模型實測約 66.65 秒；暖機後仍需約 2.5 至 2.8 秒計算 17254 筆 chunk similarity。POC 展示前應先暖機，正式切換前需處理 cold start。

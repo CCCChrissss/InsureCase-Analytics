@@ -290,7 +290,7 @@ SUMMARY_SECTION_MAX_CHARS=2000
   --report .\outputs\local_llm_summary_trial_qwen3_4b_final_v4.json
 ```
 
-2026-08-06 實測 5 件、57 次本機請求全數完成；自動回查 47 段 evidence 與 11 筆法源均無違規。2026-08-10 再完成其餘四案的品質修正，處理未閉合引號、相對人具體理由、理由脈絡、當事人法條誤列、重複結論與背景重複；四案最新版本為 v7、v8、v9、v11，再次回查 37 段 evidence 與 8 筆法源均無違規。第一案 v6 已人工核准，其餘四案最新版本維持 unreviewed。Trial DB 共保留 11 筆版本紀錄：1 筆 approved、1 筆 rejected、9 筆 unreviewed；舊版本保留供稽核，不會覆寫正式 DB。
+2026-08-06 實測 5 件、57 次本機請求全數完成；自動回查 47 段 evidence 與 11 筆法源均無違規。2026-08-10 再完成其餘四案的品質修正，處理未閉合引號、相對人具體理由、理由脈絡、當事人法條誤列、重複結論與背景重複；四案最新版本為 v7、v8、v9、v11，再次回查 37 段 evidence 與 8 筆法源均無違規。五案最新版本均已由使用者檢視並人工核准。Trial DB 共保留 11 筆版本紀錄：5 筆 approved、1 筆 rejected、5 筆 unreviewed；未審核項目都是保留供稽核的舊版本，不會覆寫正式 DB。
 
 匯入五案至 Trial DB 並查看審核佇列：
 
