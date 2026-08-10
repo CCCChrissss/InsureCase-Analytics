@@ -6,6 +6,7 @@ import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from difflib import SequenceMatcher
 from typing import Any, Protocol
 from urllib.parse import urlparse
 
@@ -20,7 +21,7 @@ from backend.app.config import SUMMARY_REQUEST_TIMEOUT_SECONDS
 from backend.app.config import SUMMARY_SECTION_MAX_CHARS
 
 
-PROMPT_VERSION = "local_llm_summary_v6"
+PROMPT_VERSION = "local_llm_summary_v11"
 OLLAMA_LOCAL_PROVIDER = "ollama_local"
 ALLOWED_LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 SUMMARY_CATEGORIES = {
@@ -41,6 +42,7 @@ SUMMARY_SECTION_TYPES = {
     "conclusion",
     "disposition",
 }
+LEGAL_REFERENCE_SECTION_TYPES = {"holding", "reasoning", "conclusion", "disposition"}
 # The deterministic parser is a stronger role signal than a small model's label.
 # Constraining each section prevents a party's allegation from becoming panel reasoning.
 SUMMARY_CATEGORY_BY_SECTION_TYPE = {
@@ -86,30 +88,68 @@ DISPLAY_PREFIX_PATTERNS_BY_SECTION_TYPE = {
     "applicant_claim": (
         re.compile(rf"^\s*(?:{CHINESE_SECTION_NUMBER_PATTERN}、\s*)?申請人之?主張[：:]\s*"),
         re.compile(rf"^\s*[（(]{CHINESE_SECTION_NUMBER_PATTERN}[）)]\s*(?:請求標的|請求事項|陳述)[：:]\s*"),
+        re.compile(r"^\s*\d+[.、]\s*"),
+        re.compile(rf"^\s*[（(]{CHINESE_SECTION_NUMBER_PATTERN}[）)]\s*"),
     ),
     "respondent_claim": (
         re.compile(rf"^\s*(?:{CHINESE_SECTION_NUMBER_PATTERN}、\s*)?相對人之?主張[：:]\s*"),
         re.compile(rf"^\s*[（(]{CHINESE_SECTION_NUMBER_PATTERN}[）)]\s*(?:請求標的|請求事項|陳述)[：:]\s*"),
+        re.compile(r"^\s*\d+[.、]\s*"),
+        re.compile(rf"^\s*[（(]{CHINESE_SECTION_NUMBER_PATTERN}[）)]\s*"),
     ),
     "undisputed_facts": (
         re.compile(
             rf"^\s*(?:{CHINESE_SECTION_NUMBER_PATTERN}、\s*)?(?:兩造)?不爭執(?:之事實|事項)?[：:]\s*"
         ),
+        re.compile(rf"^\s*[（(]{CHINESE_SECTION_NUMBER_PATTERN}[）)]\s*"),
     ),
     "issues": (
         re.compile(rf"^\s*(?:{CHINESE_SECTION_NUMBER_PATTERN}、\s*)?本件爭點[：:]\s*"),
+        re.compile(rf"^\s*[（(]{CHINESE_SECTION_NUMBER_PATTERN}[）)]\s*"),
     ),
     "reasoning": (
         re.compile(rf"^\s*(?:{CHINESE_SECTION_NUMBER_PATTERN}、\s*)?判斷理由[：:]\s*"),
+        re.compile(rf"^\s*(?:[（(]{CHINESE_SECTION_NUMBER_PATTERN}[）)]|\d+[.、])\s*"),
     ),
     "conclusion": (
         re.compile(rf"^\s*(?:{CHINESE_SECTION_NUMBER_PATTERN}、\s*)?據上論結[，,:：]?\s*"),
+        re.compile(rf"^\s*(?:{CHINESE_SECTION_NUMBER_PATTERN}、\s*)?綜上所述[，,:：]?\s*"),
     ),
     "disposition": (
         re.compile(r"^\s*主文[：:]?\s*"),
         re.compile(rf"^\s*(?:{CHINESE_SECTION_NUMBER_PATTERN}、\s*)?據上論結[，,:：]?\s*"),
     ),
 }
+DISPLAY_INLINE_PATTERNS_BY_SECTION_TYPE = {
+    "applicant_claim": (
+        re.compile(
+            rf"(?<=[。！？；])\s*[（(]{CHINESE_SECTION_NUMBER_PATTERN}[）)]\s*"
+            rf"(?:請求標的|請求事項|陳述)[：:]\s*(?:\d+[.、]\s*)?"
+        ),
+        re.compile(r"(?<=[。！？；])\s*\d+[.、]\s*"),
+    ),
+    "respondent_claim": (
+        re.compile(
+            rf"(?<=[。！？；])\s*[（(]{CHINESE_SECTION_NUMBER_PATTERN}[）)]\s*"
+            rf"(?:請求標的|請求事項|陳述)[：:]\s*(?:\d+[.、]\s*)?"
+        ),
+        re.compile(r"(?<=[。！？；])\s*\d+[.、]\s*"),
+    ),
+    "issues": (
+        re.compile(rf"(?<=[。！？；])\s*[（(]{CHINESE_SECTION_NUMBER_PATTERN}[）)]\s*"),
+    ),
+}
+RESPONDENT_FALLBACK_SIGNAL_RE = re.compile(
+    r"已承認|未拒絕|不符合|罹於時效|故|因此|是以|從而|歉難|無理由|有理由"
+)
+CONCLUSION_BOILERPLATE_RE = re.compile(r"\s*兩造其餘陳述及攻擊防禦方法，.*?併予敘明。\s*$")
+REASONING_ISSUE_RESTATEMENT_RE = re.compile(r"(?:準此，)?本件爭點(?:厥為|為|如下)")
+NEGATIVE_HOLDING_RE = re.compile(
+    r"本中心(?:就申請人之請求)?尚難為有利(?:於)?申請人之認定"
+)
+POLICY_BACKGROUND_ONLY_RE = re.compile(
+    r"^申請人於.{0,80}(?:向相對人)?投保.{0,240}(?:保險契約|附加)"
+)
 
 
 SECTION_EXTRACTION_SCHEMA: dict[str, Any] = {
@@ -594,6 +634,17 @@ def _has_complete_statement_ending(value: str) -> bool:
     return bool(normalized) and normalized[-1] in "。！？；"
 
 
+def _has_balanced_quote_marks(value: str) -> bool:
+    """Reject excerpts that stop inside a quotation copied from the source."""
+
+    normalized = normalize_evidence(value)
+    quote_pairs = (("「", "」"), ("『", "』"), ("“", "”"), ("‘", "’"))
+    return all(
+        normalized.count(opening) == normalized.count(closing)
+        for opening, closing in quote_pairs
+    )
+
+
 def _validated_statement(
     raw: Any,
     *,
@@ -616,6 +667,7 @@ def _validated_statement(
         or not _is_supported_quote(evidence_quote, packet.text)
         or _is_table_like_statement(safe_evidence_quote)
         or not _has_complete_statement_ending(safe_evidence_quote)
+        or not _has_balanced_quote_marks(safe_evidence_quote)
     ):
         return None
     # Prefer an extractive statement whenever the model's paraphrase cannot be
@@ -651,11 +703,24 @@ def _source_fallback_statement(*, packet: SourcePacket, statement_id: str) -> di
     if len(source_text) > MAX_STATEMENT_TEXT_CHARS:
         if category not in {"applicant_position", "respondent_position"}:
             return None
-        candidate = source_text[:MAX_STATEMENT_TEXT_CHARS]
-        # End at a complete sentence when possible so a long party statement
-        # remains readable without inventing an ellipsis or paraphrase.
-        boundary = max(candidate.rfind(mark) for mark in "。！？；")
-        source_text = candidate[: boundary + 1] if boundary >= 100 else candidate
+        if category == "respondent_position":
+            source_text = _best_respondent_fallback_sentence(source_text)
+        else:
+            candidate = source_text[:MAX_STATEMENT_TEXT_CHARS]
+            # Walk backward through sentence boundaries and accept the longest
+            # excerpt whose quotations are complete. A short complete assertion
+            # is safer than a fallback cut inside a policy quotation.
+            boundaries = [index for index, character in enumerate(candidate) if character in "。！？；"]
+            source_text = next(
+                (
+                    excerpt
+                    for boundary in reversed(boundaries)
+                    if (excerpt := candidate[: boundary + 1]) and _has_balanced_quote_marks(excerpt)
+                ),
+                "",
+            )
+    if not _has_complete_statement_ending(source_text) or not _has_balanced_quote_marks(source_text):
+        return None
     return {
         "statement_id": statement_id,
         "category": category,
@@ -675,6 +740,42 @@ def _source_fallback_statement(*, packet: SourcePacket, statement_id: str) -> di
     }
 
 
+def _best_respondent_fallback_sentence(source_text: str) -> str:
+    """Choose a complete, source-exact respondent rationale from a long section."""
+
+    sentences: list[str] = []
+    sentence_start = 0
+    # A period inside an open quotation is not a safe split point. Accumulate
+    # through the closing mark so every fallback remains readable and auditable.
+    sentence_marks = "。！？；"
+    quoted_sentence_end_marks = sentence_marks + "…"
+    closing_quotes = "」』”’"
+    for index, character in enumerate(source_text):
+        closes_quoted_sentence = (
+            character in closing_quotes
+            and index > 0
+            and source_text[index - 1] in quoted_sentence_end_marks
+        )
+        if character not in sentence_marks and not closes_quoted_sentence:
+            continue
+        candidate = source_text[sentence_start : index + 1].strip()
+        if not _has_balanced_quote_marks(candidate):
+            continue
+        if candidate and len(candidate) <= MAX_STATEMENT_TEXT_CHARS:
+            sentences.append(candidate)
+        sentence_start = index + 1
+    if not sentences:
+        return ""
+    return max(
+        sentences,
+        key=lambda sentence: (
+            len(RESPONDENT_FALLBACK_SIGNAL_RE.findall(sentence)),
+            len(POSITION_SIGNAL_RE.findall(sentence)),
+            min(len(sentence), MAX_STATEMENT_TEXT_CHARS),
+        ),
+    )
+
+
 def _extract_reasoning_signal_statements(structured_document: dict[str, Any]) -> list[dict[str, Any]]:
     """Extract complete case-application sentences from the full reasoning section."""
 
@@ -685,6 +786,20 @@ def _extract_reasoning_signal_statements(structured_document: dict[str, Any]) ->
         source_text = normalize_evidence(str(section.get("content") or ""))
         for match in re.finditer(r"[^。！？；]{20,300}[。！？；]", source_text):
             sentence = match.group(0)
+            if sentence.startswith(("均無法確認", "均難以確認", "均難確認")):
+                # A concluding `均...` clause refers to the preceding sequence
+                # of factual questions. Include that contiguous context so the
+                # displayed reason has a readable subject and remains exact.
+                previous_boundary = max(
+                    source_text.rfind(mark, 0, match.start())
+                    for mark in "。；"
+                )
+                contextual_sentence = source_text[previous_boundary + 1 : match.end()]
+                if (
+                    len(contextual_sentence) <= MAX_EVIDENCE_QUOTE_CHARS
+                    and _has_balanced_quote_marks(contextual_sentence)
+                ):
+                    sentence = contextual_sentence
             if not CASE_APPLICATION_SIGNAL_RE.search(sentence) or _is_table_like_statement(sentence):
                 continue
             # Quoted statutes often contain internal periods; unmatched quote
@@ -731,6 +846,10 @@ def _extract_reasoning_signal_statements(structured_document: dict[str, Any]) ->
 def _validated_legal_reference(raw: Any, *, packet: SourcePacket) -> dict[str, Any] | None:
     """Accept only source-grounded statutes; policy or contract references are excluded."""
 
+    # A party may cite a statute that the panel never adopts. Present only
+    # references from panel-owned sections as legal bases in the summary.
+    if packet.section_type not in LEGAL_REFERENCE_SECTION_TYPES:
+        return None
     if not isinstance(raw, dict):
         return None
     law_name = str(raw.get("law_name") or "").strip()
@@ -762,6 +881,8 @@ def _validated_legal_reference(raw: Any, *, packet: SourcePacket) -> dict[str, A
 def _extract_statutory_references(packet: SourcePacket) -> list[dict[str, Any]]:
     """Extract explicit statutory citations that the local model may omit."""
 
+    if packet.section_type not in LEGAL_REFERENCE_SECTION_TYPES:
+        return []
     source_text = normalize_evidence(packet.text)
     references: list[dict[str, Any]] = []
     for match in STATUTORY_REFERENCE_RE.finditer(source_text):
@@ -823,17 +944,46 @@ def _grounded_item(
                 len(priority),
             )
         )
-    statement_ids = statement_ids[:max_statement_count]
-    texts = list(
-        dict.fromkeys(
-            _summary_display_text(statement_map[statement_id])
-            for statement_id in statement_ids
-            if _summary_display_text(statement_map[statement_id])
+    display_items: list[tuple[str, str]] = []
+    for statement_id in statement_ids:
+        display_text = _summary_display_text(statement_map[statement_id])
+        if not display_text:
+            continue
+        overlapping_index = next(
+            (
+                index
+                for index, (_, existing_text) in enumerate(display_items)
+                if _display_texts_overlap(display_text, existing_text)
+            ),
+            None,
         )
-    )
-    if not texts or not statement_ids:
+        if overlapping_index is None:
+            display_items.append((statement_id, display_text))
+        elif len(display_text) > len(display_items[overlapping_index][1]):
+            # Preserve the original priority position while replacing a short
+            # duplicate such as holding text with its fuller conclusion.
+            display_items[overlapping_index] = (statement_id, display_text)
+    display_items = display_items[:max_statement_count]
+    if not display_items:
         return {"text": None, "statement_ids": []}
-    return {"text": " ".join(texts), "statement_ids": statement_ids}
+    return {
+        "text": " ".join(text for _, text in display_items),
+        "statement_ids": [statement_id for statement_id, _ in display_items],
+    }
+
+
+def _display_texts_overlap(left: str, right: str) -> bool:
+    """Detect exact containment or near-identical decision wording."""
+
+    if left in right or right in left:
+        return True
+    # A holding and conclusion may add a different object before the same
+    # negative outcome. Treat only this narrow, explicit outcome as duplicate.
+    if NEGATIVE_HOLDING_RE.search(left) and NEGATIVE_HOLDING_RE.search(right):
+        return True
+    # A high threshold merges trivial wording variants such as `有利於申請人`
+    # versus `有利申請人` without collapsing distinct partial-award outcomes.
+    return SequenceMatcher(None, left, right, autojunk=False).ratio() >= 0.9
 
 
 def _summary_display_text(statement: dict[str, Any]) -> str:
@@ -847,11 +997,56 @@ def _summary_display_text(statement: dict[str, Any]) -> str:
 
     value = normalize_evidence(str(statement.get("text") or "")).strip()
     section_type = str(statement.get("section_type") or "")
+    cleaned = value
+    # Apply sequentially because a source fallback can contain nested labels,
+    # for example `二、申請人之主張：(一)請求標的：1.請求...`.
     for pattern in DISPLAY_PREFIX_PATTERNS_BY_SECTION_TYPE.get(section_type, ()):
-        cleaned = pattern.sub("", value, count=1).strip()
-        if cleaned and cleaned != value:
-            return cleaned
-    return value
+        candidate = pattern.sub("", cleaned, count=1).strip()
+        if candidate:
+            cleaned = candidate
+    for pattern in DISPLAY_INLINE_PATTERNS_BY_SECTION_TYPE.get(section_type, ()):
+        cleaned = pattern.sub(" ", cleaned).strip()
+    if section_type == "respondent_claim":
+        # Extracted continuations can begin with punctuation or a connective
+        # inherited from the previous source sentence; neither belongs at the
+        # start of an independently displayed Dashboard paragraph.
+        cleaned = re.sub(r"^[，,；;]\s*", "", cleaned)
+        cleaned = re.sub(r"^而(?=相對人)", "", cleaned)
+    if section_type == "conclusion":
+        cleaned = CONCLUSION_BOILERPLATE_RE.sub("", cleaned).strip()
+    return cleaned
+
+
+def _remove_redundant_applicant_background(
+    item: dict[str, Any],
+    *,
+    background_text: str | None,
+    statement_map: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Drop repeated policy setup when another applicant claim remains."""
+
+    if not background_text or "投保" not in background_text:
+        return item
+    retained_ids = []
+    for statement_id in item.get("statement_ids", []):
+        display_text = _summary_display_text(statement_map[statement_id])
+        is_policy_background_only = bool(
+            POLICY_BACKGROUND_ONLY_RE.search(display_text)
+            and not POSITION_SIGNAL_RE.search(display_text)
+        )
+        if not is_policy_background_only:
+            retained_ids.append(statement_id)
+    # Preserve the original item when filtering would erase the only applicant
+    # evidence available in an unusually structured decision.
+    if not retained_ids or retained_ids == item.get("statement_ids", []):
+        return item
+    return {
+        "text": " ".join(
+            _summary_display_text(statement_map[statement_id])
+            for statement_id in retained_ids
+        ),
+        "statement_ids": retained_ids,
+    }
 
 
 def _grounded_items(
@@ -907,6 +1102,19 @@ def _ranked_grounded_items(
         )
         if statement["category"] in allowed_categories
     ]
+    if allowed_categories == {"reasoning"}:
+        # A paragraph that only introduces the questions belongs in core issues,
+        # not in the panel's reasons. Keep it only when no actual reasoning was
+        # extracted, so older or unusually structured decisions do not go blank.
+        substantive_ids = [
+            statement_id
+            for statement_id in ranked_ids
+            if not REASONING_ISSUE_RESTATEMENT_RE.search(
+                str(statement_map[statement_id].get("text") or "")
+            )
+        ]
+        if substantive_ids:
+            ranked_ids = substantive_ids
     raw_items = [{"statement_ids": [statement_id]} for statement_id in ranked_ids]
     return _grounded_items(
         raw_items,
@@ -1118,6 +1326,11 @@ def generate_case_summary(
         allowed_categories={"applicant_position"},
         max_statement_count=2,
     )
+    applicant_position = _remove_redundant_applicant_background(
+        applicant_position,
+        background_text=background["text"],
+        statement_map=statement_map,
+    )
     respondent_position = _grounded_item(
         final_content.get("respondent_position"),
         statement_map,
@@ -1140,7 +1353,7 @@ def generate_case_summary(
         statement_map,
         allowed_categories={"decision_result"},
         max_statement_count=2,
-        preferred_section_types=("holding", "disposition", "conclusion"),
+        preferred_section_types=("holding", "conclusion", "disposition"),
     )
 
     used_statement_ids = list(
