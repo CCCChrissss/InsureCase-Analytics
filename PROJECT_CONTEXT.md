@@ -285,7 +285,7 @@ frontend/dist/
 - `backend/app/services/search_service.py`：FTS5 搜尋、LIKE fallback、snippet 產生；FTS5 報錯或 0 筆時會進 LIKE fallback，且 fallback 會查案號、爭議類型與 normalized text。
 - `backend/app/services/similar_case_service.py`：規則式相似案件計分。
 - `backend/app/services/statistics_service.py`：案件總數、爭議類型數、年度與日期範圍總覽，支援可選年度條件。
-- `backend/app/services/summary_generation_service.py`：本機 Ollama 生成式摘要 POC；只接受 loopback URL 與本機模型，將完整案件按真正句界分區，限制輸出 token，驗證原文引文與角色類別，過濾表格／不完整句，以規則訊號排序評議理由並排除契約型法源。v7-v11 另處理未閉合引號、相對人具體理由補位、理由前文脈絡、當事人法條誤列、重複結論、爭點誤入理由、段首標點及背景重複；所有顯示清理都保留逐字 evidence。單次 packet 失敗可留下診斷並降級，此 service 不寫入資料庫。
+- `backend/app/services/summary_generation_service.py`：本機 Ollama 生成式摘要 POC；只接受 loopback URL 與本機模型，將完整案件按真正句界分區，限制輸出 token，驗證原文引文與角色類別，過濾表格／不完整句，以規則訊號排序評議理由並排除契約型法源。v7-v13 另處理未閉合引號、雙方具體主張補位、理由前文脈絡、當事人法條誤列、重複結論、爭點誤入理由、半形問號、法條之幾、法規簡稱與部分有理由案件的補償理由；所有顯示清理都保留逐字 evidence。單次 packet 失敗可留下診斷並降級，此 service 不寫入資料庫。
 - `backend/app/services/ai_summary_service.py`：管理版本化 AI 摘要匯入、讀取與人工審核狀態；重複匯入保留既有 reviewer 與核准結果，API 優先回傳 approved、否則回傳最新 unreviewed，rejected 不對 Dashboard 顯示。
 - `backend/app/services/summary_service.py`：案件摘要查詢。
 - `backend/scripts/extract_case_summaries.py`：從 normalized text 產生規則式摘要並寫入 `case_summaries`；已支援「二、申請人主張」與非固定序號的「判斷理由」標題。
@@ -296,8 +296,8 @@ frontend/dist/
 - `backend/scripts/compare_semantic_annotations.py`：驗證並比較兩份完整 benchmark 標註，計算原始一致率、Cohen's Kappa、混淆矩陣與各查詢一致率，並輸出待仲裁衝突清單。
 - `backend/scripts/run_semantic_query_trial.py`：在指定 SQLite trial DB 上執行 query-to-document 語意搜尋試測，預設使用本機 BGE，支援重複 `--query`、固定 `benchmark-v1`、JSON 與 Markdown 輸出；查詢不修改 DB，也不使用外部 API。
 - `backend/scripts/run_semantic_query_suggestion_trial.py`：為 benchmark v1 的 15 個短查詢執行固定、可解釋的離線建議試驗；只使用本機 BGE、以唯讀模式開啟 trial DB，輸出原查詢、建議查詢、規則編號、原因與 Top 5。
-- `backend/scripts/run_summary_trial.py`：以 SQLite `mode=ro` 選取五件不同長度與爭議類型案件，執行 Qwen3 4B 本機摘要；支援 `--dry-run`、指定案號與 JSON 原子輸出，不會改寫 `case_summaries`。
-- `backend/scripts/validate_summary_trial.py`：對摘要試跑 JSON 逐案回查唯讀 DB，驗證必要欄位、角色區塊、evidence quote、正式法規、內部 request error 與 merge fallback；有違規時以 exit code 1 結束。
+- `backend/scripts/run_summary_trial.py`：以 SQLite `mode=ro` 選取不同長度與爭議類型案件，執行 Qwen3 4B 本機摘要；支援 `--dry-run`、指定案號、排除已有摘要案件、逐案 checkpoint 與 `--resume`，不會改寫 `case_summaries`。
+- `backend/scripts/validate_summary_trial.py`：對摘要試跑 JSON 逐案回查唯讀 DB，驗證必要欄位、角色區塊、evidence quote、正式法規與已知法規簡稱、內部 request error 與 merge fallback；有違規時以 exit code 1 結束。
 - `backend/scripts/import_summary_trial.py`：將已驗證試跑報告交易式匯入 Trial DB 的 `case_ai_summaries`；預設拒絕正式 DB，同一版本可安全重跑。
 - `backend/scripts/review_ai_summary.py`：本機人工審核 CLI，可列出佇列、查看完整摘要，並以 reviewer、note 將版本標記為 unreviewed、approved 或 rejected。
 - `backend/scripts/evaluate_semantic_benchmark.py`：由 query trial JSON 產生人工標註模板，驗證每筆 label 與 evidence summary 完整性，並輸出 strict / lenient、macro / micro Precision@5 與逐筆證據報告。
@@ -320,7 +320,8 @@ frontend/dist/
 - `backend/tests/test_semantic_query_suggestions.py`：查詢建議 15 詞覆蓋與順序、規則完整性、SQLite 唯讀連線及本機 BGE provider/model 固定行為測試。
 - `backend/tests/test_similar_case_service.py`：相似案件 service 單元測試。
 - `backend/tests/test_summary_service.py`：摘要擷取與 summary service 測試，包含 FOI 標題格式變異的 regression tests。
-- `backend/tests/test_summary_generation_service.py`：本機摘要安全與可追溯性測試，覆蓋遠端 URL／cloud model 阻擋、無 Authorization header、structured output、輸出上限、PDF 換行分段、證據句界、角色類別、表格排除、法規擷取、部分 request 降級與理由訊號排序。
+- `backend/tests/test_summary_generation_service.py`：本機摘要安全與可追溯性測試，覆蓋遠端 URL／cloud model 阻擋、無 Authorization header、structured output、輸出上限、PDF 換行分段、證據句界、角色類別、雙方主張補強、表格排除、法規擷取、法規簡稱、部分 request 降級與理由訊號排序。
+- `backend/tests/test_run_summary_trial.py`：摘要批次測試，覆蓋排除已有摘要案件、逐案 checkpoint、保留成功結果與續跑失敗案件；使用 fake provider，不呼叫 Ollama 或外部 API。
 - `backend/tests/test_ai_summary_service.py`：版本匯入、審核保留、approved 優先、rejected 隱藏與 API availability wrapper 測試。
 
 ### frontend
@@ -559,7 +560,7 @@ FOREIGN KEY(case_id) REFERENCES cases(case_id) ON DELETE CASCADE
 
 ### `case_ai_summaries`
 
-本機生成式摘要的版本與人工審核表。目前只存在於 Local BGE Trial DB，共 11 筆版本：`approved = 5`、`rejected = 1`、`unreviewed = 5`。五案最新版本 v6、v7、v8、v9、v11 均為 approved；舊 v4 與第一案 v5 等版本保留供稽核。正式 DB 未建立或匯入此表。摘要內容與生成診斷分開保存，人工欄位不會因重複匯入而重設。
+本機生成式摘要的版本與人工審核表。目前只存在於 Local BGE Trial DB，共 21 筆版本：`approved = 5`、`rejected = 1`、`unreviewed = 15`。原五案最新版本 v6、v7、v8、v9、v11 均為 approved；2026-08-10 新增 10 個不同爭議類型的代表案件，最新採用 v11、v12 或 v13，全部維持 unreviewed 等待人工核對。正式 DB 未建立或匯入此表。摘要內容與生成診斷分開保存，人工欄位不會因重複匯入而重設。
 
 ```sql
 summary_id TEXT PRIMARY KEY
@@ -1041,7 +1042,7 @@ Query parameters：
 - 一致性比較工具與 POC 混合式第二輪已完成；正式第二位獨立標註與有效的跨標註者信度估計仍未完成。
 - OpenAI 或其他外部 AI embedding provider 尚未實作。
 - 實務級向量資料庫或 ANN index。
-- 本機 AI 摘要目前只有 5 件 POC；五案最新版本均已完成人工核准，但仍未全量生成或切換成正式摘要來源。
+- 本機 AI 摘要目前涵蓋 15 件 POC：原五案已人工核准，新增十案仍待人工核對；尚未全量生成或切換成正式摘要來源。
 - 系統尚無登入與角色權限，因此審核寫入只提供本機 CLI；若要建立網頁審核介面，必須先完成身分驗證與操作稽核。
 
 ## 10. 目前可能的 bug 或技術債
@@ -1157,7 +1158,7 @@ Local BGE trial API 已可實際查詢 17254 個 candidates，暖機後 API 約 
 
 ### 摘要與相似案件規則需要持續抽樣校正
 
-目前正式規則式摘要 API 與規則式相似案件 baseline 仍保留。本機 Qwen3 五案 POC 已完成來源回查、獨立版本表、唯讀 API、Dashboard 顯示與本機審核 CLI；五案最新 v6、v7、v8、v9、v11 均已人工核准。正式採用前仍需擴大抽樣與登入權限設計。
+目前正式規則式摘要 API 與規則式相似案件 baseline 仍保留。本機 Qwen3 已完成 15 案 POC 的來源回查、獨立版本表、唯讀 API、Dashboard 顯示與本機審核 CLI；原五案已核准，新增十案仍為 unreviewed。正式採用前仍需完成新增十案人工核對、擴大抽樣與登入權限設計。
 
 已知已修正格式變異：
 
@@ -1294,7 +1295,7 @@ py .\backend\scripts\extract_case_summaries.py
 - `applicant_claim` = 2992
 - `reasoning` = 2992
 
-### 本機生成式摘要五案 POC
+### 本機生成式摘要 POC
 
 先確認代表案件，不呼叫模型：
 
@@ -1315,6 +1316,8 @@ py .\backend\scripts\extract_case_summaries.py
 ```
 
 試跑只讀取 DB，結果寫入 Git 忽略的 `outputs/`；不會改寫正式摘要表。2026-08-06 實測 5 件、57 次本機請求失敗 0；驗證腳本回查 47 段 evidence 與 11 筆法源，`violations = []`。每案仍需人工核對雙方主張、主文、判斷理由與表格脈絡。
+
+擴大抽樣時可加上 `--exclude-existing-summaries` 排除已有版本案件；執行中每案完成即原子寫入 checkpoint，中斷後使用相同 `--output` 搭配 `--resume` 續跑。2026-08-10 的新增十案最終報告為 Git 忽略的 `outputs/local_llm_summary_expansion_10_final.json`，回查 94 段 evidence 與 16 筆法源，`violations = []`。
 
 ### 建立案件文字 chunks
 
@@ -1678,6 +1681,15 @@ http://127.0.0.1:5173
 - 法源只採主文、判斷理由、結論與處分區塊，避免把當事人自行引用的法條顯示為評議依據；契約條款仍只保留在原文證據，不列入法源清單。
 - Trial DB 完成品質修正匯入時共 11 筆版本，狀態為 approved 1、rejected 1、unreviewed 9；服務層確認四案會取用最新 v7、v8、v9、v11。使用者驗收後，最新狀態為 approved 5、rejected 1、unreviewed 5。正式 DB 維持 254,672,896 bytes 與原修改時間。
 - `py -m pytest backend/tests/test_summary_generation_service.py -q`：48 passed；`py -m pytest -q`：180 passed；摘要服務 `py_compile` 與 `git diff --check` 通過。
+
+2026-08-10 本機摘要擴充十案後，另完成以下檢查：
+
+- 先以 `--exclude-existing-summaries --dry-run` 選出十種不同爭議類型，再由本機 `qwen3:4b` 產生；外部 AI API 請求為 0。
+- v12 補強半形問號、雙方具體請求／抗辯、法規名稱過度擷取與重複結果；v13 修正 `第54條之1`、`金保法` 顯示全名與部分有理由案件的公平合理補償理由。
+- 最終十案報告回查 94 段 evidence 與 16 筆法源，`valid = true`、`violations = []`；十案交易式匯入 Trial DB，`inserted = 10`、`updated = 0`。
+- Trial DB 匯入後共 21 筆版本：`approved = 5`、`rejected = 1`、`unreviewed = 15`；本次十案全部為 unreviewed，正式 DB 未匯入。
+- Trial API 實測新增除外責任案回傳 `available = true`、`prompt_version = local_llm_summary_v13`、`review_status = unreviewed`、`official = false`，並含補償與拒賠兩段理由；`PRAGMA integrity_check = ok`。
+- `py -m pytest -q`：189 passed；摘要相關模組 `py_compile`、最終報告 validator 與 `git diff --check` 通過。
 
 注意：Local BGE 語意搜尋第一次載入模型實測約 66.65 秒；暖機後仍需約 2.5 至 2.8 秒計算 17254 筆 chunk similarity。POC 展示前應先暖機，正式切換前需處理 cold start。
 

@@ -53,10 +53,31 @@ def connect_read_only(db_path: Path) -> sqlite3.Connection:
     return connection
 
 
+def _table_exists(connection: sqlite3.Connection, table_name: str) -> bool:
+    """Check optional trial tables without changing a read-only database."""
+
+    return connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1;",
+        (table_name,),
+    ).fetchone() is not None
+
+
+def _existing_ai_summary_case_ids(connection: sqlite3.Connection) -> set[str]:
+    """Return cases already represented by any AI-summary version."""
+
+    if not _table_exists(connection, "case_ai_summaries"):
+        return set()
+    return {
+        str(row[0])
+        for row in connection.execute("SELECT DISTINCT case_id FROM case_ai_summaries;")
+    }
+
+
 def select_representative_case_ids(
     connection: sqlite3.Connection,
     *,
     limit: int,
+    excluded_case_ids: set[str] | None = None,
 ) -> list[str]:
     """Select deterministic length quantiles while preferring different dispute types."""
 
@@ -76,8 +97,15 @@ def select_representative_case_ids(
     if not rows:
         return []
 
-    indexed_rows = list(enumerate(rows))
-    targets = [round(index * (len(rows) - 1) / max(limit - 1, 1)) for index in range(limit)]
+    excluded = excluded_case_ids or set()
+    candidate_rows = [row for row in rows if str(row["case_id"]) not in excluded]
+    if not candidate_rows:
+        return []
+    indexed_rows = list(enumerate(candidate_rows))
+    targets = [
+        round(index * (len(candidate_rows) - 1) / max(limit - 1, 1))
+        for index in range(limit)
+    ]
     selected: list[sqlite3.Row] = []
     used_case_ids: set[str] = set()
     used_dispute_types: set[str] = set()
@@ -108,6 +136,7 @@ def load_cases(
     *,
     limit: int,
     case_numbers: list[str] | None = None,
+    exclude_existing_summaries: bool = False,
 ) -> list[dict[str, Any]]:
     if case_numbers:
         placeholders = ",".join("?" for _ in case_numbers)
@@ -128,7 +157,16 @@ def load_cases(
             raise ValueError(f"Case numbers not found: {missing}")
         return [by_number[number] for number in case_numbers]
 
-    case_ids = select_representative_case_ids(connection, limit=limit)
+    excluded_case_ids = (
+        _existing_ai_summary_case_ids(connection)
+        if exclude_existing_summaries
+        else set()
+    )
+    case_ids = select_representative_case_ids(
+        connection,
+        limit=limit,
+        excluded_case_ids=excluded_case_ids,
+    )
     if not case_ids:
         return []
     placeholders = ",".join("?" for _ in case_ids)
@@ -156,6 +194,56 @@ def write_json_atomic(output_path: Path, payload: dict[str, Any]) -> None:
     temporary_path.replace(output_path)
 
 
+def load_resume_report(output_path: Path) -> dict[str, Any]:
+    """Load a prior checkpoint and reject missing or malformed reports early."""
+
+    if not output_path.is_file():
+        raise FileNotFoundError(f"Resume report does not exist: {output_path}")
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or not isinstance(payload.get("selected_cases"), list):
+        raise ValueError("Resume report is not a valid summary trial report.")
+    return payload
+
+
+def resume_case_numbers(report: dict[str, Any]) -> list[str]:
+    """Restore the original deterministic batch instead of selecting new cases."""
+
+    numbers = [
+        str(item.get("case_number") or "").strip()
+        for item in report.get("selected_cases", [])
+        if isinstance(item, dict)
+    ]
+    if not numbers or any(not number for number in numbers):
+        raise ValueError("Resume report contains an invalid selected_cases list.")
+    return numbers
+
+
+def _validate_resume_configuration(
+    report: dict[str, Any],
+    *,
+    db_path: Path,
+    model_name: str,
+    base_url: str,
+    num_ctx: int,
+    max_output_tokens: int,
+    max_section_chars: int,
+) -> None:
+    """Fail closed when a resumed run would mix incompatible generation settings."""
+
+    stored_database = Path(str(report.get("database") or "")).resolve()
+    expected = {
+        "database": (stored_database, db_path.resolve()),
+        "model": (report.get("model"), model_name),
+        "base_url": (report.get("base_url"), base_url),
+        "num_ctx": (report.get("num_ctx"), num_ctx),
+        "max_output_tokens": (report.get("max_output_tokens"), max_output_tokens),
+        "max_section_chars": (report.get("max_section_chars"), max_section_chars),
+    }
+    mismatches = [name for name, (stored, current) in expected.items() if stored != current]
+    if mismatches:
+        raise ValueError(f"Resume configuration mismatch: {', '.join(mismatches)}")
+
+
 def build_trial_report(
     *,
     db_path: Path,
@@ -169,9 +257,16 @@ def build_trial_report(
     max_output_tokens: int,
     max_section_chars: int,
     dry_run: bool,
+    exclude_existing_summaries: bool = False,
+    resume_report: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     with connect_read_only(db_path) as connection:
-        cases = load_cases(connection, limit=limit, case_numbers=case_numbers)
+        cases = load_cases(
+            connection,
+            limit=limit,
+            case_numbers=case_numbers,
+            exclude_existing_summaries=exclude_existing_summaries,
+        )
     selected: list[dict[str, Any]] = []
     for case in cases:
         source_text = case.get("normalized_text") or case.get("raw_text") or ""
@@ -206,6 +301,21 @@ def build_trial_report(
         "errors": [],
         "created_at": utc_now_iso(),
     }
+    if resume_report is not None:
+        _validate_resume_configuration(
+            resume_report,
+            db_path=db_path,
+            model_name=model_name,
+            base_url=base_url,
+            num_ctx=num_ctx,
+            max_output_tokens=max_output_tokens,
+            max_section_chars=max_section_chars,
+        )
+        # Successful cases are immutable checkpoints. Prior errors are retried,
+        # so only completed results are carried into the resumed report.
+        report["results"] = list(resume_report.get("results") or [])
+        report["created_at"] = resume_report.get("created_at") or report["created_at"]
+        report["resumed_at"] = utc_now_iso()
     if dry_run:
         return report
 
@@ -218,7 +328,20 @@ def build_trial_report(
     )
     try:
         report["model_inventory"] = provider.ensure_model_available()
+        write_json_atomic(output_path, report)
+        completed_case_ids = {
+            str(item.get("case_id"))
+            for item in report["results"]
+            if isinstance(item, dict) and item.get("case_id")
+        }
         for index, case in enumerate(cases, start=1):
+            if str(case["case_id"]) in completed_case_ids:
+                print(
+                    f"[{index}/{len(cases)}] 略過已完成摘要：{case['case_number']}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                continue
             print(f"[{index}/{len(cases)}] 產生摘要：{case['case_number']}", file=sys.stderr, flush=True)
             source_text = case.get("normalized_text") or case.get("raw_text") or ""
             source_type = "normalized" if case.get("normalized_text") else "raw"
@@ -231,6 +354,7 @@ def build_trial_report(
                     max_section_chars=max_section_chars,
                 )
                 report["results"].append(result)
+                completed_case_ids.add(str(case["case_id"]))
             except Exception as error:  # Keep completed cases available for POC diagnosis.
                 report["errors"].append(
                     {
@@ -240,7 +364,9 @@ def build_trial_report(
                         "message": str(error),
                     }
                 )
-                write_json_atomic(output_path, report)
+            # Persist after every case so an interruption loses at most the
+            # currently running local-model request, not the completed batch.
+            write_json_atomic(output_path, report)
     finally:
         provider.close()
     return report
@@ -263,6 +389,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-output-tokens", type=int, default=SUMMARY_MAX_OUTPUT_TOKENS)
     parser.add_argument("--max-section-chars", type=int, default=SUMMARY_SECTION_MAX_CHARS)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--exclude-existing-summaries",
+        action="store_true",
+        help="Exclude cases that already have any case_ai_summaries version.",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume the selected batch from the existing --output checkpoint.",
+    )
     return parser.parse_args()
 
 
@@ -273,11 +409,17 @@ def main() -> None:
         raise SystemExit("--limit must be between 1 and 20 for a bounded POC trial.")
     db_path = resolve_project_path(args.db)
     output_path = resolve_project_path(args.output)
+    if args.resume and args.dry_run:
+        raise SystemExit("--resume cannot be combined with --dry-run.")
+    if args.resume and args.case_numbers:
+        raise SystemExit("--resume restores case numbers from --output; do not pass --case-number.")
+    resume_report = load_resume_report(output_path) if args.resume else None
+    case_numbers = resume_case_numbers(resume_report) if resume_report else args.case_numbers
     report = build_trial_report(
         db_path=db_path,
         output_path=output_path,
         limit=args.limit,
-        case_numbers=args.case_numbers,
+        case_numbers=case_numbers,
         model_name=args.model,
         base_url=args.base_url,
         timeout_seconds=args.timeout_seconds,
@@ -285,6 +427,8 @@ def main() -> None:
         max_output_tokens=args.max_output_tokens,
         max_section_chars=args.max_section_chars,
         dry_run=args.dry_run,
+        exclude_existing_summaries=args.exclude_existing_summaries,
+        resume_report=resume_report,
     )
     if not args.dry_run:
         write_json_atomic(output_path, report)

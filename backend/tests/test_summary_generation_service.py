@@ -25,8 +25,11 @@ from backend.app.services.summary_generation_service import _extract_reasoning_s
 from backend.app.services.summary_generation_service import _ranked_grounded_items
 from backend.app.services.summary_generation_service import _grounded_item
 from backend.app.services.summary_generation_service import _summary_display_text
+from backend.app.services.summary_generation_service import _best_applicant_fallback_sentence
 from backend.app.services.summary_generation_service import _best_respondent_fallback_sentence
+from backend.app.services.summary_generation_service import _canonical_law_name
 from backend.app.services.summary_generation_service import _display_texts_overlap
+from backend.app.services.summary_generation_service import _ensure_high_signal_party_position
 from backend.app.services.summary_generation_service import _remove_redundant_applicant_background
 from backend.app.services.summary_generation_service import _source_fallback_statement
 from backend.app.services.summary_generation_service import build_source_packets
@@ -34,6 +37,7 @@ from backend.app.services.summary_generation_service import generate_case_summar
 from backend.app.services.summary_generation_service import split_text_exact
 from backend.scripts.run_summary_trial import connect_read_only
 from backend.scripts.run_summary_trial import select_representative_case_ids
+from backend.scripts.validate_summary_trial import _is_source_grounded_law_name
 
 
 def test_local_provider_rejects_remote_url_and_cloud_model() -> None:
@@ -195,7 +199,48 @@ def test_table_density_filter_rejects_numeric_rows_but_keeps_prose() -> None:
 
 def test_statement_quote_must_end_at_a_sentence_boundary() -> None:
     assert _has_complete_statement_ending("本中心認為請求無理由。") is True
+    # Some source decisions use an ASCII question mark after Chinese text.
+    assert _has_complete_statement_ending("申請人的請求是否有據?") is True
     assert _has_complete_statement_ending("本中心認為請求無理") is False
+
+
+def test_applicant_fallback_prefers_request_over_policy_history() -> None:
+    source = (
+        "申請人於109年間向相對人投保系爭保險契約。"
+        "請求標的：相對人應給付醫療保險金45,800元及利息。"
+        "申請人後續接受治療並提出理賠申請。"
+    )
+
+    selected = _best_applicant_fallback_sentence(source)
+
+    assert selected == "請求標的：相對人應給付醫療保險金45,800元及利息。"
+
+
+def test_low_information_party_choice_is_replaced_by_rule_based_supplement() -> None:
+    statement_map = {
+        "history": {
+            "category": "respondent_position",
+            "section_type": "respondent_claim",
+            "text": "相對人於收到申請後調閱相關資料。",
+        },
+        "defence": {
+            "category": "respondent_position",
+            "section_type": "respondent_claim",
+            "text": "病歷未見外傷紀錄，因此相對人主張不符合意外事故要件。",
+            "rule_based_party_position": True,
+        },
+    }
+
+    item = _ensure_high_signal_party_position(
+        {"text": statement_map["history"]["text"], "statement_ids": ["history"]},
+        category="respondent_position",
+        statement_map=statement_map,
+    )
+
+    assert item == {
+        "text": "病歷未見外傷紀錄，因此相對人主張不符合意外事故要件。",
+        "statement_ids": ["defence"],
+    }
 
 
 def test_statement_quote_marks_must_be_balanced() -> None:
@@ -341,6 +386,13 @@ def test_display_text_overlap_merges_same_negative_holding_with_different_object
     ) is True
 
 
+def test_display_text_overlap_ignores_punctuation_for_contained_decision() -> None:
+    assert _display_texts_overlap(
+        "申請人請求解除房屋買賣契約之部分，不受理。",
+        "申請人請求解除房屋買賣契約之部分不受理；申請人其餘請求為無理由。",
+    ) is True
+
+
 def test_respondent_display_text_removes_leading_continuation_marks() -> None:
     assert _summary_display_text(
         {
@@ -428,6 +480,29 @@ def test_ranked_reasoning_excludes_issue_restatement_when_reason_exists() -> Non
     assert [item["statement_ids"] for item in items] == [["reason"]]
 
 
+def test_ranked_reasoning_excludes_issue_restatement_using_should_be_wording() -> None:
+    statement_map = {
+        "reason": {
+            "category": "reasoning",
+            "section_type": "reasoning",
+            "text": "經查病歷未見必要性，故申請人的請求無理由。",
+        },
+        "issue_restatement": {
+            "category": "reasoning",
+            "section_type": "reasoning",
+            "text": "是本件爭點應為申請人的治療是否有必要性？",
+        },
+    }
+
+    items = _ranked_grounded_items(
+        statement_map,
+        allowed_categories={"reasoning"},
+        max_items=3,
+    )
+
+    assert [item["statement_ids"] for item in items] == [["reason"]]
+
+
 def test_rule_based_reasoning_keeps_complete_case_application_sentence() -> None:
     document = {
         "sections": [
@@ -449,6 +524,32 @@ def test_rule_based_reasoning_keeps_complete_case_application_sentence() -> None
 
     assert [item["text"] for item in statements] == ["既相對人已給付，從而難認申請人之請求有據。"]
     assert statements[0]["rule_based_reasoning"] is True
+
+
+def test_rule_based_reasoning_keeps_partial_award_basis_from_long_paragraph() -> None:
+    award_basis = (
+        "衡酌本件事實情狀及證據取捨，爰依金融消費者保護法第20條第1項所揭示之公平合理原則，"
+        "認相對人除已給付部分外，應仍有補償申請人之必要，其補償金額以一萬元為適當。"
+    )
+    document = {
+        "sections": [
+            {
+                "section_id": "reasoning_1",
+                "section_type": "reasoning",
+                "title": "判斷理由",
+                "start_offset": 100,
+                "end_offset": 600,
+                # The prefix makes the full paragraph exceed the generic
+                # sentence limit while the decision-driving clause stays short.
+                "content": "相對人理賠程序之說明" + "甲" * 350 + "，" + award_basis,
+            }
+        ]
+    }
+
+    statements = _extract_reasoning_signal_statements(document)
+
+    assert any(statement["text"] == award_basis for statement in statements)
+    assert any(statement["reasoning_signal_score"] == 30 for statement in statements)
 
 
 def test_rule_based_reasoning_expands_context_for_collective_unknown_conclusion() -> None:
@@ -545,6 +646,44 @@ def test_rule_based_statutory_reference_extraction_keeps_laws_only() -> None:
             "extraction_source": "rule_based",
         }
     ]
+
+
+def test_statutory_reference_uses_law_nearest_article_in_long_context() -> None:
+    packet = SourcePacket(
+        section_id="reasoning_1",
+        section_type="reasoning",
+        title="判斷理由",
+        part_index=1,
+        start_offset=0,
+        end_offset=80,
+        text="依保險法相關規定從事擔保及保證放款涉屬銀行法第12條規範。",
+    )
+
+    references = _extract_statutory_references(packet)
+
+    assert references[0]["law_name"] == "銀行法"
+    assert references[0]["article"] == "第12條"
+    assert _canonical_law_name("保險法相關規定從事擔保及保證放款涉屬銀行法") == "銀行法"
+
+
+def test_statutory_reference_keeps_article_suffix_and_expands_common_alias() -> None:
+    packet = SourcePacket(
+        section_id="reasoning_1",
+        section_type="reasoning",
+        title="判斷理由",
+        part_index=1,
+        start_offset=0,
+        end_offset=80,
+        text="按保險法第54條之1規定審酌，爰依金保法第27條第2項決定。",
+    )
+
+    references = _extract_statutory_references(packet)
+
+    assert [(item["law_name"], item["article"]) for item in references] == [
+        ("保險法", "第54條之1"),
+        ("金融消費者保護法", "第27條第2項"),
+    ]
+    assert _is_source_grounded_law_name("金融消費者保護法", packet.text) is True
 
 
 def test_party_statutory_references_are_not_presented_as_panel_legal_bases() -> None:

@@ -12,6 +12,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from backend.app.services.document_section_service import structure_document_text
 from backend.app.services.summary_generation_service import LAW_NAME_RE
+from backend.app.services.summary_generation_service import LAW_NAME_ALIASES
 from backend.app.services.summary_generation_service import POLICY_REFERENCE_RE
 from backend.app.services.summary_generation_service import SUMMARY_CATEGORY_BY_SECTION_TYPE
 from backend.app.services.summary_generation_service import _is_supported_quote
@@ -22,6 +23,19 @@ from backend.scripts.run_summary_trial import resolve_project_path
 
 
 DEFAULT_REPORT_PATH = PROJECT_ROOT / "outputs" / "local_llm_summary_trial_qwen3_4b_final_v4.json"
+
+
+def _is_source_grounded_law_name(law_name: str, section_text: str) -> bool:
+    """Accept a displayed full law name when the source uses a known abbreviation."""
+
+    normalized_section = normalize_evidence(section_text)
+    normalized_law_name = normalize_evidence(law_name)
+    if normalized_law_name in normalized_section:
+        return True
+    return any(
+        canonical_name == law_name and normalize_evidence(alias) in normalized_section
+        for alias, canonical_name in LAW_NAME_ALIASES.items()
+    )
 
 
 def load_structured_document(connection: Any, case_id: str) -> dict[str, Any]:
@@ -118,7 +132,7 @@ def validate_report(report: dict[str, Any], *, database_path: Path) -> dict[str,
                     section is None
                     or not LAW_NAME_RE.search(law_name)
                     or POLICY_REFERENCE_RE.search(law_name)
-                    or normalize_evidence(law_name) not in normalize_evidence(section_text)
+                    or not _is_source_grounded_law_name(law_name, section_text)
                     or normalize_evidence(article) not in normalize_evidence(section_text)
                     or not _is_supported_quote(str(reference.get("evidence_quote") or ""), section_text)
                 ):
