@@ -164,3 +164,80 @@ def test_hybrid_search_caches_complete_ranking_before_pagination(monkeypatch) ->
     assert first["items"][0]["case_id"] == "case_1"
     assert second["cached"] is True
     assert second["items"][0]["case_id"] == "case_2"
+
+
+def test_hybrid_search_filters_keyword_matches_before_pagination(monkeypatch) -> None:
+    """Keyword scope must exclude semantic-only cases before counting and slicing."""
+    configure_cache_key(monkeypatch)
+    monkeypatch.setattr(hybrid_search_service, "search_all_cases", lambda _: keyword_result("both"))
+    monkeypatch.setattr(
+        hybrid_search_service.embedding_service,
+        "semantic_case_rankings",
+        lambda *args, **kwargs: semantic_result("semantic_only", "both"),
+    )
+
+    result = hybrid_search_service.hybrid_search(
+        "住院後遭拒賠",
+        result_scope="keyword",
+        provider_name="fake",
+        model_name="fake_model",
+    )
+
+    assert result["result_scope"] == "keyword"
+    assert result["total"] == 1
+    assert [item["case_id"] for item in result["items"]] == ["both"]
+
+
+def test_hybrid_search_reverses_complete_ranking_before_pagination(monkeypatch) -> None:
+    """Ascending order must start from the global lowest score, not reverse one page."""
+    configure_cache_key(monkeypatch)
+    monkeypatch.setattr(hybrid_search_service, "search_all_cases", lambda _: keyword_result())
+    monkeypatch.setattr(
+        hybrid_search_service.embedding_service,
+        "semantic_case_rankings",
+        lambda *args, **kwargs: semantic_result("highest", "middle", "lowest"),
+    )
+
+    result = hybrid_search_service.hybrid_search(
+        "住院後遭拒賠",
+        page=1,
+        page_size=1,
+        sort_direction="asc",
+        provider_name="fake",
+        model_name="fake_model",
+    )
+
+    assert result["sort_direction"] == "asc"
+    assert result["total"] == 3
+    assert result["items"][0]["case_id"] == "lowest"
+
+
+def test_hybrid_search_reuses_cache_when_scope_and_direction_change(monkeypatch) -> None:
+    """UI-only controls must not rerun the embedding model for the same query."""
+    configure_cache_key(monkeypatch)
+    calls = 0
+    monkeypatch.setattr(hybrid_search_service, "search_all_cases", lambda _: keyword_result("both"))
+
+    def ranked(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return semantic_result("semantic_only", "both")
+
+    monkeypatch.setattr(hybrid_search_service.embedding_service, "semantic_case_rankings", ranked)
+    hybrid_search_service.hybrid_search(
+        "住院後遭拒賠",
+        provider_name="fake",
+        model_name="fake_model",
+    )
+    changed = hybrid_search_service.hybrid_search(
+        "住院後遭拒賠",
+        result_scope="keyword",
+        sort_direction="asc",
+        provider_name="fake",
+        model_name="fake_model",
+    )
+
+    assert calls == 1
+    assert changed["cached"] is True
+    assert changed["result_scope"] == "keyword"
+    assert changed["sort_direction"] == "asc"

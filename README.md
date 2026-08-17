@@ -28,7 +28,7 @@
 - 分析驗證頁，展示摘要與相似案件品質檢查過程
 - 案件文字 chunking pipeline，作為後續 embedding 與向量搜尋前置資料
 - 本機 chunk embedding MVP 與語意搜尋 API
-- 全文命中案件可依關鍵字相關性或全域語意相似度排序，排序完成後再分頁
+- 主搜尋可分別選擇查找範圍與綜合相關度高低，完整排序後再分頁
 - 「計算方法」頁公開全文搜尋、搜尋相似度、相關案件、評議結果與 Precision@5 計算流程
 - 前端語意搜尋頁，展示 query、embedding 模型、命中 chunk、score、section hint 與案件來源
 - 案件詳情頁語意相似案件區塊，展示案件層級語意相似與命中段落
@@ -229,20 +229,19 @@ FTS5 與 LIKE fallback 的搜尋範圍皆包含：
 - 爭議類型 `dispute_type`
 - 正規化全文 `normalized_text`
 
-理賠人員使用的前端搜尋頁採「全文命中加語意評分」：
+理賠人員使用的前端搜尋頁採「全庫語意召回加文字排名融合」：
 
 ```text
-FTS5 / LIKE 關鍵字結果
-  +
-本機 BAAI/bge-large-zh-v1.5 逐案評分
+全部案件的本機 BAAI/bge-large-zh-v1.5 語意排名
+  + FTS5 / LIKE 文字排名
   ↓
-關鍵字相關性排序，或先完成全體語意排序再分頁
+依查找範圍篩選、依相關度方向排序，再分頁
 ```
 
 前端搜尋頁會展示：
 
 - 查詢文字、全部命中案件數、目前頁數與總頁數，每頁可選擇 10、15 或 20 筆。
-- 排序方式可選擇「關鍵字相關性」或「相似度：高到低」。
+- 查找範圍可選擇「全部相關案件」或「只看文字命中」，排序方向可獨立選擇相關度高到低或低到高。
 - 每筆結果的案號、決定日期、爭議類型、命中文字片段、評議結果與「與搜尋內容相近 XX%」。
 - 評議結果由摘要主文保守分類為有理由、部分有理由、無理由或不受理；無法可靠分類時顯示尚未整理。
 - 「相似度怎麼看」以白話說明搜尋文字、案件內容與接近程度的關係，不在理賠人員主畫面呈現模型公式。
@@ -250,7 +249,7 @@ FTS5 / LIKE 關鍵字結果
 
 案件 Dashboard 以 `GET /api/cases/{case_id}/document-sections` 回傳的完整原文為主要內容，依「主文、程序事項、申請人主張、相對人主張、不爭執事項、爭點、判斷理由、綜上所述、據上論結、附註」分段。各區塊保留完整文字與原始順序，不使用規則式摘要的字數上限；後端同時回傳來源字數、涵蓋字數與 `complete_coverage` 供核對。畫面預設只展開主文與本件爭點，也可全部展開／收合。逐字全文可切換 normalized text 與 raw text，正式頁碼、表格與排版仍以 PDF 為準。
 
-關鍵字排序時，語意評分只針對目前頁面的 10 至 20 件案件；相似度排序時，`GET /api/semantic-ranked-search` 會先取得全部關鍵字命中案件，逐案取最高 chunk cosine similarity，完成全域排序後才分頁。後端以 DB 檔案身分、查詢、provider 與 model 作為 key，最多快取最近 16 組完整排名。查詢固定指定 `local_bge` 與 `BAAI/bge-large-zh-v1.5-local`，只讀取本機模型快取與目前後端連線 DB 的既有 embeddings，不呼叫 Hugging Face API；若全域排序失敗，前端會退回關鍵字排序。
+主搜尋以 `POST /api/hybrid-search` 對全部案件逐案取得最高 chunk cosine similarity，再與 FTS5 / LIKE 文字排名融合。後端先完成完整排名，才套用查找範圍、排序方向與分頁；以 DB 檔案身分、查詢、provider 與 model 作為 key，最多快取最近 16 組完整排名。查詢固定指定 `local_bge` 與 `BAAI/bge-large-zh-v1.5-local`，只讀取本機模型快取與目前後端連線 DB 的既有 embeddings，不呼叫 Hugging Face API；若全庫語意搜尋失敗，前端會顯示後端降級後的文字結果。
 
 案件 Dashboard 的相關案件使用不同公式：先將來源案件全部 chunks 向量相加並正規化，再與其他案件的每個 chunk 比較，候選案件取最高分。此計算具有方向性，且制式文字可能拉高分數，因此只能作為查找提示。完整公式、BM25、百分比換算、評議結果分類與 Precision@5 限制可由側邊欄「計算方法」查看。
 
@@ -399,12 +398,14 @@ LOCAL_BGE_BATCH_SIZE=4
 
 ```text
 POST /api/hybrid-search
-{"q": "關鍵字、短句或事件經過", "page": 1, "page_size": 15}
+{"q": "關鍵字、短句或事件經過", "page": 1, "page_size": 15, "result_scope": "all", "sort_direction": "desc"}
 ```
 
 前端使用 JSON body，避免較長的事故經過在 URL 編碼後超過長度限制；GET 同路徑仍保留給短查詢。後端會對全部 stored chunk embeddings 執行 Local BGE 語意排名，同時執行 FTS5 / LIKE 精確文字搜尋，再以加權 Reciprocal Rank Fusion 合併兩條排名。語意排名權重為 2、文字排名權重為 1；每件案件保留最高分 chunk 作為可回查的命中原文。模型不可用時會降級為文字搜尋，舊 `/api/search` 仍保留給案號、法條與已知詞彙的精確查找。
 
 畫面顯示的百分比只使用 cosine similarity；RRF 融合分數只負責排序，不會呈現為理賠機率或模型信心。完整排名最多快取最近 16 組查詢，換頁不會重新掃描全庫。
+
+主搜尋將控制拆為兩組：`result_scope=all|keyword` 決定顯示全部相關案件或只保留文字命中案件，`sort_direction=desc|asc` 決定完整綜合排名由高到低或低到高；篩選與反轉均在分頁前完成，切換控制可沿用同一份查詢快取。
 
 Hugging Face Inference API 執行實作已移除：
 

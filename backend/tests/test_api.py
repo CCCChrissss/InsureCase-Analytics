@@ -462,6 +462,8 @@ def test_hybrid_search_accepts_narrative_and_model_params(monkeypatch) -> None:
             "elapsed_ms": 12.5,
             "cached": False,
             "search_mode": "hybrid",
+            "result_scope": kwargs["result_scope"],
+            "sort_direction": kwargs["sort_direction"],
             "fallback_reason": None,
             "items": [
                 {
@@ -501,12 +503,16 @@ def test_hybrid_search_accepts_narrative_and_model_params(monkeypatch) -> None:
             "page_size": 15,
             "embedding_model": "BAAI/bge-large-zh-v1.5-local",
             "embedding_provider": "local_bge",
+            "result_scope": "keyword",
+            "sort_direction": "asc",
         },
     )
 
     assert response.status_code == 200
     assert captured["query"] == narrative
     assert captured["provider_name"] == "local_bge"
+    assert captured["result_scope"] == "keyword"
+    assert captured["sort_direction"] == "asc"
     assert response.json()["items"][0]["match_type"] == "semantic"
     assert response.json()["keyword_match_count"] == 0
 

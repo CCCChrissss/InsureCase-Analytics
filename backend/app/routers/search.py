@@ -27,6 +27,8 @@ def hybrid_search_cases(
     page_size: int = Query(20, ge=1, le=20),
     embedding_model: str | None = Query(None, min_length=1),
     embedding_provider: str | None = Query(None, min_length=1),
+    result_scope: str = Query("all", pattern="^(all|keyword)$"),
+    sort_direction: str = Query("desc", pattern="^(desc|asc)$"),
 ) -> dict:
     """Search all embedded cases semantically and fuse exact text matches."""
     return hybrid_search(
@@ -35,6 +37,8 @@ def hybrid_search_cases(
         page_size=page_size,
         model_name=embedding_model,
         provider_name=embedding_provider,
+        result_scope=result_scope,
+        sort_direction=sort_direction,
     )
 
 
@@ -47,4 +51,6 @@ def hybrid_search_narrative(request: HybridSearchRequest) -> dict:
         page_size=request.page_size,
         model_name=request.embedding_model,
         provider_name=request.embedding_provider,
+        result_scope=request.result_scope,
+        sort_direction=request.sort_direction,
     )

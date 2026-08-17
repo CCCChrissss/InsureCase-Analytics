@@ -237,6 +237,8 @@ export type HybridSearchResponse = {
   elapsed_ms: number;
   cached: boolean;
   search_mode: "hybrid" | "keyword_fallback";
+  result_scope: "all" | "keyword";
+  sort_direction: "desc" | "asc";
   fallback_reason: string | null;
   items: HybridSearchResult[];
   total: number;

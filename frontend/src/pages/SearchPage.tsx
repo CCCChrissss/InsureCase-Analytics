@@ -1,7 +1,7 @@
 import React from "react";
 import { ChevronLeft, ChevronRight, FileText, Info, Search } from "lucide-react";
 
-import { apiGet, apiPath, apiPost } from "../api/client";
+import { apiPost } from "../api/client";
 import { SimilarityExplanationDialog } from "../components/SimilarityExplanationDialog";
 import { AsyncBlock, PageHeader } from "../components/ui";
 import { LOCAL_BGE_MODEL, LOCAL_BGE_PROVIDER } from "../config/semantic";
@@ -9,75 +9,49 @@ import { useAsyncData } from "../hooks/useAsyncData";
 import type {
   HybridSearchResponse,
   HybridSearchResult,
-  SearchResponse,
-  SearchResult,
-  SemanticCaseScoresResponse,
 } from "../types";
 
 const PAGE_SIZE_OPTIONS = [10, 15, 20] as const;
-type SearchSortMode = "hybrid" | "keyword";
+type SearchResultScope = "all" | "keyword";
+type SearchSortDirection = "desc" | "asc";
 
 export function SearchPage({ onOpenCase }: { onOpenCase: (caseId: string, label?: string) => void }) {
   const [query, setQuery] = React.useState("");
   const [submittedQuery, setSubmittedQuery] = React.useState("");
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(15);
-  const [sortMode, setSortMode] = React.useState<SearchSortMode>("hybrid");
+  const [resultScope, setResultScope] = React.useState<SearchResultScope>("all");
+  const [sortDirection, setSortDirection] = React.useState<SearchSortDirection>("desc");
   const [showSimilarityExplanation, setShowSimilarityExplanation] = React.useState(false);
 
-  // 精確文字模式保留給案號、法條或已知詞彙；一般查找預設走全庫混合搜尋。
-  const keywordResults = useAsyncData(
-    () => submittedQuery && sortMode === "keyword"
-      ? apiGet<SearchResponse>(apiPath("/search", { q: submittedQuery, page, page_size: pageSize }))
-      : Promise.resolve<SearchResponse | null>(null),
-    [submittedQuery, page, pageSize, sortMode]
-  );
+  // 查找範圍與排序方向都交給後端在完整排名上處理，避免只重排目前頁面。
   const hybridResults = useAsyncData(
-    () => submittedQuery && sortMode === "hybrid"
+    () => submittedQuery
       ? apiPost<HybridSearchResponse>("/hybrid-search", {
           q: submittedQuery,
           page,
           page_size: pageSize,
           embedding_provider: LOCAL_BGE_PROVIDER,
           embedding_model: LOCAL_BGE_MODEL,
+          result_scope: resultScope,
+          sort_direction: sortDirection,
         })
       : Promise.resolve<HybridSearchResponse | null>(null),
-    [submittedQuery, page, pageSize, sortMode]
+    [submittedQuery, page, pageSize, resultScope, sortDirection]
   );
 
-  // useAsyncData 在新請求期間會保留舊資料，因此必須比對查詢與頁碼，避免畫面短暫顯示錯頁。
-  const validKeywordResults = isCurrentPage(keywordResults.data, submittedQuery, page, pageSize)
-    ? keywordResults.data
-    : null;
-  const validHybridResults = isCurrentPage(hybridResults.data, submittedQuery, page, pageSize)
+  // useAsyncData 會保留舊資料，需連查找範圍與方向一起核對，避免短暫顯示舊順序。
+  const validHybridResults = isCurrentPage(
+    hybridResults.data,
+    submittedQuery,
+    page,
+    pageSize,
+    resultScope,
+    sortDirection
+  )
     ? hybridResults.data
     : null;
-  const usesKeywordResults = sortMode === "keyword";
-  const activeResults = usesKeywordResults ? validKeywordResults : validHybridResults;
-  const activeLoading = usesKeywordResults ? keywordResults.loading : hybridResults.loading;
-  const activeError = usesKeywordResults ? keywordResults.error : hybridResults.error;
-
-  // 精確文字模式只對當頁補相似度；混合搜尋已直接回傳全庫語意分數。
-  const scoreCaseIds = React.useMemo(() => {
-    if (sortMode !== "keyword" || keywordResults.loading || !validKeywordResults) return "";
-    return validKeywordResults.items.map((item) => item.case_id).join(",");
-  }, [keywordResults.loading, sortMode, validKeywordResults]);
-  const semanticScores = useAsyncData(
-    () => scoreCaseIds
-      ? apiGet<SemanticCaseScoresResponse>(apiPath("/semantic-case-scores", {
-          q: submittedQuery,
-          case_ids: scoreCaseIds,
-          embedding_provider: LOCAL_BGE_PROVIDER,
-          embedding_model: LOCAL_BGE_MODEL,
-        }))
-      : Promise.resolve<SemanticCaseScoresResponse | null>(null),
-    [scoreCaseIds, submittedQuery]
-  );
-  const scoreByCase = React.useMemo(
-    () => new Map((semanticScores.data?.items ?? []).map((item) => [item.case_id, item.score])),
-    [semanticScores.data]
-  );
-  const totalPages = Math.max(1, Math.ceil((activeResults?.total ?? 0) / pageSize));
+  const totalPages = Math.max(1, Math.ceil((validHybridResults?.total ?? 0) / pageSize));
 
   return (
     <section className="page claims-search-page">
@@ -123,8 +97,8 @@ export function SearchPage({ onOpenCase }: { onOpenCase: (caseId: string, label?
             <div>
               <h3>搜尋結果</h3>
               <span>
-                {activeResults
-                  ? resultCountText(activeResults, page, totalPages)
+                {validHybridResults
+                  ? resultCountText(validHybridResults, page, totalPages)
                   : "查詢中"}
               </span>
             </div>
@@ -138,16 +112,29 @@ export function SearchPage({ onOpenCase }: { onOpenCase: (caseId: string, label?
                 相似度怎麼看
               </button>
               <label className="result-size-control sort-control">
-                <span>排序方式</span>
+                <span>查找範圍</span>
                 <select
-                  value={sortMode}
+                  value={resultScope}
                   onChange={(event) => {
                     setPage(1);
-                    setSortMode(event.target.value as SearchSortMode);
+                    setResultScope(event.target.value as SearchResultScope);
                   }}
                 >
-                  <option value="hybrid">綜合相關性</option>
+                  <option value="all">全部相關案件</option>
                   <option value="keyword">只看文字命中</option>
+                </select>
+              </label>
+              <label className="result-size-control sort-control">
+                <span>排序方向</span>
+                <select
+                  value={sortDirection}
+                  onChange={(event) => {
+                    setPage(1);
+                    setSortDirection(event.target.value as SearchSortDirection);
+                  }}
+                >
+                  <option value="desc">相關度高到低</option>
+                  <option value="asc">相關度低到高</option>
                 </select>
               </label>
               <label className="result-size-control">
@@ -166,7 +153,7 @@ export function SearchPage({ onOpenCase }: { onOpenCase: (caseId: string, label?
               </label>
             </div>
           </div>
-          {sortMode === "hybrid" && hybridResults.loading && (
+          {hybridResults.loading && (
             <div className="semantic-status-note">正在比較全部案件的語意，並合併文字命中結果</div>
           )}
           {validHybridResults?.search_mode === "keyword_fallback" && (
@@ -174,17 +161,9 @@ export function SearchPage({ onOpenCase }: { onOpenCase: (caseId: string, label?
               本機語意模型目前無法使用，已自動改用精確文字搜尋。
             </div>
           )}
-          {!activeLoading && scoreCaseIds && semanticScores.loading && (
-            <div className="semantic-status-note">正在補上每筆案件的相似度</div>
-          )}
-          {!activeLoading && usesKeywordResults && semanticScores.error && (
-            <div className="semantic-unavailable-note" title={semanticScores.error}>
-              相似度目前無法使用，全文搜尋與翻頁仍可正常使用。
-            </div>
-          )}
-          <AsyncBlock loading={activeLoading} error={activeError}>
+          <AsyncBlock loading={hybridResults.loading} error={hybridResults.error}>
             <div className="claims-search-results">
-              {(activeResults?.items ?? []).map((item) => (
+              {(validHybridResults?.items ?? []).map((item) => (
                 <button
                   key={item.case_id}
                   className="claims-search-row"
@@ -193,16 +172,13 @@ export function SearchPage({ onOpenCase }: { onOpenCase: (caseId: string, label?
                 >
                   <span className="search-row-heading">
                     <strong>{item.case_number}</strong>
-                    <SimilarityValue
-                      score={similarityForItem(item, scoreByCase)}
-                      loading={sortMode === "keyword" && semanticScores.loading}
-                    />
+                    <SimilarityValue score={item.similarity_score} />
                   </span>
                   <span className="search-row-meta">
                     <span>
                       <span className="search-row-dispute">{item.dispute_type || "爭議類型未標示"}</span>
                       <span className="search-row-date">{item.decision_date || "日期未標示"}</span>
-                      {isHybridResult(item) && <MatchTypeValue matchType={item.match_type} />}
+                      <MatchTypeValue matchType={item.match_type} />
                     </span>
                     <strong className={`search-decision-result ${decisionTone(item.decision_result)}`}>
                       評議結果：{meaningfulDecisionResult(item.decision_result)}
@@ -211,16 +187,16 @@ export function SearchPage({ onOpenCase }: { onOpenCase: (caseId: string, label?
                   <p>{item.snippet || "此案件沒有可顯示的命中片段。"}</p>
                 </button>
               ))}
-              {activeResults?.items.length === 0 && (
+              {validHybridResults?.items.length === 0 && (
                 <div className="state-box">目前沒有符合「{submittedQuery}」的案件，請嘗試較短的關鍵字。</div>
               )}
             </div>
-            {(activeResults?.total ?? 0) > 0 && (
+            {(validHybridResults?.total ?? 0) > 0 && (
               <div className="pagination compact-pagination search-pagination">
                 <button
                   className="icon-button"
                   type="button"
-                  disabled={page <= 1 || activeLoading}
+                  disabled={page <= 1 || hybridResults.loading}
                   onClick={() => setPage((value) => Math.max(1, value - 1))}
                   aria-label="上一頁"
                   title="上一頁"
@@ -231,7 +207,7 @@ export function SearchPage({ onOpenCase }: { onOpenCase: (caseId: string, label?
                 <button
                   className="icon-button"
                   type="button"
-                  disabled={page >= totalPages || activeLoading}
+                  disabled={page >= totalPages || hybridResults.loading}
                   onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
                   aria-label="下一頁"
                   title="下一頁"
@@ -252,27 +228,23 @@ export function SearchPage({ onOpenCase }: { onOpenCase: (caseId: string, label?
   );
 }
 
-// 只有查詢、頁碼及每頁筆數都一致時，資料才屬於目前畫面。
-function isCurrentPage<T extends { query: string; page: number; page_size: number }>(
+// 查詢、頁碼、範圍與方向都一致時，資料才屬於目前畫面。
+function isCurrentPage<T extends HybridSearchResponse>(
   data: T | null,
   query: string,
   page: number,
-  pageSize: number
+  pageSize: number,
+  resultScope: SearchResultScope,
+  sortDirection: SearchSortDirection
 ): data is T {
-  return Boolean(data && data.query === query && data.page === page && data.page_size === pageSize);
-}
-
-// 全域排序結果直接帶分數；一般搜尋結果則使用當頁補算的分數表。
-function similarityForItem(
-  item: SearchResult | HybridSearchResult,
-  scoreByCase: Map<string, number>
-) {
-  if ("similarity_score" in item) return item.similarity_score;
-  return scoreByCase.get(item.case_id) ?? null;
-}
-
-function isHybridResult(item: SearchResult | HybridSearchResult): item is HybridSearchResult {
-  return "match_type" in item;
+  return Boolean(
+    data
+    && data.query === query
+    && data.page === page
+    && data.page_size === pageSize
+    && data.result_scope === resultScope
+    && data.sort_direction === sortDirection
+  );
 }
 
 function MatchTypeValue({ matchType }: { matchType: HybridSearchResult["match_type"] }) {
@@ -285,19 +257,18 @@ function MatchTypeValue({ matchType }: { matchType: HybridSearchResult["match_ty
 }
 
 function resultCountText(
-  result: SearchResponse | HybridSearchResponse,
+  result: HybridSearchResponse,
   page: number,
   totalPages: number
 ) {
-  if ("search_mode" in result && result.search_mode === "hybrid") {
+  if (result.search_mode === "hybrid" && result.result_scope === "all") {
     return `已排序 ${result.total.toLocaleString("zh-TW")} 件，其中 ${result.keyword_match_count.toLocaleString("zh-TW")} 件也有文字命中，第 ${page} / ${totalPages} 頁`;
   }
   return `共 ${result.total.toLocaleString("zh-TW")} 件，第 ${page} / ${totalPages} 頁`;
 }
 
-function SimilarityValue({ score, loading }: { score: number | null; loading: boolean }) {
+function SimilarityValue({ score }: { score: number | null }) {
   // 後端保留原始 cosine score，畫面只做 0 到 100 的保守百分比轉換。
-  if (loading) return <span className="search-similarity pending">相似度計算中</span>;
   if (score === null) return null;
   const percentage = Math.round(Math.min(Math.max(score, 0), 1) * 100);
   return <span className="search-similarity">與搜尋內容相近 {percentage}%</span>;

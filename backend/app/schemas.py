@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -243,6 +245,8 @@ class HybridSearchRequest(BaseModel):
     page_size: int = Field(default=20, ge=1, le=20)
     embedding_model: str | None = Field(default=None, min_length=1)
     embedding_provider: str | None = Field(default=None, min_length=1)
+    result_scope: Literal["all", "keyword"] = "all"
+    sort_direction: Literal["desc", "asc"] = "desc"
 
 
 class HybridSearchResponse(BaseModel):
@@ -256,6 +260,8 @@ class HybridSearchResponse(BaseModel):
     elapsed_ms: float
     cached: bool
     search_mode: str
+    result_scope: Literal["all", "keyword"]
+    sort_direction: Literal["desc", "asc"]
     fallback_reason: str | None
     items: list[HybridSearchResult]
     total: int

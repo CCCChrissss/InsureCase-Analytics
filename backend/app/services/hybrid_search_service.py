@@ -21,6 +21,8 @@ RRF_K = 60
 SEMANTIC_RRF_WEIGHT = 2.0
 KEYWORD_RRF_WEIGHT = 1.0
 HYBRID_SEARCH_CACHE_SIZE = 16
+RESULT_SCOPES = {"all", "keyword"}
+SORT_DIRECTIONS = {"desc", "asc"}
 
 _HYBRID_SEARCH_CACHE: OrderedDict[tuple[Any, ...], dict[str, Any]] = OrderedDict()
 _HYBRID_SEARCH_CACHE_LOCK = threading.Lock()
@@ -49,6 +51,8 @@ def _keyword_fallback_result(
     started_at: float,
     provider_name: str | None,
     model_name: str | None,
+    result_scope: str,
+    sort_direction: str,
 ) -> dict[str, Any]:
     """Preserve basic retrieval when the local semantic model is unavailable."""
     items = []
@@ -70,6 +74,10 @@ def _keyword_fallback_result(
             }
         )
 
+    # Fallback has only keyword rank. Reverse the complete list before slicing
+    # so ascending order remains stable across every page.
+    if sort_direction == "asc":
+        items.reverse()
     _, safe_page_size, offset = clamp_pagination(page, page_size)
     return {
         "query": query,
@@ -80,6 +88,8 @@ def _keyword_fallback_result(
         "elapsed_ms": round((time.perf_counter() - started_at) * 1000, 2),
         "cached": False,
         "search_mode": "keyword_fallback",
+        "result_scope": result_scope,
+        "sort_direction": sort_direction,
         "fallback_reason": str(error),
         "items": items[offset : offset + safe_page_size],
         "total": len(items),
@@ -99,6 +109,8 @@ def hybrid_search(
     page_size: int = 20,
     model_name: str | None = None,
     provider_name: str | None = None,
+    result_scope: str = "all",
+    sort_direction: str = "desc",
 ) -> dict[str, Any]:
     """Combine full-database semantic recall with literal keyword precision.
 
@@ -106,6 +118,11 @@ def hybrid_search(
     then fused by rank, so literal matching can improve precision but can never
     prevent a semantically relevant case from entering the result set.
     """
+    if result_scope not in RESULT_SCOPES:
+        raise ValueError(f"Unsupported hybrid search result scope: {result_scope}")
+    if sort_direction not in SORT_DIRECTIONS:
+        raise ValueError(f"Unsupported hybrid search sort direction: {sort_direction}")
+
     started_at = time.perf_counter()
     cleaned_query = query.strip()
     safe_page, safe_page_size, offset = clamp_pagination(page, page_size)
@@ -142,6 +159,8 @@ def hybrid_search(
                 started_at=started_at,
                 provider_name=resolved_provider,
                 model_name=resolved_model,
+                result_scope=result_scope,
+                sort_direction=sort_direction,
             )
 
         keyword_by_case = {
@@ -235,9 +254,20 @@ def hybrid_search(
                 _HYBRID_SEARCH_CACHE.popitem(last=False)
 
     assert cached_result is not None
+    # Scope and direction are presentation controls over the same cached full
+    # ranking. Apply both before pagination so page boundaries stay correct.
+    scoped_items = cached_result["items"]
+    if result_scope == "keyword":
+        scoped_items = [item for item in scoped_items if item["keyword_rank"] is not None]
+    if sort_direction == "asc":
+        scoped_items = list(reversed(scoped_items))
+
     return {
         **{key: value for key, value in cached_result.items() if key != "items"},
-        "items": cached_result["items"][offset : offset + safe_page_size],
+        "items": scoped_items[offset : offset + safe_page_size],
+        "total": len(scoped_items),
+        "result_scope": result_scope,
+        "sort_direction": sort_direction,
         "page": safe_page,
         "page_size": safe_page_size,
         "elapsed_ms": round((time.perf_counter() - started_at) * 1000, 2),
