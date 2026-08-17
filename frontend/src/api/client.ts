@@ -20,6 +20,19 @@ export async function apiGet<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export async function apiPost<T>(path: string, body: unknown): Promise<T> {
+  // Narrative search uses JSON to avoid percent-encoded query text exceeding URL limits.
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorMessage(response));
+  }
+  return response.json() as Promise<T>;
+}
+
 async function apiErrorMessage(response: Response): Promise<string> {
   let detail = response.statusText || "Request failed";
   try {

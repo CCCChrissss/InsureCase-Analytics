@@ -861,6 +861,143 @@ def semantic_case_scores(
     }
 
 
+def semantic_case_rankings(
+    query: str,
+    *,
+    model_name: str | None = None,
+    provider_name: str | None = None,
+) -> dict[str, Any]:
+    """Rank every embedded case by its strongest query-to-chunk similarity.
+
+    Unlike ``semantic_ranked_search``, this function does not apply a keyword
+    gate. It is the semantic recall side of hybrid search, so a case may be
+    returned even when it shares no literal phrase with the user's narrative.
+    """
+    started_at = time.perf_counter()
+    cleaned_query = query.strip()
+    resolved_provider_name = (provider_name or EMBEDDING_PROVIDER).strip().lower()
+    resolved_model_name = (model_name or EMBEDDING_MODEL).strip()
+    if resolved_provider_name in LOCAL_BGE_PROVIDER_ALIASES and resolved_model_name in {
+        LOCAL_MODEL_NAME,
+        HUGGINGFACE_DEFAULT_MODEL_NAME,
+    }:
+        resolved_model_name = LOCAL_BGE_MODEL_NAME
+
+    with connect() as connection:
+        inventory_row = connection.execute(
+            """
+            SELECT COUNT(*) AS embedding_count,
+                   MIN(embedding_dims) AS min_dims,
+                   MAX(embedding_dims) AS max_dims
+            FROM chunk_embeddings
+            WHERE embedding_model = ?;
+            """,
+            (resolved_model_name,),
+        ).fetchone()
+
+    embedding_count = int(inventory_row["embedding_count"])
+    if embedding_count == 0:
+        raise EmbeddingProviderError(
+            f"No stored embeddings were found for model '{resolved_model_name}' in database "
+            f"'{DEFAULT_DB_PATH.name}'. Start the API with a database that contains this model."
+        )
+    min_dims = int(inventory_row["min_dims"])
+    max_dims = int(inventory_row["max_dims"])
+    if min_dims != max_dims:
+        raise EmbeddingProviderError(
+            f"Stored embeddings for model '{resolved_model_name}' contain mixed dimensions: "
+            f"{min_dims} and {max_dims}. Rebuild the model embeddings before searching."
+        )
+
+    provider = create_embedding_provider(
+        provider_name=resolved_provider_name,
+        model_name=resolved_model_name,
+        dims=min_dims,
+    )
+    query_embeddings = provider.embed_texts([cleaned_query])
+    validate_provider_embeddings(
+        provider,
+        query_embeddings,
+        expected_count=1,
+        context_ids=["query"],
+    )
+    embedded_query = query_embeddings[0]
+    if embedded_query.token_count == 0 or embedded_query.norm == 0:
+        return {
+            "query": query,
+            "embedding_provider": provider.provider_name,
+            "embedding_model": provider.model_name,
+            "embedding_dims": provider.dims,
+            "embedding_device": embedding_device(provider),
+            "elapsed_ms": round((time.perf_counter() - started_at) * 1000, 2),
+            "items": [],
+            "total_cases": 0,
+            "total_candidates": embedding_count,
+        }
+
+    with connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT chunk_embeddings.embedding, chunk_embeddings.embedding_dims,
+                   case_chunks.case_id, case_chunks.chunk_index,
+                   case_chunks.section_hint, case_chunks.chunk_text,
+                   cases.case_number, cases.decision_date, cases.dispute_type,
+                   cases.decision_result, case_summaries.holding
+            FROM chunk_embeddings
+            JOIN case_chunks ON case_chunks.chunk_id = chunk_embeddings.chunk_id
+            JOIN cases ON cases.case_id = case_chunks.case_id
+            LEFT JOIN case_summaries ON case_summaries.case_id = cases.case_id
+            WHERE chunk_embeddings.embedding_model = ?;
+            """,
+            (provider.model_name,),
+        ).fetchall()
+
+    # One long decision can contain many chunks. The strongest chunk remains
+    # the auditable evidence for why that case was retrieved for this query.
+    best_by_case: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        candidate_vector = unpack_vector(row["embedding"], row["embedding_dims"])
+        score = dot_product(embedded_query.vector, candidate_vector)
+        current = best_by_case.get(row["case_id"])
+        if current is None or score > current["similarity_score"]:
+            best_by_case[row["case_id"]] = {
+                "case_id": row["case_id"],
+                "case_number": row["case_number"],
+                "decision_date": row["decision_date"],
+                "dispute_type": row["dispute_type"],
+                "decision_result": row["decision_result"],
+                "holding": row["holding"],
+                "similarity_score": score,
+                "section_hint": row["section_hint"],
+                "chunk_index": row["chunk_index"],
+                "semantic_snippet": row["chunk_text"],
+            }
+
+    items = list(best_by_case.values())
+    items.sort(
+        key=lambda item: (
+            item["similarity_score"],
+            item["decision_date"] or "",
+            item["case_number"] or "",
+        ),
+        reverse=True,
+    )
+    for item in items:
+        item["similarity_score"] = round(item["similarity_score"], 4)
+
+    return {
+        "query": query,
+        "embedding_provider": provider.provider_name,
+        "embedding_model": provider.model_name,
+        "embedding_dims": provider.dims,
+        "embedding_device": embedding_device(provider),
+        "elapsed_ms": round((time.perf_counter() - started_at) * 1000, 2),
+        "items": items,
+        "total_cases": len(items),
+        "total_candidates": len(rows),
+    }
+
+
 def clear_semantic_ranked_search_cache() -> None:
     """Clear process-local ranked results after tests or an explicit data refresh."""
     with _SEMANTIC_RANKED_SEARCH_CACHE_LOCK:

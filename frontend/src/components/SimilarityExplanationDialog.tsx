@@ -35,7 +35,7 @@ export function SimilarityExplanationDialog({
           <span className="similarity-explanation-icon"><Info size={20} /></span>
           <div>
             <h3 id="similarity-explanation-title">相似度怎麼看</h3>
-            <p>這個數字是協助你快速排列案件的參考。</p>
+            <p>不必先想出正式關鍵字，也可以直接描述事情經過。</p>
           </div>
           <button
             ref={closeButtonRef}
@@ -53,21 +53,22 @@ export function SimilarityExplanationDialog({
           <div className="similarity-plain-steps" aria-label="相似度產生方式">
             <span>輸入搜尋內容</span>
             <span aria-hidden="true">→</span>
-            <span>比較案件文字</span>
+            <span>比較全部案件</span>
             <span aria-hidden="true">→</span>
-            <span>顯示接近程度</span>
+            <span>合併文字與語意結果</span>
           </div>
-          <p>系統會把你輸入的內容和案件文字逐一比較，再找出案件中意思最接近的一段。</p>
+          <p>系統會同時尋找相同文字，也會比較整段敘述的意思，再把兩種結果合併排序。</p>
           <ul>
+            <li>即使沒有出現完全相同的詞，只要敘述意思接近，案件仍可能被找到。</li>
+            <li>同時有文字命中與語意接近的案件，通常會排得更前面。</li>
             <li>分數越高，表示案件內容和搜尋文字越接近。</li>
-            <li>分數適合用來排序，以及快速找出可能相關的案件。</li>
             <li>分數不是理賠結果，也不代表案件一定適用。</li>
             <li>實際判斷仍需要查看案件摘要、理由與原文。</li>
           </ul>
           <div className="similarity-example">
-            搜尋「癌症住院」時顯示 85%，代表案件中有內容和這個搜尋方向接近，不代表有 85% 的機率應該理賠。
+            輸入「住院後保險公司認為不需要住院」時，系統也可能找到寫著「不符合醫療必要性」的案件。顯示 85% 只代表文字意思接近，不代表有 85% 的機率應該理賠。
           </div>
-          <small>搜尋與比較都在本機完成，不會傳送到外部 AI 服務。</small>
+          <small>搜尋使用本機 BGE 完成，不會把輸入內容傳送到外部 AI 服務。</small>
         </div>
       </section>
     </div>

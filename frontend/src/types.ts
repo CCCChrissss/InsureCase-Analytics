@@ -216,6 +216,38 @@ export type SemanticRankedSearchResponse = {
   page_size: number;
 };
 
+export type HybridSearchResult = SearchResult & {
+  // 相似度是 cosine；ranking_score 只供融合排序，不轉成畫面百分比。
+  similarity_score: number | null;
+  ranking_score: number;
+  semantic_rank: number | null;
+  keyword_rank: number | null;
+  section_hint: string | null;
+  chunk_index: number | null;
+  semantic_snippet: string | null;
+  match_type: "hybrid" | "semantic" | "keyword";
+};
+
+export type HybridSearchResponse = {
+  query: string;
+  embedding_provider: string;
+  embedding_model: string;
+  embedding_dims: number;
+  embedding_device: string;
+  elapsed_ms: number;
+  cached: boolean;
+  search_mode: "hybrid" | "keyword_fallback";
+  fallback_reason: string | null;
+  items: HybridSearchResult[];
+  total: number;
+  keyword_match_count: number;
+  semantic_case_count: number;
+  total_candidates: number;
+  match_source: string;
+  page: number;
+  page_size: number;
+};
+
 export type EmbeddingModelStatus = {
   embedding_model: string;
   embedding_dims: number;

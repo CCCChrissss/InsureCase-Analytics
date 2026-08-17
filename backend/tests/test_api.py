@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from backend.app.main import app
 from backend.app.database import connect
+from backend.app.routers import search as search_router
 from backend.app.routers import semantic_search as semantic_search_router
 from backend.app.routers import similar_cases as similar_cases_router
 
@@ -443,6 +444,71 @@ def test_semantic_ranked_search_accepts_pagination_and_model_params(monkeypatch)
     assert captured["page_size"] == 15
     assert response.json()["items"][0]["similarity_score"] == 0.8123
     assert response.json()["total"] == 21
+
+
+def test_hybrid_search_accepts_narrative_and_model_params(monkeypatch) -> None:
+    """The public route must pass the full narrative to semantic recall unchanged."""
+    captured = {}
+
+    def fake_hybrid_search(query: str, **kwargs):
+        captured["query"] = query
+        captured.update(kwargs)
+        return {
+            "query": query,
+            "embedding_provider": kwargs["provider_name"],
+            "embedding_model": kwargs["model_name"],
+            "embedding_dims": 1024,
+            "embedding_device": "cuda",
+            "elapsed_ms": 12.5,
+            "cached": False,
+            "search_mode": "hybrid",
+            "fallback_reason": None,
+            "items": [
+                {
+                    "case_id": "case_1",
+                    "case_number": "115年評字第000001號",
+                    "decision_date": "115.01.09",
+                    "dispute_type": "必要性醫療",
+                    "decision_result": "無理由",
+                    "snippet": "住院治療並不符合醫療必要性。",
+                    "match_source": "semantic",
+                    "similarity_score": 0.8123,
+                    "ranking_score": 0.03278689,
+                    "semantic_rank": 1,
+                    "keyword_rank": None,
+                    "section_hint": "判斷理由",
+                    "chunk_index": 2,
+                    "semantic_snippet": "住院治療並不符合醫療必要性。",
+                    "match_type": "semantic",
+                }
+            ],
+            "total": 2992,
+            "keyword_match_count": 0,
+            "semantic_case_count": 2992,
+            "total_candidates": 17254,
+            "match_source": "fts5",
+            "page": kwargs["page"],
+            "page_size": kwargs["page_size"],
+        }
+
+    monkeypatch.setattr(search_router, "hybrid_search", fake_hybrid_search)
+    narrative = "住院幾天後，保險公司認為沒有住院必要性，因此拒絕理賠。"
+    response = client.post(
+        "/api/hybrid-search",
+        json={
+            "q": narrative,
+            "page": 1,
+            "page_size": 15,
+            "embedding_model": "BAAI/bge-large-zh-v1.5-local",
+            "embedding_provider": "local_bge",
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["query"] == narrative
+    assert captured["provider_name"] == "local_bge"
+    assert response.json()["items"][0]["match_type"] == "semantic"
+    assert response.json()["keyword_match_count"] == 0
 
 
 def test_embedding_status_reports_available_models(monkeypatch) -> None:

@@ -2173,6 +2173,28 @@ button {
   font-size: 0.8rem;
 }
 
+.search-match-type {
+  padding: 2px 6px;
+  border: 1px solid #c9d3d0;
+  border-radius: 5px;
+  color: #596762;
+  background: #f5f7f6;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.search-match-type.semantic {
+  border-color: #b8c9dc;
+  color: #365d85;
+  background: #f1f6fb;
+}
+
+.search-match-type.hybrid {
+  border-color: #adc9bd;
+  color: #2e6554;
+  background: #edf6f1;
+}
+
 .search-decision-result {
   flex: 0 0 auto;
   color: #4f5d59;

@@ -395,6 +395,17 @@ LOCAL_BGE_BATCH_SIZE=4
 
 本機 BGE 使用 `BAAI/bge-large-zh-v1.5` 權重，不需要 API token。選用套件與 CPU / CUDA 安裝方式記錄於 `docs/local_bge_provider.md`。
 
+主搜尋頁預設使用混合搜尋，不再以關鍵字作為語意搜尋的候選門檻：
+
+```text
+POST /api/hybrid-search
+{"q": "關鍵字、短句或事件經過", "page": 1, "page_size": 15}
+```
+
+前端使用 JSON body，避免較長的事故經過在 URL 編碼後超過長度限制；GET 同路徑仍保留給短查詢。後端會對全部 stored chunk embeddings 執行 Local BGE 語意排名，同時執行 FTS5 / LIKE 精確文字搜尋，再以加權 Reciprocal Rank Fusion 合併兩條排名。語意排名權重為 2、文字排名權重為 1；每件案件保留最高分 chunk 作為可回查的命中原文。模型不可用時會降級為文字搜尋，舊 `/api/search` 仍保留給案號、法條與已知詞彙的精確查找。
+
+畫面顯示的百分比只使用 cosine similarity；RRF 融合分數只負責排序，不會呈現為理賠機率或模型信心。完整排名最多快取最近 16 組查詢，換頁不會重新掃描全庫。
+
 Hugging Face Inference API 執行實作已移除：
 
 ```text

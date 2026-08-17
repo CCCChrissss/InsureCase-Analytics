@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class HealthResponse(BaseModel):
@@ -216,6 +216,51 @@ class SemanticRankedSearchResponse(BaseModel):
     cached: bool
     items: list[SemanticRankedSearchResult]
     total: int
+    total_candidates: int
+    match_source: str
+    page: int
+    page_size: int
+
+
+class HybridSearchResult(SearchResult):
+    """One case ranked by semantic recall plus optional literal matching."""
+
+    similarity_score: float | None
+    ranking_score: float
+    semantic_rank: int | None
+    keyword_rank: int | None
+    section_hint: str | None
+    chunk_index: int | None
+    semantic_snippet: str | None
+    match_type: str
+
+
+class HybridSearchRequest(BaseModel):
+    """JSON body avoids URL-length limits for a user's incident narrative."""
+
+    q: str = Field(min_length=1, max_length=2000)
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=20, ge=1, le=20)
+    embedding_model: str | None = Field(default=None, min_length=1)
+    embedding_provider: str | None = Field(default=None, min_length=1)
+
+
+class HybridSearchResponse(BaseModel):
+    """Paginated complete hybrid ranking and its auditable runtime metadata."""
+
+    query: str
+    embedding_provider: str
+    embedding_model: str
+    embedding_dims: int
+    embedding_device: str
+    elapsed_ms: float
+    cached: bool
+    search_mode: str
+    fallback_reason: str | None
+    items: list[HybridSearchResult]
+    total: int
+    keyword_match_count: int
+    semantic_case_count: int
     total_candidates: int
     match_source: str
     page: int

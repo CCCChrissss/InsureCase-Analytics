@@ -57,7 +57,7 @@ export function CalculationMethodPage() {
         id="keyword-search"
         icon={<SearchCheck size={20} />}
         title="全文搜尋與關鍵字相關性"
-        plain="系統先找出文字中確實命中查詢詞的案件。一般排序會把關鍵字較集中、較具代表性的案件放前面。"
+        plain="精確文字搜尋會找出確實命中查詢詞的案件；預設綜合搜尋則會讓這條路徑與全庫語意搜尋同時執行。"
       >
         <div className="formula-block">
           <strong>SQLite FTS5 BM25</strong>
@@ -76,7 +76,7 @@ export function CalculationMethodPage() {
         id="query-similarity"
         icon={<Calculator size={20} />}
         title="搜尋文字與案件相似度"
-        plain="系統把搜尋文字和每個命中案件的各段內容做比較，取其中最接近的一段作為該案件分數。"
+        plain="系統把關鍵字、短句或整段經過直接轉成向量，與全資料庫的案件段落比較，不要求先出現相同文字。"
       >
         <div className="formula-block">
           <strong>搜尋到案件的分數</strong>
@@ -85,8 +85,13 @@ export function CalculationMethodPage() {
           <code>畫面百分比 = round(clamp(Squery, 0, 1) × 100)%</code>
           <span>E 代表本機 BGE 將文字轉成的向量；cos 代表餘弦相似度。</span>
         </div>
+        <div className="formula-block">
+          <strong>綜合相關性排序</strong>
+          <code>RRF(q,C) = 2 / (60 + Rsemantic) + 1 / (60 + Rkeyword)</code>
+          <span>語意排名權重為 2、文字排名權重為 1；沒有進入某條排名時，該項計為 0。使用排名位置融合，可避免直接混合不同尺度的 BM25 與 cosine 數值。</span>
+        </div>
         <p className="method-note">
-          選擇「相似度：高到低」時，系統會先算完所有關鍵字命中案件，再排序與分頁。最多快取最近 16 組查詢，翻頁時不必重新計算整批結果。
+          預設「綜合相關性」會先完成全庫語意排名及文字排名，再合併、排序與分頁。最多快取最近 16 組查詢，翻頁時不必重新計算整批結果；本機模型不可用時則自動降級為精確文字搜尋。
         </p>
       </MethodSection>
 
@@ -136,6 +141,7 @@ export function CalculationMethodPage() {
         </div>
         <ul className="method-limit-list">
           <li>相似度只表示文字語意接近，不表示應賠、勝訴機率或法律適用結論。</li>
+          <li>綜合排名分數只用來排列先後，不會顯示成百分比；畫面百分比仍是該案件最高段落的 cosine 相似度。</li>
           <li>法源依據只列決定書中辨識到的法規條文，不呈現保單或契約條款。</li>
           <li>本機 BGE 不會呼叫 Hugging Face API；模型與 embeddings 必須事先存在於本機。</li>
           <li>摘要與評議結果仍可能受到 PDF 文字抽取、章節辨識及規則式分類限制。</li>

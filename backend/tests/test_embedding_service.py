@@ -614,6 +614,63 @@ def test_semantic_case_scores_returns_best_chunk_for_each_requested_case(
     assert result["total_candidates"] == 3
 
 
+def test_semantic_case_rankings_scans_all_cases_and_keeps_best_chunk(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Full semantic recall must not depend on a prior keyword candidate list."""
+    db_path = tmp_path / "insurance_cases.db"
+    with make_connection(db_path) as connection:
+        connection.executescript((Path(__file__).resolve().parents[1] / "schema.sql").read_text(encoding="utf-8"))
+        insert_case_with_chunks(
+            connection,
+            case_id="case_best",
+            case_number="115年評字第000001號",
+            dispute_type="必要性醫療",
+            chunks=["背景段落", "住院必要性判斷"],
+        )
+        insert_case_with_chunks(
+            connection,
+            case_id="case_second",
+            case_number="115年評字第000002號",
+            dispute_type="承保範圍",
+            chunks=["保單承保範圍"],
+        )
+        vectors = {
+            "case_best_chunk_0": [0.2, 0.98, 0.0],
+            "case_best_chunk_1": [0.95, 0.1, 0.0],
+            "case_second_chunk_0": [0.8, 0.2, 0.0],
+        }
+        for chunk_id, vector in vectors.items():
+            normalized = embedding_service.normalize_vector(vector)
+            connection.execute(
+                """
+                INSERT INTO chunk_embeddings (
+                  chunk_id, embedding_model, embedding_dims, embedding,
+                  embedding_norm, created_at
+                ) VALUES (?, 'fake_model_v1', 3, ?, 1.0, '2026-01-01T00:00:00Z');
+                """,
+                (chunk_id, embedding_service.pack_vector(normalized)),
+            )
+
+    provider = FakeEmbeddingProvider([make_embedding([1.0, 0.0, 0.0])])
+    monkeypatch.setattr(embedding_service, "connect", lambda: make_connection(db_path))
+    monkeypatch.setattr(embedding_service, "DEFAULT_DB_PATH", db_path)
+    monkeypatch.setattr(embedding_service, "create_embedding_provider", lambda **_: provider)
+
+    result = embedding_service.semantic_case_rankings(
+        "住院後遭拒賠",
+        provider_name="fake",
+        model_name="fake_model_v1",
+    )
+
+    assert result["total_cases"] == 2
+    assert result["total_candidates"] == 3
+    assert [item["case_id"] for item in result["items"]] == ["case_best", "case_second"]
+    assert result["items"][0]["semantic_snippet"] == "住院必要性判斷"
+    assert result["items"][0]["similarity_score"] > result["items"][1]["similarity_score"]
+
+
 def test_semantic_ranked_search_sorts_all_matches_before_pagination_and_uses_cache(
     tmp_path: Path,
     monkeypatch,
