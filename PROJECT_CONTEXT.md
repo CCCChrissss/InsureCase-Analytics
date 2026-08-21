@@ -1074,7 +1074,7 @@ Query parameters：
 - 一致性比較工具與 POC 混合式第二輪已完成；正式第二位獨立標註與有效的跨標註者信度估計仍未完成。
 - OpenAI 或其他外部 AI embedding provider 尚未實作。
 - 實務級向量資料庫或 ANN index。
-- 本機 AI 摘要目前涵蓋 15 件 POC：原五案已人工核准，新增十案仍待人工核對；尚未全量生成或切換成正式摘要來源。
+- 本機 AI 摘要目前涵蓋 16 件 POC：原五案已人工核准，新增十案與指定案件 `114年評字第000593號` 仍待人工核對；尚未全量生成或切換成正式摘要來源。
 - 系統尚無登入與角色權限，因此審核寫入只提供本機 CLI；若要建立網頁審核介面，必須先完成身分驗證與操作稽核。
 
 ## 10. 目前可能的 bug 或技術債
@@ -1722,6 +1722,13 @@ http://127.0.0.1:5173
 - Trial DB 匯入後共 21 筆版本：`approved = 5`、`rejected = 1`、`unreviewed = 15`；本次十案全部為 unreviewed，正式 DB 未匯入。
 - Trial API 實測新增除外責任案回傳 `available = true`、`prompt_version = local_llm_summary_v13`、`review_status = unreviewed`、`official = false`，並含補償與拒賠兩段理由；`PRAGMA integrity_check = ok`。
 - `py -m pytest -q`：189 passed；摘要相關模組 `py_compile`、最終報告 validator 與 `git diff --check` 通過。
+
+2026-08-21 指定案件 `114年評字第000593號` 補充摘要後，另完成以下檢查：
+
+- 本機 Ollama `qwen3:4b` 以 `local_llm_summary_v13` 處理 3,809 字來源、8 個 packet，共 9 次請求；失敗 0、最終合併 fallback 0，外部 AI API 請求 0。
+- `validate_summary_trial.py` 回查 9 段 evidence 與 1 筆法源，`valid = true`、`violations = []`。
+- 摘要已匯入 Trial DB，summary ID 為 `aisum_aea1e7f5e20da5457a6638b7`，維持 `unreviewed`、`official = false`；Trial DB 共 22 個摘要版本（approved 5、rejected 1、unreviewed 16），正式 DB 未寫入。
+- 唯讀 AI 摘要 API 已實測可回傳背景、雙方主張、爭點、理由、結果、法源與證據。
 
 2026-08-17 主搜尋改為完整語意與文字混合排序後，另完成以下檢查：
 

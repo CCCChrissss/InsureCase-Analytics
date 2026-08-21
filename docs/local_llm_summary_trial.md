@@ -123,10 +123,10 @@ py .\backend\scripts\run_summary_trial.py `
 
 POC 已證明 `qwen3:4b` 可在目前硬體上離線完成有來源證據的案件摘要，且不消耗 Hugging Face 推論額度。這不代表可直接上線：
 
-- 15 案樣本仍不足以代表 2,992 件資料，正式建置前仍需擴大抽樣與人工標註。
+- 16 案樣本仍不足以代表 2,992 件資料，正式建置前仍需擴大抽樣與人工標註。
 - 長主張可能以完整原文補位，文字仍偏長；表格與正式排版應回看 PDF。
 - 規則式理由訊號需隨年度與文件格式持續校正。
-- 原五案與新增十案均已匯入 Trial DB 的獨立版本表並接入案件 Dashboard；原五案為 `approved`，新增十案維持 `unreviewed`。
+- 原五案、新增十案與指定案件均已匯入 Trial DB 的獨立版本表並接入案件 Dashboard；原五案為 `approved`，其餘十一案維持 `unreviewed`。
 - 第一案 v4 因判斷理由句首殘留 `…」` 而標記 rejected；v5 修正引文尾端並保留為 unreviewed，v6 再清理摘要顯示中的章節標題後核准。舊版本不覆寫，供後續稽核與比較。
 - 目前樣本與審核介面仍屬 POC；正式全量建置前需要擴大抽樣、逐案人工核准及登入權限設計。
 
@@ -146,6 +146,14 @@ POC 已證明 `qwen3:4b` 可在目前硬體上離線完成有來源證據的案�
 - 最終報告 `outputs/local_llm_summary_expansion_10_final.json` 回查 94 段 evidence 與 16 筆法源，`valid = true`、`violations = []`。
 - 十案已交易式匯入 Trial DB，`inserted = 10`、`updated = 0`，全部維持 `unreviewed`。Trial DB 目前共 21 筆版本：`approved = 5`、`rejected = 1`、`unreviewed = 15`。
 - `py -m pytest -q` 為 189 passed；摘要服務、批次與 validator 的 `py_compile` 通過。正式 `insurance_cases.db` 未匯入本次摘要。
+
+## 2026-08-21 指定案件補充摘要
+
+- 指定案件 `114年評字第000593號`（必要性醫療）使用本機 Ollama `qwen3:4b` 與 `local_llm_summary_v13` 額外生成摘要，外部 AI API 請求為 0。
+- 來源文字 3,809 字，共拆成 8 個 packet；9 次本機請求全部成功，`failed_request_count = 0`、`final_merge_fallback = false`。
+- 驗證器回查 9 段 evidence 與 1 筆法源，結果為 `valid = true`、`violations = []`。
+- 摘要已交易式匯入 Trial DB，summary ID 為 `aisum_aea1e7f5e20da5457a6638b7`，狀態維持 `unreviewed`、`official = false`；Trial DB 目前共 22 個版本（approved 5、rejected 1、unreviewed 16），正式 DB 未寫入。
+- 唯讀 API `/api/cases/case_c7e91ffef1204842/ai-summary` 已確認可取得背景、雙方主張、爭點、理由、結果、法源與證據。
 
 ## 人工審核流程
 
